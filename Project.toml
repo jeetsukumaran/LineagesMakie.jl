@@ -1,0 +1,7 @@
+name = "LineagesMakie"
+uuid = "442c8a50-53a9-4dd6-b3a1-02ab81198c2d"
+authors = ["Jeet Sukumaran <jeetsukumaran@gmail.com>"]
+version = "0.1.0"
+
+[compat]
+julia = "1.10.10"
