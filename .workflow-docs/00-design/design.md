@@ -3,7 +3,9 @@
 
 A general framework for visualization of evolutionary (phylogenetic, coalescent, cladistic, ancestral) graphs and associated biological data in the Makie ecosystem.
 
-A single top-level function:
+## Proposed concepts
+
+Functions take accessors as arguments
 
 ```julia
 lineageplot(x; kw...)
@@ -15,7 +17,6 @@ and support inputs through these routes:
 - native support for `Graphs.AbstractGraph`
 - explicit keyword-based accessors for arbitrary foreign objects
 
-## Proposed concepts
 
 ```julia
 using LineagesMakie, CairoMakie
