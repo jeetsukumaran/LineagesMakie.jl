@@ -241,7 +241,71 @@ set: `:edgelengths`, `:vertexages`, `:vertexdepths`, `:vertexheights`,
 > Yes, these names are not hard to read for me
 
 *Ratified convention:* Compound accessor names and domain-specific identifiers
-in this codebase use no underscore: `edgelength`, `vertexvalue`, `vertexage`,
-`fromvertex`, `tovertex`, `rootvertex`, `boundingbox`. This is a deliberate
-style choice for this package, consistent with STYLE-julia.md §2.1 ("underscores
-between words when the name would otherwise be hard to read").
+in this codebase use no underscore: `edgelength`, `vertexvalue`, `coalescenceage`,
+`branchingtime`, `fromvertex`, `tovertex`, `rootvertex`, `boundingbox`. This is
+a deliberate style choice for this package, consistent with STYLE-julia.md §2.1
+("underscores between words when the name would otherwise be hard to read").
+
+---
+
+## Vocabulary revision — 2026-04-19
+
+### Background
+
+The original ratification used `age` and `vertexage` for what was loosely
+described as "the time value of a vertex". A follow-up discussion clarified
+that two distinct concepts had been conflated, and that the prior term `depth`
+was also imprecise. The revision below replaces both.
+
+### Clarification of polarity and concept
+
+**User statement:**
+
+> When I say divergence time, I mean equivalent to sum of edge lengths in path
+> to root, or "distance from root". When I say age, I mean "coalescent age",
+> "distance from leaf" (only makes strictly defined if tree is ultrametric).
+
+**Resolution:**
+
+Two canonical concepts are now defined with unambiguous polarity:
+
+| Canonical term | Accessor | Polarity | Definition |
+|---|---|---|---|
+| `branchingtime` | `branchingtime(v)` | Root = 0, increases toward leaves | Cumulative `edgelength` sum from `rootvertex` to `v`; "forward time" |
+| `coalescenceage` | `coalescenceage(v)` | Leaf = 0, increases toward root | Cumulative `edgelength` sum from `v` down to leaf; "backward time"; requires ultrametric tree |
+
+**Proscribed:** `age` (as identifier), `vertexage`, `depth`, `distance_from_root`,
+`divergence_time` (as identifier; acceptable in prose only).
+
+### Layout mode changes
+
+`:vertexages` mode replaced by `:coalescenceage`.
+`:branchingtime` added as a new mode (user supplies pre-computed divergence
+times; the engine bypasses the on-the-fly summation that `:edgelengths` performs).
+
+**Rationale for `:branchingtime` alongside `:edgelengths`:** Some users have a
+vector of pre-computed divergence times and do not want to back-calculate edge
+lengths. These are logically equivalent but sourced differently; having both
+modes explicitly named makes the intent clear and avoids confusion.
+
+### Relationship between modes
+
+`:edgelengths` and `:branchingtime` produce identical vertex positions when the
+supplied times are consistent with the edge lengths. `:coalescenceage` and
+`:vertexheights` are leaf-relative counterparts: `:coalescenceage` is weighted
+(requires ultrametric data), `:vertexheights` is topological (unweighted edge
+counts).
+
+For a strictly ultrametric tree:
+`branchingtime(v) + coalescenceage(v) = branchingtime(deepest_leaf)`
+
+### Non-ultrametric policy for `:coalescenceage`
+
+`coalescenceage` is well-defined only for ultrametric trees. For non-ultrametric
+trees, a `nonultrametric` keyword controls behavior: `:error` (default),
+`:minimum`, `:maximum`.
+
+Computation from edge lengths via post-order traversal:
+`coalescenceage(v) = edgelength(v, c) + coalescenceage(c)` for any direct child
+`c` (ultrametric guarantee: all children give the same value). For leaves,
+`coalescenceage = 0`.

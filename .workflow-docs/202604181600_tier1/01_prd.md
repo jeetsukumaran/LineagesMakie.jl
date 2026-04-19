@@ -22,10 +22,9 @@ authoritative reference; this section provides a quick-reference summary.
 | `tovertex` | Destination vertex in an edge accessor | `child`, `v2`, `dst` |
 | `edgelength` | Scalar edge measure; also the accessor callable | `branch_length`, `edge_length`, `len` |
 | `vertexvalue` | Callable: per-vertex data | `nodevalue`, `node_value` |
-| `vertexage` | Callable: vertex age (≥ 0) | `node_age`, `vertex_age` |
-| `age` | Time value of a vertex; 0 = present, > 0 = past | `time`, `divergence_time` |
-| `depth` | Cumulative edge length from rootvertex | `distance_from_root` |
-| `height` | Max depth (tree); edges-to-farthest-leaf (vertex) | `max_depth` |
+| `branchingtime` | Cumulative edge length from rootvertex; "forward time"; root = 0 | `depth`, `distance_from_root`, `divergence_time` |
+| `coalescenceage` | Cumulative edge length to leaf; "backward time"; leaf = 0; ultrametric | `age`, `vertexage`, `node_age` |
+| `height` | Max branchingtime (tree); edge-count-to-farthest-leaf (vertex; topological) | `max_depth`, `depth` |
 | `boundingbox` | Smallest axis-aligned enclosing rectangle | `bounding_box`, `extent` |
 | `vertex_positions` | Dict of 2D layout coordinates per vertex | `node_positions` |
 | `edge_paths` | Geometric paths for edge rendering | `branch_paths` |
@@ -153,165 +152,177 @@ for non-isotropic axes. Every public function has full test coverage.
    `vertex -> any_value` to attach arbitrary data (bootstrap, posterior, name)
    to vertices, so that I can drive label and color layers from my own data.
 
-9. As a researcher, I want to supply `vertexage` as a function
-   `vertex -> Float64` (age ≥ 0) and use the `:vertexages` positioning mode,
-   so that time-calibrated and coalescent trees are laid out with the correct
-   temporal x-axis.
+9. As a researcher, I want to supply `coalescenceage` as a function
+   `vertex -> Float64` (coalescence age ≥ 0) and use the `:coalescenceage`
+   positioning mode, so that coalescent trees are laid out with leaves at x = 0
+   and the root at the maximum x-coordinate.
+
+10. As a researcher, I want to supply `branchingtime` as a function
+    `vertex -> Float64` and use the `:branchingtime` positioning mode, so that
+    I can provide pre-computed divergence times directly without re-deriving
+    them from per-edge lengths.
 
 ### Layout
 
-10. As a researcher, I want to choose a positioning mode via the `mode` keyword
-    (`:edgelengths`, `:vertexages`, `:vertexheights`, `:vertexlevels`,
-    `:vertexdepths`, `:vertexcoords`, `:vertexpos`), so that I can control how
-    vertex x-coordinates are determined independently of the tree data type.
+11. As a researcher, I want to choose a positioning mode via the `mode` keyword
+    (`:edgelengths`, `:branchingtime`, `:coalescenceage`, `:vertexheights`,
+    `:vertexlevels`, `:vertexdepths`, `:vertexcoords`, `:vertexpos`), so that I
+    can control how vertex x-coordinates are determined independently of the
+    tree data type.
 
-11. As a researcher, I want the positioning mode to default to `:edgelengths`
+12. As a researcher, I want the positioning mode to default to `:edgelengths`
     when an `edgelength` accessor is supplied, and to `:vertexheights` otherwise
     (leaf-aligned, equal topology spacing), so that I get a sensible plot with
     no configuration.
 
-12. As a researcher, using any rectangular layout, I want leaves to be equally
+13. As a researcher, using any rectangular layout, I want leaves to be equally
     spaced on the y-axis by default, so that the tree is legible without any
     configuration.
 
-13. As a researcher, I want to control leaf spacing via the `leaf_spacing`
+14. As a researcher, I want to control leaf spacing via the `leaf_spacing`
     keyword argument, so that I can adjust density for trees of different sizes.
 
-14. As a researcher, using the circular layout, I want leaves equally spaced
+15. As a researcher, using the circular layout, I want leaves equally spaced
     angularly by default, so that the tree is legible without configuration.
 
-15. As a researcher, I want the layout to be recomputed reactively when the
+16. As a researcher, I want the layout to be recomputed reactively when the
     input tree Observable is updated, so that animated or interactive updates
     work correctly.
 
-16. As a researcher, when I resize the figure, I want marker sizes and label
+17. As a researcher, when I resize the figure, I want marker sizes and label
     sizes to remain correct in pixel space even though the data coordinate range
     changes, so that resizing does not distort the appearance.
 
 ### Visual layers
 
-17. As a researcher, I want edges rendered as right-angle segments (horizontal +
+18. As a researcher, I want edges rendered as right-angle segments (horizontal +
     vertical) for the rectangular layout, so that the tree has the standard
     phylogenetic appearance.
 
-18. As a researcher, I want edges rendered as straight diagonal lines for an
+19. As a researcher, I want edges rendered as straight diagonal lines for an
     optional slanted variant in the rectangular layout, so that I can match
     publication conventions that use this style.
 
-19. As a researcher, I want to set edge color, line width, line style, and alpha
+20. As a researcher, I want to set edge color, line width, line style, and alpha
     either uniformly or via a function `edge -> value` mapped over edges,
     so that I can encode continuous or categorical data on edges.
 
-20. As a researcher, I want to toggle the edge layer independently of other
+21. As a researcher, I want to toggle the edge layer independently of other
     layers, so that I can build the figure incrementally.
 
-21. As a researcher, I want internal vertex markers (marker shape, color, fill,
+22. As a researcher, I want internal vertex markers (marker shape, color, fill,
     size, alpha) independently controllable, so that I can show or hide them or
     map data to their appearance.
 
-22. As a researcher, I want leaf markers independently controllable with the
+23. As a researcher, I want leaf markers independently controllable with the
     same properties as internal vertex markers, so that I can distinguish
     leaves from internal vertices visually.
 
-23. As a researcher, I want leaf labels rendered as text with controllable font,
+24. As a researcher, I want leaf labels rendered as text with controllable font,
     size, color, offset from the leaf, and an italic option, so that taxon names
     can be displayed in conventional style.
 
-24. As a researcher, I want vertex labels rendered as text showing any vertex
+25. As a researcher, I want vertex labels rendered as text showing any vertex
     attribute (bootstrap, posterior, name) with a threshold filter, so that I
     can display only high-confidence support values without cluttering the
     figure.
 
-25. As a researcher, if I provide a threshold for vertex labels, I want only
+26. As a researcher, if I provide a threshold for vertex labels, I want only
     vertices meeting the threshold to be labelled, and the threshold predicate
     to default to "show all", so that filtering is opt-in.
 
-26. As a researcher, I want to highlight one or more clades by drawing a colored
+27. As a researcher, I want to highlight one or more clades by drawing a colored
     rectangle behind their edges and leaves, so that I can visually emphasize
     monophyletic groups.
 
-27. As a researcher, I want to annotate a clade with a labelled bracket (vertical
+28. As a researcher, I want to annotate a clade with a labelled bracket (vertical
     bar + text) placed outside the leaf labels, so that I can name taxonomic
     groups.
 
-28. As a researcher, I want a scale bar showing edge-length units placed at a
+29. As a researcher, I want a scale bar showing edge-length units placed at a
     configurable position on the figure, so that readers can interpret
     edge-length proportional layouts.
 
-29. As a researcher, when no edge lengths are encoded (`:vertexheights` or
+30. As a researcher, when no edge lengths are encoded (`:vertexheights` or
     `:vertexlevels` mode), I want the scale bar omitted by default, so that the
     figure does not display meaningless scale information.
 
-30. As a researcher, I want each visual layer to be independently composable via
+31. As a researcher, I want each visual layer to be independently composable via
     separate `layer!` calls on an axis, so that I can include exactly the layers
     I need without triggering unwanted defaults.
 
 ### LineageAxis
 
-31. As a researcher, I want a `LineageAxis` block that I can place in a Makie
+32. As a researcher, I want a `LineageAxis` block that I can place in a Makie
     `Figure` layout, so that I have a tree-aware axis with sensible defaults
-    (no tick marks, no grid lines, optional x-axis for edge-length modes).
+    (no tick marks, no grid lines, optional x-axis for quantitative modes).
 
-32. As a researcher, I want `LineageAxis` to suppress tick marks, grid lines,
+33. As a researcher, I want `LineageAxis` to suppress tick marks, grid lines,
     and axis spines by default (classic naked-tree appearance), so that the
     figure matches phylogenetic publication conventions without manual
     configuration.
 
-33. As a researcher, I want `LineageAxis` to optionally display an x-axis with
-    edge-length scale when using `:edgelengths` or `:vertexages` mode, so that
-    quantitative positions are interpretable.
+34. As a researcher, I want `LineageAxis` to optionally display an x-axis with
+    quantitative scale when using `:edgelengths`, `:branchingtime`, or
+    `:coalescenceage` mode, so that calibrated positions are interpretable.
 
-34. As a researcher, I want `LineageAxis` to correctly manage pixel↔data
+35. As a researcher, I want `LineageAxis` to correctly manage pixel↔data
     coordinate conversion for non-isotropic axes, so that circular markers
     appear circular even when x and y scales differ.
 
-35. As a researcher, I want `lineageplot!` to work directly on both
+36. As a researcher, I want `lineageplot!` to work directly on both
     `LineageAxis` and standard Makie `Axis`, so that I can use the convenience
     of `LineageAxis` or integrate with existing figure layouts.
 
 ### Observables and reactivity
 
-36. As a researcher, I want to wrap my tree in an `Observable` and pass it to
+37. As a researcher, I want to wrap my tree in an `Observable` and pass it to
     `lineageplot!`, so that updating the Observable triggers a full re-layout
     and re-render reactively.
 
-37. As a researcher, I want to pass `Observable`-valued attributes (color,
+38. As a researcher, I want to pass `Observable`-valued attributes (color,
     linewidth, alpha) that update live when the Observable changes, so that I
     can animate or interactively update the visual appearance without
     re-calling `lineageplot!`.
 
-38. As a researcher, I want to use Makie's `lift` to derive plot attributes from
+39. As a researcher, I want to use Makie's `lift` to derive plot attributes from
     Observables I control, so that I can wire tree visualization to sliders,
     buttons, or other interactive elements using standard Makie idioms.
 
 ### Error handling
 
-39. As a researcher, if `children` returns a cycle (not a tree), I want an
+40. As a researcher, if `children` returns a cycle (not a tree), I want an
     informative error before layout begins, so that I do not receive a cryptic
     stack overflow or silent infinite loop.
 
-40. As a researcher, if `edgelength` returns a negative value, I want an
+41. As a researcher, if `edgelength` returns a negative value, I want an
     `ArgumentError` with a message identifying which edge is problematic, so
     that data errors are surfaced immediately.
 
-41. As a researcher, if `vertexvalue` returns a value of an unexpected type for
+42. As a researcher, if `coalescenceage` is used in `:coalescenceage` mode and
+    the tree is not ultrametric, I want an `ArgumentError` by default, and
+    control over the fallback policy via a `nonultrametric` keyword
+    (`:minimum`, `:maximum`, `:error`), so that non-ultrametric trees are
+    handled explicitly rather than silently.
+
+43. As a researcher, if `vertexvalue` returns a value of an unexpected type for
     a label layer, I want an informative error at plot time, not a silent
     rendering failure.
 
-42. As a researcher, if the tree has zero leaves, I want a clear error rather
+44. As a researcher, if the tree has zero leaves, I want a clear error rather
     than an empty or broken figure, so that I can diagnose the data problem.
 
 ### Testing
 
-43. As a developer, I want every exported function and type to have unit tests
+45. As a developer, I want every exported function and type to have unit tests
     covering the documented contract, edge cases, and failure modes, so that
     regressions are caught immediately.
 
-44. As a developer, I want integration tests that render a tree end-to-end with
+46. As a developer, I want integration tests that render a tree end-to-end with
     CairoMakie (non-interactive backend) and verify that the output is
     non-empty, so that the full pipeline is exercised in CI.
 
-45. As a developer, I want Aqua.jl and JET.jl checks in CI, so that code
+47. As a developer, I want Aqua.jl and JET.jl checks in CI, so that code
     quality and type inference issues are caught automatically.
 
 ---
@@ -327,7 +338,12 @@ directly to `lineageplot`:
 - `edgelength`: `(fromvertex, tovertex) -> Float64` or
   `(fromvertex, tovertex) -> (; value::Float64, units::Symbol)`; optional
 - `vertexvalue`: `vertex -> Any`; optional; used by label and color layers
-- `vertexage`: `vertex -> Float64`; optional; required when `mode = :vertexages`
+- `branchingtime`: `vertex -> Float64`; optional; required when
+  `mode = :branchingtime`; returns pre-computed cumulative edge-length sum from
+  `rootvertex` (equivalent to what `:edgelengths` computes on the fly)
+- `coalescenceage`: `vertex -> Float64`; optional; required when
+  `mode = :coalescenceage`; returns cumulative edge-length sum from vertex down
+  to leaf; leaf = 0, root = maximum; requires ultrametric tree by default
 - `vertexcoords`: `vertex -> Point2f`; optional; required when
   `mode = :vertexcoords`
 - `vertexpos`: `vertex -> Point2f`; optional; required when `mode = :vertexpos`
@@ -349,34 +365,48 @@ layered stack — each higher-level mode delegates to shared lower-level
 traversal infrastructure, which is the architectural expression of DRY for
 layout computation.
 
-| Mode | Accessor required | x-coordinate source |
-|---|---|---|
-| `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from `rootvertex` |
-| `:vertexages` | `vertexage` | `vertexage(vertex)`; edge extent = `vertexage(fromvertex) − vertexage(tovertex)` |
-| `:vertexdepths` | none | Cumulative topological edge count from `rootvertex` (all weights = 1) |
-| `:vertexheights` | none | Per-vertex height (edges to farthest leaf); all leaves at x = 0; produces leaf-aligned cladogram appearance |
-| `:vertexlevels` | none | Integer level = edge count from `rootvertex`; equal inter-level spacing; produces dendrogram appearance |
-| `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates |
-| `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates |
+| Mode | Accessor required | x-coordinate source | Polarity |
+|---|---|---|---|
+| `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from `rootvertex`; computes `branchingtime` on the fly | Root = 0, increases toward leaves |
+| `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | Root = 0, increases toward leaves |
+| `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; leaf = 0, increases toward root; requires ultrametric tree (see `nonultrametric` policy) | Leaf = 0, increases toward root |
+| `:vertexdepths` | none | Cumulative topological edge count from `rootvertex` (all weights = 1) | Root = 0, increases toward leaves |
+| `:vertexheights` | none | Per-vertex height (edge count to farthest leaf); all leaves at x = 0; topological analogue of `:coalescenceage` | Leaf = 0, increases toward root |
+| `:vertexlevels` | none | Integer level = edge count from `rootvertex`; equal inter-level spacing; topological analogue of `:branchingtime` | Root = 0, increases toward leaves |
+| `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined |
+| `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined |
 
 **Default mode detection:** If `edgelength` is supplied and `mode` is not set,
 the default is `:edgelengths`. If neither `edgelength` nor `mode` is supplied,
 the default is `:vertexheights` (leaf-aligned topology plot with all leaves at
 the same x-coordinate).
 
+**Polarity:** Modes `:edgelengths`, `:branchingtime`, `:vertexdepths`, and
+`:vertexlevels` are root-relative (root = 0, leaves to the right). Modes
+`:coalescenceage` and `:vertexheights` are leaf-relative (leaf = 0, root to the
+right). Both conventions are standard in phylogenetics; the mode name makes
+polarity explicit.
+
 **Missing edge lengths:** In `:edgelengths` mode, if `edgelength` returns
 `nothing` or `missing` for an edge, that edge falls back to unit length with a
 warning identifying the edge. Negative edge lengths raise `ArgumentError`
 immediately.
 
-**Shared implementation (deep stack):** `:vertexages` uses the same cumulative-
-sum traversal as `:edgelengths`, with edge extent computed from age differences.
-`:vertexdepths`, `:vertexheights`, and `:vertexlevels` all traverse the tree
-via the `children` accessor using a shared depth-first pass, computing their
-respective quantities in a single traversal. `:vertexcoords` and `:vertexpos`
-bypass layout computation entirely, injecting pre-computed coordinates. This
-stack means that adding a new mode rarely requires new traversal logic — it
-reuses the existing infrastructure.
+**Non-ultrametric trees in `:coalescenceage` mode:** If any two children of a
+vertex yield inconsistent coalescence age estimates, the default behavior raises
+`ArgumentError`. This is controlled by a `nonultrametric` keyword argument:
+`:error` (default), `:minimum` (take min over all leaf paths), or `:maximum`
+(take max over all leaf paths).
+
+**Shared implementation (deep stack):** `:branchingtime` and `:edgelengths`
+both use the same preorder cumulative-sum traversal; `:edgelengths` derives the
+sum from the `edgelength` accessor, `:branchingtime` reads it directly.
+`:coalescenceage` uses a postorder traversal and adds each incident edge length
+to the child's coalescence age. `:vertexdepths`, `:vertexheights`, and
+`:vertexlevels` traverse the tree via the `children` accessor using a shared
+depth-first pass. `:vertexcoords` and `:vertexpos` bypass layout computation
+entirely. This stack means that adding a new mode rarely requires new traversal
+logic — it reuses existing infrastructure.
 
 ### Layout algorithms
 
@@ -495,15 +525,15 @@ AbstractTrees.jl adapter.
 **Interface:**
 
 - `TreeAccessor` struct: holds `children`, `edgelength`, `vertexvalue`,
-  `vertexage`, `vertexcoords`, `vertexpos` callables (all except `children`
-  optional, defaulting to `nothing`)
+  `branchingtime`, `coalescenceage`, `vertexcoords`, `vertexpos` callables (all
+  except `children` optional, defaulting to `nothing`)
 - `tree_accessor(rootvertex; children, edgelength=nothing, vertexvalue=nothing,
-  vertexage=nothing, vertexcoords=nothing, vertexpos=nothing)`: constructs a
-  `TreeAccessor` from explicit keyword functions; validates that `children` is
-  callable
+  branchingtime=nothing, coalescenceage=nothing, vertexcoords=nothing,
+  vertexpos=nothing)`: constructs a `TreeAccessor` from explicit keyword
+  functions; validates that `children` is callable
 - `abstracttrees_accessor(rootvertex; edgelength=nothing, vertexvalue=nothing,
-  vertexage=nothing)`: constructs a `TreeAccessor` by wrapping
-  `AbstractTrees.children`; requires AbstractTrees.jl to be loaded
+  branchingtime=nothing, coalescenceage=nothing)`: constructs a `TreeAccessor`
+  by wrapping `AbstractTrees.children`; requires AbstractTrees.jl to be loaded
 - Predicate utilities: `is_leaf(accessor, vertex) -> Bool`,
   `leaves(accessor, rootvertex) -> iterator`,
   `preorder(accessor, rootvertex) -> iterator`
@@ -530,14 +560,18 @@ positioning mode. Pure functional; no Makie dependency.
   mode=:vertexheights) -> TreeGeometry`
 - `boundingbox(geom::TreeGeometry) -> Rect2f`
 
-Positioning modes implemented: `:edgelengths`, `:vertexages`, `:vertexdepths`,
-`:vertexheights`, `:vertexlevels`, `:vertexcoords`, `:vertexpos`. All
-topology-computed modes (`:vertexdepths`, `:vertexheights`, `:vertexlevels`)
-share a single depth-first traversal implementation.
+Positioning modes implemented: `:edgelengths`, `:branchingtime`,
+`:coalescenceage`, `:vertexdepths`, `:vertexheights`, `:vertexlevels`,
+`:vertexcoords`, `:vertexpos`. All topology-computed modes (`:vertexdepths`,
+`:vertexheights`, `:vertexlevels`) share a single depth-first traversal
+implementation. `:edgelengths` and `:branchingtime` share a preorder
+cumulative-sum traversal. `:coalescenceage` uses a postorder traversal.
 
 **Failure modes:** negative edge length → `ArgumentError` with offending edge
 identified; zero-leaf tree → `ArgumentError`; missing edge length in
-`:edgelengths` mode → warning + unit-length fallback for that edge.
+`:edgelengths` mode → warning + unit-length fallback for that edge;
+non-ultrametric tree in `:coalescenceage` mode → `ArgumentError` by default,
+controlled by `nonultrametric` keyword (`:error` | `:minimum` | `:maximum`).
 
 **Tested:** Yes
 
