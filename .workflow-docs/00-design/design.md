@@ -21,11 +21,11 @@ and support inputs through these routes:
 using LineagesMakie, CairoMakie
 
 fig, ax, plt = lineageplot(
-    seednode;
-    children = node -> ..., # or: children = AbstractTrees.children,
-    edgelength = (node1, node2) -> ...
+    seedvertex;
+    children = vertex -> ..., # or: children = AbstractTrees.children,
+    edgelength = (vertex1, vertex2) -> ...
     ...styling,
-    ...allow muliple images/labels in different positions around nodes/edges?
+    ...allow muliple images/labels in different positions around vertices/edges?
 )
 ```
 
@@ -38,12 +38,12 @@ scale_obs = Observable(1.0)
 highlight_obs = Observable(Set{Int}())
 
 fig = Figure()
-ax = BranchingAxis(fig[1, 1])
+ax = LineageAxis(fig[1, 1])
 
 lineageplot!(ax, tree_obs;
-    branchlength_scale = scale_obs,
+    edgelength_scale = scale_obs,
     color = lift(highlight_obs) do hs
-        branchcolor_by_node(hs)
+        edgecolor_by_vertex(hs)
     end
 )
 
@@ -51,8 +51,8 @@ slider = Slider(fig[2, 1], range = 0.1:0.1:5.0)
 connect!(scale_obs, slider.value)
 
 on(events(fig).mouseclick) do event
-    node = pick_node(ax, event)
-    highlight_obs[] = toggle(highlight_obs[], node)
+    vertex = pick_vertex(ax, event)
+    highlight_obs[] = toggle(highlight_obs[], vertex)
 end
 
 fig
