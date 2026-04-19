@@ -1,507 +1,724 @@
-# Target Reference Capacities
+# Target reference capacities
 
-Comprehensive inventory of visualization types, annotation layers, and styling
-options that PhyloMakie.jl should ultimately support. Derived from:
+Comprehensive inventory of visualization types, annotation layers, styling
+options, and axis semantics that LineagesMakie.jl should ultimately support.
+Derived from:
 
 - **ggtree** (R/ggplot2) — the most complete existing phylogenetic visualization
   system; serves as the functional reference baseline
 - **PhyloNetworks.jl / PhyloPlots.jl** — defines the extra visual vocabulary
   required for reticulate (non-tree) network structures
+- **LineageAxis design** (described in section 0 below) — the semantic axis
+  abstraction that grounds the coordinate system and makes the above correctly
+  composable
 
----
+## 0. LineageAxis — the semantic axis abstraction
 
-## 1. Tree / Network Layout Styles
+LineagesMakie.jl is organized around `LineageAxis`, a custom Makie `Block`
+that functions as a semantic axis for branching and merging processes. This
+section describes the concept fully. Readers of this document do not need any
+other source to understand `LineageAxis`; it is presented here as a foundational
+design principle that all other capabilities in this document depend on.
+
+### Why a semantic axis is needed
+
+A phylogenetic tree is not simply a geometric object. It carries meaning: the
+primary dimension of the tree represents a process (evolutionary time,
+coalescent time, substitution count, branching rank, or any scalar index of
+process state), and the layout on screen is a *rendering choice* that may or
+may not align with the process direction.
+
+Without an explicit semantic axis, three distinct concerns collapse into one
+and become impossible to separate cleanly:
+
+1. **Tree-centric:** What is the process coordinate of each vertex? Which
+   direction does the process run (root-to-leaf or leaf-to-root)? This is
+   determined by the data and the chosen positioning mode.
+2. **User-centric:** What does the process coordinate mean to the researcher?
+   Is it "forward time" (species diversification) or "backward time"
+   (coalescence)? Is it measured in millions of years, substitutions per site,
+   or event ranks?
+3. **Plotting-centric:** How is the process coordinate embedded in the 2D
+   scene? Which screen axis carries it? Which end of that axis has the smaller
+   values?
+
+These three concerns are independent. A coalescent model with leaf-relative
+process coordinates (user-centric: backward time) can be drawn with the
+rootvertex at either the left or the right (plotting-centric choice), and the
+researcher may think of it as "coalescent time increasing toward the past"
+(user-centric) or simply as a topology display tool. Conflating these three
+concerns leads to an API that either forces one convention on the user or
+requires ad-hoc workarounds for every deviation from that convention.
+
+`LineageAxis` separates them explicitly.
+
+### The primary dimension
+
+The primary dimension of `LineageAxis` is the one-dimensional index set of the
+branching process. It is the distinguished coordinate along which the process
+progresses.
+
+In a standard rectangular tree layout with the rootvertex at the left and
+leaves at the right, this is the x-axis. But this is a rendering convention,
+not a structural requirement. The primary dimension can be mapped to any screen
+axis in any direction.
+
+The process coordinate values assigned to vertices are determined by the
+active **positioning mode** (see section below). The canonical process
+coordinate types in LineagesMakie.jl are:
+
+**`branchingtime`** — root-relative, forward polarity. Defined as the
+cumulative sum of `edgelength` values on the directed path from the rootvertex
+to a given vertex. `branchingtime(rootvertex) = 0`; the value increases toward
+the leaves. This is equivalent to "divergence time" in phylogenetic prose and is
+the x-coordinate produced by the `:edgelengths` and `:branchingtime` positioning
+modes. The process runs in the forward direction: rootvertex is earliest, leaves
+are latest.
+
+**`coalescenceage`** — leaf-relative, backward polarity. Defined as the
+cumulative sum of `edgelength` values on the directed path from a given vertex
+down to any leaf. `coalescenceage(leaf) = 0`; the value increases toward the
+rootvertex. This corresponds to "coalescent age" or "backward time" in
+population-genetic prose. Requires an ultrametric tree (all root-to-leaf paths
+have equal total `edgelength`) or an explicit non-ultrametric policy. The
+process runs in the backward direction: leaves are earliest (age = 0), the
+rootvertex is latest (age = maximum).
+
+**Topological variants** — four topology-based positioning modes do not use
+edge-length data:
+- `:vertexlevels` — integer level = edge count from rootvertex; forward polarity;
+  analogue of `branchingtime` for topology-only displays.
+- `:vertexdepths` — cumulative topological edge count from rootvertex; forward
+  polarity.
+- `:vertexheights` — per-vertex edge count to farthest leaf; backward polarity;
+  topology-only analogue of `coalescenceage`. This is the default when no
+  `edgelength` is supplied, because it aligns all leaves at the same
+  x-coordinate (classic cladogram appearance).
+- `:vertexcoords` / `:vertexpos` — user-supplied coordinates in data or pixel
+  space respectively; polarity is user-defined.
+
+### Axis polarity, display polarity, and orientation
+
+Three attributes of `LineageAxis` govern the relationship between process
+coordinates and the screen.
+
+**`axis_polarity`** records the semantic direction of increasing process
+coordinates. `:forward` means increasing process coordinate moves in the
+root-to-leaf direction; `:backward` means it moves in the leaf-to-root
+direction. `LineageAxis` infers this from the active positioning mode:
+`:edgelengths`, `:branchingtime`, `:vertexdepths`, and `:vertexlevels` are
+`:forward`; `:coalescenceage` and `:vertexheights` are `:backward`. Users can
+override this for axis labeling purposes.
+
+**`display_polarity`** governs the mapping from process coordinates to screen
+position. `:standard` maps increasing process coordinates to increasing screen
+position along `lineage_orientation` (e.g., rightward in `:left_to_right`
+mode). `:reversed` inverts this mapping. Display polarity is independent of
+axis polarity.
+
+**`lineage_orientation`** selects the screen embedding. `:left_to_right` places
+the lineage axis along the x-axis with the origin at the left. `:right_to_left`
+places it along x with the origin at the right. `:top_to_bottom` and
+`:bottom_to_top` place it along y. `:radial` is the default for circular
+layouts.
+
+Some common combinations:
+
+| Positioning mode | `display_polarity` | `lineage_orientation` | Result |
+|---|---|---|---|
+| `:edgelengths` (forward) | `:standard` | `:left_to_right` | Rootvertex at left, leaves at right (standard phylogram) |
+| `:edgelengths` (forward) | `:reversed` | `:left_to_right` | Rootvertex at right, leaves at left (paleontological convention) |
+| `:coalescenceage` (backward) | `:standard` | `:left_to_right` | Leaves at left (age = 0), rootvertex at right (maximum age) |
+| `:coalescenceage` (backward) | `:reversed` | `:left_to_right` | Rootvertex at left, leaves at right (inverted coalescent, non-standard) |
+| `:vertexheights` (backward) | `:standard` | `:top_to_bottom` | Leaves at top (height = 0), rootvertex at bottom (dendrogram-down) |
+
+### The secondary dimension
+
+The secondary dimension (transverse axis) governs leaf placement orthogonal to
+the primary dimension. In rectangular layouts this is the y-axis; in circular
+layouts it is the angular position. Leaf spacing along the transverse axis is
+controlled by `leaf_spacing` (default `:equal` for even distribution).
+
+Beyond leaf spacing, the transverse axis supports visual encodings attached to
+edges: width, fill, border, cross-sectional geometry. These are the branch-
+width gradients, ribbons, and uncertainty envelopes listed in section 2.1.
+
+### Higher-dimensional embeddings and future extensions
+
+`LineageAxis` is designed to generalize beyond 2D planar trees. The primary
+dimension (process index) and the transverse dimensions form a product space
+that can be extended to three or more dimensions:
+
+- 3D tree renderings (branches as tubes; morphospace trajectories)
+- Geographic tip coordinates (tips placed at latitude/longitude)
+- Trait-space embeddings
+
+The accessor-first input design does not prevent this: `vertexcoords` already
+admits user-supplied 2D coordinates, and the same pattern extends to higher
+dimensions. These capabilities are Tier 3 and Tier 4.
+
+**Interval schemas** — named bins or ranges on the primary dimension (geological
+epochs, coalescent levels, custom event ranges) — allow visual elements to be
+placed by interval name rather than raw coordinate. An interval schema maps a
+symbol (`:eocene`, `:pleistocene`) to a numeric range on the lineage axis, and
+with transverse dimensions it induces cells or blocks that can hold arbitrary
+overlay layers. This is Tier 4.
+
+### Tier classification for LineageAxis capacities
+
+| Capacity | Tier |
+|---|---|
+| `LineageAxis` custom Makie `Block` with sensible tree defaults | 1 |
+| `axis_polarity` attribute (inferred from mode; overridable) | 1 |
+| `display_polarity` attribute (`:standard` / `:reversed`) | 1 |
+| `lineage_orientation` (`:left_to_right`, `:right_to_left`, `:top_to_bottom`, `:bottom_to_top`) | 1 |
+| `lineage_orientation = :radial` (circular layouts) | 1 |
+| Optional x-axis with tick marks for quantitative modes | 1 |
+| `CoordTransform` module for non-isotropic pixel↔data conversion | 1 |
+| Viewport-reactive pixel↔data mapping (correct resize behavior) | 1 |
+| Dendrogram orientation (`:top_to_bottom` / `:bottom_to_top`) | 2 |
+| Interval schemas and geological timescale bands | 4 |
+| 3D lineage embeddings (tubes, morphospace) | 4 |
+| Geographic tip coordinate constraints | 3 |
+| Interval-indexed overlay layers (background fills, annotations by epoch) | 4 |
+
+## 1. Tree and network layout styles
 
 The `layout` argument selects the global coordinate system. All layers and
 annotations must respect the active layout.
 
-### 1.1 Rooted Layouts
+### 1.1 Rooted layouts
 
-| Layout | Description | ggtree analogue |
+| Layout | Description | Reference |
 |---|---|---|
-| **Rectangular** (cladogram) | Standard horizontal; root left, tips right; branches at right angles | `rectangular` |
-| **Rectangular** (phylogram) | Same but branch horizontal length proportional to edge length | `rectangular` + `branch.length` |
-| **Slanted** | Diagonal (non-rectangular) branches forming a V-shape | `slanted` |
-| **Dendrogram** | Root at top, tips at bottom; hierarchical-clustering style | `dendrogram` |
-| **Circular** | Radial from centre; tips at outer ring | `circular` |
-| **Fan** | Circular with configurable opening angle (subtree of a circular) | `fan(angle=)` |
-| **Inward circular** | Circular with tips pointing inward, root at outer ring | `inward_circular` |
+| Rectangular (cladogram) | Standard horizontal; rootvertex left, leaves right; edges at right angles; default positioning mode `:vertexheights` | ggtree `rectangular` |
+| Rectangular (phylogram) | Same but edge horizontal length proportional to `edgelength`; positioning mode `:edgelengths` or `:branchingtime` | ggtree `rectangular` + `branch.length` |
+| Slanted | Diagonal (non-rectangular) edges forming a V-shape | ggtree `slanted` |
+| Dendrogram | Rootvertex at top, leaves at bottom; hierarchical-clustering style; `lineage_orientation = :top_to_bottom` | ggtree `dendrogram` |
+| Circular | Radial from centre; leaves at outer ring; `lineage_orientation = :radial` | ggtree `circular` |
+| Fan | Circular with configurable opening angle (subtree of a circular) | ggtree `fan(angle=)` |
+| Inward circular | Circular with leaves pointing inward, rootvertex at outer ring | ggtree `inward_circular` |
 
-### 1.2 Unrooted Layouts
+### 1.2 Unrooted layouts
 
-| Layout | Description | ggtree analogue |
-|---|---|---|
-| **Equal-angle** | Classic unrooted; equal angle subtended per subtree | `equal_angle` |
-| **Daylight** | Iteratively maximises angular space; better for imbalanced trees | `daylight` / `unrooted` |
+| Layout | Description |
+|---|---|
+| Equal-angle | Classic unrooted; equal angle subtended per subtree |
+| Daylight | Iteratively maximises angular space; better for imbalanced trees |
 
-### 1.3 Edge Rendering Variants
+### 1.3 Edge rendering variants
 
-Independent of coordinate layout; controls how branch segments are drawn.
+Independent of coordinate layout; controls how edge segments are drawn.
 
 | Style | Description |
 |---|---|
-| **Right-angle** | Horizontal + vertical segments (default for rectangular) |
-| **Diagonal / slanted** | Straight lines between parent and child coordinates |
-| **Ellipse** | Curved arcs instead of segments (aesthetic variant) |
-| **Rounded-rect** | Rounded corners on right-angle bends |
+| Right-angle | Horizontal + vertical segments (default for rectangular) |
+| Diagonal / slanted | Straight lines between parent and child coordinates |
+| Ellipse | Curved arcs instead of segments |
+| Rounded-rect | Rounded corners on right-angle bends |
 
-### 1.4 Layout Transformations
+### 1.4 Layout transformations
 
-Functions that reproject or rearrange an already-plotted tree.
+Functions that reproject or rearrange an already-rendered tree.
 
-| Operation | Description | ggtree analogue |
-|---|---|---|
-| `rotate_tree(angle)` | Rotate entire circular/fan layout | `rotate_tree()` |
-| `open_tree(angle)` | Open a circular tree to fan with given gap angle | `open_tree()` |
-| `flip(node1, node2)` | Swap position of two sister clades at a node | `flip()` |
-| `rotate(node)` | Swap left/right children at an internal node | `rotate()` |
-| `ladderise(direction)` | Sort children by clade size (left-heavy or right-heavy) | `ladderize()` (via ape) |
+| Operation | Description |
+|---|---|
+| `rotate_tree(angle)` | Rotate entire circular/fan layout |
+| `open_tree(angle)` | Open a circular tree to fan with given gap angle |
+| `flip(vertex1, vertex2)` | Swap position of two sister clades at a vertex |
+| `rotate(vertex)` | Swap left/right children at an internal vertex |
+| `ladderise(direction)` | Sort children by clade size (left-heavy or right-heavy) |
 
----
+### Tier classification for layouts
 
-## 2. Core Visual Layers
+| Capacity | Tier |
+|---|---|
+| Rectangular (cladogram) | 1 |
+| Rectangular (phylogram) | 1 |
+| Circular | 1 |
+| Fan layout | 2 |
+| Slanted layout | 2 |
+| Dendrogram (`:top_to_bottom`) | 2 |
+| Equal-angle unrooted | 2 |
+| Daylight unrooted | 4 |
+| Inward circular | 3 |
+| Layout transformations (flip, rotate, ladderise) | 2 |
 
-Analogous to ggplot2 `geom_*` layers. In Makie these become recipe components
-or composable `plot!` calls. Each layer should be independently togglable.
+## 2. Core visual layers
 
-### 2.1 Branch / Edge Layer
+Each layer corresponds to an independent Makie `@recipe`. Every layer is
+independently togglable and composable.
+
+### 2.1 Edge layer
 
 The fundamental tree structure.
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Color** | Uniform; mapped to continuous data (e.g. evolutionary rate, posterior); mapped to discrete group |
-| **Line width / thickness** | Uniform; mapped to data (e.g. bootstrap support, γ weight) |
-| **Line style** | Solid, dashed, dotted, etc. |
-| **Transparency (alpha)** | Uniform or mapped |
-| **Continuous color gradient along branch** | Color interpolated from parent value to child value along branch (ggtree `continuous="color"`) |
-| **Continuous width gradient along branch** | Width interpolated along branch (ggtree `continuous="size"`) |
-| **Directionality arrow** | Arrow head at child end; configurable size and style; critical for hybrid edges in networks |
-| **Root edge** | Optional stub branch extending from root node (ggtree `geom_rootedge`) |
+| Color | Uniform; mapped per-edge via a callable `(fromvertex, tovertex) -> color` |
+| Line width / thickness | Uniform; mapped per-edge |
+| Line style | Solid, dashed, dotted |
+| Alpha | Uniform or mapped |
+| Continuous color gradient along edge | Color interpolated from parent to child value along edge |
+| Continuous width gradient along edge | Width interpolated along edge |
+| Directionality arrow | Arrow head at child end; configurable size; critical for hybrid edges |
+| Root edge | Optional stub extending from rootvertex |
 
-### 2.2 Node Layer (Internal Nodes)
+### 2.2 Vertex layer (internal vertices)
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Marker / glyph** | Circle, square, diamond, triangle, etc.; or no marker |
-| **Color** | Uniform; mapped to data |
-| **Fill** | For hollow markers |
-| **Size** | Uniform; mapped to data (e.g. posterior probability) |
-| **Transparency** | Uniform or mapped |
-| **Visibility** | Show all / show only nodes with data / hide all |
-| **Subset filtering** | Apply marker only to nodes meeting a predicate |
+| Marker | Circle, square, diamond, triangle, or no marker |
+| Color | Uniform; mapped per-vertex |
+| Fill | For hollow markers |
+| Size | Uniform; mapped per-vertex |
+| Alpha | Uniform or mapped |
+| Visibility | Show all / show only vertices with data / hide all |
+| Subset filtering | Apply marker only to vertices meeting a predicate |
 
-### 2.3 Tip / Leaf Layer
+### 2.3 Leaf layer
 
-| Property | Options / Notes |
+Same properties as vertex layer; applied to leaf vertices only.
+
+### 2.4 Rootvertex layer
+
+Separate addressable layer for the rootvertex (distinct styling from other
+internal vertices).
+
+### 2.5 Leaf label layer
+
+| Property | Options |
 |---|---|
-| **Marker / glyph** | Same options as node layer |
-| **Color / fill / size / alpha** | Same options |
-| **Visibility** | Show all tips / subset |
+| Text content | Taxon name; or any leaf-associated value via `text_func` |
+| Font | Family, size, style (bold, italic), color |
+| Offset | Gap between leaf marker and label start |
+| Alignment | Left / right / centre; `align = true` draws a connecting dotted line |
+| Angle | Rotate labels (important for circular/fan layouts) |
+| Connector line | Dotted/dashed line from leaf to aligned label margin |
+| Rendering mode | Plain text; framed label; image (e.g. PhyloPic silhouette) |
+| Italic | Species names conventionally italicised |
+| Subset filtering | Label only a subset of leaves |
 
-### 2.4 Root Node Layer
+### 2.6 Vertex label layer (internal vertices)
 
-Separate addressable layer for the root node (distinct styling from other
-internal nodes — e.g. an outgroup marker or an open circle).
-
-### 2.5 Tip Label Layer
-
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Text content** | Taxon name; or any tip-associated data field |
-| **Font** | Family, size, style (bold, italic), colour |
-| **Offset** | Gap between tip marker and label start |
-| **Alignment** | Left / right / centre; `align=true` draws a connecting dotted line to an aligned margin |
-| **Angle** | Rotate labels (important for circular/fan layouts) |
-| **Connector line** | Dotted/dashed line from tip to aligned label margin |
-| **Rendering mode** | Plain text; framed label (box); image (e.g. PhyloPic silhouette) |
-| **Italic rendering** | Species names conventionally italicised |
-| **Subset filtering** | Label only a subset of tips |
+| Text content | Bootstrap; posterior; name; any per-vertex value via `value_func` |
+| Position | At vertex; offset toward parent; offset toward children |
+| Font / color / size | Standard |
+| Threshold filter | Show label only if value meets predicate |
 
-### 2.6 Node / Internal Label Layer
+### 2.7 Edge label layer
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Text content** | Bootstrap value; posterior probability; node name; any node-associated data field |
-| **Position** | At node; offset toward parent; offset toward children |
-| **Font / colour / size** | Same as tip label |
-| **Subset / threshold** | Show label only if value > threshold (e.g. bootstrap ≥ 70) |
+| Edge length | Numeric value placed at edge midpoint |
+| Bootstrap / support | Placed near child vertex or at midpoint |
+| Gamma (γ) | Inheritance weight on hybrid edges |
+| Custom data | Any edge-associated scalar mapped to text |
+| Color / size | Major vs. minor hybrid edges distinguished by color |
 
-### 2.7 Edge Label Layer
+### 2.8 Scale bar layer
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Branch length** | Numeric value placed along branch midpoint |
-| **Bootstrap / support** | Placed near child node or branch midpoint |
-| **Gamma (γ)** | Inheritance weight on hybrid edges; by convention placed below edge |
-| **Edge number** | Internal identifier (for development/debugging) |
-| **Custom data** | Any edge-associated scalar mapped to text |
-| **Colour / size** | Major vs. minor hybrid edges distinguished by colour |
+| Position | (x, y) in data coordinates or corner anchor |
+| Length | In edge-length data units |
+| Label | Numeric value and optional unit string |
+| Color / line width / font | Standard |
 
-### 2.8 Scale Bar Layer
+### Tier classification for core layers
 
-Phylogenetic distance scale bar (not a full axis); shows a reference length
-and its numeric value.
-
-| Property | Options / Notes |
+| Layer | Tier |
 |---|---|
-| **Position** | (x, y) in data coordinates or corner anchor |
-| **Width** | Length in branch-length units |
-| **Label** | Numeric value and optional unit string |
-| **Colour / line width / font** | Standard styling |
+| `EdgeLayer` (color, linewidth, linestyle, alpha) | 1 |
+| `VertexLayer` (internal vertices) | 1 |
+| `LeafLayer` | 1 |
+| `LeafLabelLayer` | 1 |
+| `VertexLabelLayer` with threshold filter | 1 |
+| `ScaleBarLayer` | 1 |
+| Rootvertex layer | 2 |
+| Edge label layer | 2 |
+| Continuous color/width gradient along edge | 2 |
+| Directionality arrow on edges | 3 |
+| Root edge stub | 2 |
+| Image rendering in leaf label layer | 4 |
+| Connector line / aligned margin labels | 2 |
 
----
+## 3. Clade and group annotation layers
 
-## 3. Clade & Group Annotation Layers
-
-### 3.1 Clade Highlight
+### 3.1 Clade highlight
 
 Shade the background region occupied by a monophyletic clade.
 
 | Shape | Notes |
 |---|---|
-| **Rectangle** | Axis-aligned bounding box around clade |
-| **Rounded rectangle** | Softened corners |
-| **Encircle / blob** | Smooth spline enclosing clade tips and branches |
-| **Gradient fill** | Radial or linear gradient for aesthetic effect |
+| Rectangle | Axis-aligned bounding box around clade |
+| Rounded rectangle | Softened corners |
+| Encircle / blob | Smooth spline enclosing clade leaves and edges |
+| Gradient fill | Radial or linear gradient |
 
-Key parameters: `node` (MRCA), `fill`, `colour`, `alpha`, `extend`
-(padding), `extendto` (extend to a fixed x value / outer margin).
+Key parameters: MRCA vertex, fill, color, alpha, padding, `extendto`
+(extend to a fixed x value or outer margin).
 
-### 3.2 Clade Label / Bar
+### 3.2 Clade label / bar
 
-Bracket + text annotation spanning a clade, typically placed to the right of
-tips (ggtree `geom_cladelabel`, `geom_strip`).
+Bracket + text annotation spanning a clade.
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Bar** | Vertical bracket spanning clade extent |
-| **Label text** | Clade name, placed beside or at centre of bar |
-| **Offset** | Distance from tips to bar |
-| **Text offset** | Gap between bar and text |
-| **Angle** | Rotate text (e.g. vertical for space saving) |
-| **Font / colour / size** | Standard |
-| **Horizontal vs. vertical** | Orientation of bar and text |
+| Bar | Vertical bracket spanning clade extent |
+| Label text | Clade name, beside or at centre of bar |
+| Offset | Distance from leaves to bar |
+| Text offset | Gap between bar and text |
+| Angle | Rotate text |
+| Font / color / size | Standard |
 
-### 3.3 Taxa-Range Strip
+### 3.3 Taxa-range strip
 
-Like clade label but defined by two arbitrary tip names rather than an MRCA
-node — useful for paraphyletic groupings (ggtree `geom_strip`).
+Like clade label but defined by two arbitrary leaf names rather than an MRCA
+vertex — useful for paraphyletic groupings.
 
-### 3.4 Balance Highlight
+### 3.4 Balance highlight
 
-Highlights the two sister clades descending from a given internal node with
-alternating fills — useful for visualising evolutionary "balance"
-(ggtree `geom_balance`).
+Highlights the two sister clades descending from a given internal vertex with
+alternating fills.
 
-### 3.5 Clade Collapse
+### 3.5 Clade collapse
 
-Replace a clade with a triangle glyph, optionally sized proportional to the
-number of tips or some summary statistic.
+Replace a clade with a triangle glyph.
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Triangle width / height** | Proportional to tip count or fixed |
-| **Fill / colour / alpha** | |
-| **Label** | Collapsed clade name |
+| Triangle width / height | Proportional to leaf count or fixed |
+| Fill / color / alpha | Standard |
+| Label | Collapsed clade name |
 
-### 3.6 Clade Zoom / Inset
+### 3.6 Clade zoom / inset
 
-Show a zoomed view of a clade alongside the full tree (ggtree `viewClade`,
-`zoomClade`).
+Show a zoomed view of a clade alongside the full tree.
 
----
+### Tier classification for clade layers
 
-## 4. Cross-Taxon Link Layers
+| Layer | Tier |
+|---|---|
+| `CladeHighlightLayer` (rectangle) | 1 |
+| `CladeLabelLayer` (bracket + text) | 1 |
+| Taxa-range strip | 2 |
+| Balance highlight | 2 |
+| Clade collapse (triangle) | 2 |
+| Clade zoom / inset | 2 |
+| Clade highlight (rounded rect, encircle, gradient) | 3 |
 
-Curved or straight lines connecting two arbitrary tips or nodes.
+## 4. Cross-taxon link layers
 
-| Layer | Use Case | Key Parameters |
+Curved or straight lines connecting two arbitrary leaves or vertices.
+
+| Layer | Use case | Key parameters |
 |---|---|---|
-| **Taxa link** | Co-evolution, host–parasite, gene transfer | `tip1`, `tip2`, `curvature`, `colour`, `linetype`, `arrow` |
-| **Tanglegram link** | Paired tree comparison; connects same taxon in mirrored trees | Same |
+| Taxa link | Co-evolution, host–parasite, gene transfer | `leaf1`, `leaf2`, `curvature`, `color`, `linestyle`, `arrow` |
+| Tanglegram link | Paired tree comparison | Same |
 
----
+Tier: 4
 
-## 5. Network-Specific Layers
+## 5. Network-specific layers
 
-Required when the input is a phylogenetic network (has reticulations) rather
-than a bifurcating tree. These have no analogue in standard tree visualization.
+Required when the input is a phylogenetic network (has reticulations).
 
-### 5.1 Hybrid Node Marker
+### 5.1 Hybrid vertex marker
 
-Reticulation nodes must be visually distinguished from tree nodes.
-
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Glyph** | Distinct shape (e.g. filled diamond, double circle) |
-| **Colour / fill / size** | May differ from tree-node defaults |
-| **Label** | Hybrid tag (e.g. `#H1`) |
+| Marker | Distinct shape (filled diamond, double circle) |
+| Color / fill / size | May differ from tree-vertex defaults |
+| Label | Hybrid tag (e.g. `#H1`) |
 
-### 5.2 Hybrid / Reticulation Edge Rendering
+### 5.2 Hybrid / reticulation edge rendering
 
-Each reticulation has two parent edges converging on the same child node.
-Both must be rendered, even though this creates a non-tree path.
+Each reticulation has two parent edges converging on the same child vertex.
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Major edge** | Primary inheritance path (`γ > 0.5`); drawn like a tree edge but colour-distinguished |
-| **Minor edge** | Secondary path (`γ < 0.5`); conventionally lighter colour or dashed |
-| **Colour (major)** | e.g. dark blue |
-| **Colour (minor)** | e.g. light blue / sky blue |
-| **Line weight** | May be proportional to γ |
-| **Arrow / directionality** | Required to show gene flow direction; essential on minor edges |
-| **Arrow size** | Configurable (`arrowlen`) |
-| **Curve / routing** | Curved arc to avoid overlap with tree edges; routing must handle crossing |
+| Major edge | Primary inheritance path (γ > 0.5) |
+| Minor edge | Secondary path (γ < 0.5); conventionally dashed or lighter |
+| Color (major) | e.g. dark blue |
+| Color (minor) | e.g. light blue / sky blue |
+| Line weight | May be proportional to γ |
+| Arrow / directionality | Required to show gene-flow direction |
+| Curve / routing | Curved arc to avoid overlap with tree edges |
 
-### 5.3 Gamma (γ) Label Layer
+### 5.3 Gamma (γ) label layer
 
-Numeric inheritance weight labels on hybrid edges.
-
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Value displayed** | γ (raw), percentage, or both |
-| **Position** | Below edge (convention), at midpoint |
-| **Colour** | Matches edge colour (major/minor) |
-| **Font size / family** | Standard |
-| **Toggle** | On/off independently of edge rendering |
+| Value displayed | γ (raw), percentage, or both |
+| Position | Below edge (convention), at midpoint |
+| Color | Matches edge color (major/minor) |
 
-### 5.4 Network View Modes
+### 5.4 Network view modes
 
 | Mode | Description |
 |---|---|
-| **Full network** (`:fulltree`) | All edges rendered, including both major and minor hybrid edges |
-| **Major tree** (`:majortree`) | Only major edges shown; minor hybrid edges indicated by small arrows or omitted |
+| Full network | All edges rendered, including major and minor hybrid edges |
+| Major tree | Only major edges shown; minor hybrid edges omitted or indicated by arrows |
 
-### 5.5 Rooting / Direction Model Display
+### 5.5 Rooting / direction display
 
-| Property | Options / Notes |
+| Mode | Options |
 |---|---|
-| **Rooted** | Root node marked; all edges directed away from root |
-| **Semi-directed** | Hybrid edges directed; tree edges undirected or ambiguously directed |
-| **Unrooted** | No directional arrows on tree edges |
+| Rooted | Rootvertex marked; all edges directed away from rootvertex |
+| Semi-directed | Hybrid edges directed; tree edges undirected |
+| Unrooted | No directional arrows on tree edges |
 
----
+### Tier classification for network layers
 
-## 6. External Data Overlay Layers
-
-Panels and glyphs that attach external data to tips or nodes without altering
-the tree geometry.
-
-### 6.1 Aligned Heatmap Panel
-
-A rectangular heatmap aligned to tip order, appended to the right of the tree
-(ggtree `gheatmap`).
-
-| Property | Options / Notes |
+| Layer | Tier |
 |---|---|
-| **Data** | Matrix of values; columns are traits/sites, rows are taxa (aligned by tip label) |
-| **Colour scale** | Low / high colours; diverging; categorical |
-| **Column labels** | Position (top/bottom), angle, font |
-| **Width / offset** | Relative width and gap from tree |
-| **Multiple panels** | Stack multiple heatmaps side by side |
-| **Legend** | Colourbar per heatmap |
+| All network-specific layers | 3 |
 
-### 6.2 Multiple Sequence Alignment Panel
+## 6. External data overlay layers
 
-Visualise an aligned DNA/protein sequence matrix alongside the tree (ggtree
-`msaplot`).
+### 6.1 Aligned heatmap panel
 
-| Property | Options / Notes |
+A rectangular heatmap aligned to leaf order, appended adjacent to the tree.
+
+| Property | Options |
 |---|---|
-| **Colour scheme** | Nucleotide (A/C/G/T), amino acid, or custom |
-| **Window** | Column range to display |
-| **Width / offset** | Layout parameters |
+| Data | Matrix with rows = taxa, columns = traits/sites |
+| Color scale | Low/high colors; diverging; categorical |
+| Column labels | Position, angle, font |
+| Width / offset | Relative width and gap from tree |
+| Multiple panels | Stack multiple heatmaps |
+| Legend | Color bar per heatmap |
 
-### 6.3 Faceted Data Panel
+### 6.2 Multiple sequence alignment panel
 
-Generic additional panel aligned to tip order, rendered with an arbitrary plot
-type (bar, dot, box, line) — ggtree `facet_plot` / `geom_facet`.
+DNA or protein alignment visualized alongside the tree.
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Panel name** | Label for the panel strip |
-| **Data** | Data frame with tip labels and value columns |
-| **Plot type** | Bar, point, segment, density, etc. |
-| **Relative width** | Width of panel relative to tree panel |
-| **Multiple panels** | Arbitrary number of panels with independent widths |
+| Color scheme | Nucleotide (A/C/G/T), amino acid, or custom |
+| Window | Column range to display |
+| Width / offset | Layout parameters |
 
-### 6.4 Node Pie Chart Insets
+### 6.3 Faceted data panel
 
-Pie charts embedded at node or tip positions, showing compositional data
-(e.g. ancestral state probabilities, population mixture proportions) —
-ggtree `nodepie` + `geom_inset`.
+Generic additional panel aligned to leaf order, rendered with an arbitrary
+plot type (bar, dot, box, line).
 
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Data** | One row per node; columns are proportions (summing to 1) |
-| **Size** | Width and height of inset |
-| **Position** | At node coordinate; at branch midpoint |
-| **Colours** | One per category |
-| **Outline** | Border colour and width |
+| Panel label | Strip text |
+| Data | Per-leaf values |
+| Plot type | Bar, point, segment, density, etc. |
+| Relative width | Width relative to tree panel |
+| Multiple panels | Arbitrary number with independent widths |
 
-### 6.5 Node Bar Chart Insets
+### 6.4 Vertex pie chart insets
 
-Same as pie but rendered as stacked or grouped bars — ggtree `nodebar`.
+Pie charts embedded at vertex or leaf positions showing compositional data
+(ancestral state probabilities, population mixture proportions).
 
-### 6.6 Arbitrary Subplot Insets
+### 6.5 Vertex bar chart insets
 
-Embed any plot object at a node or branch position — ggtree `geom_inset`.
+Same as pie but rendered as stacked or grouped bars.
 
-### 6.7 Uncertainty / Range Bars
+### 6.6 Arbitrary subplot insets
 
-Horizontal bars at tip or node positions expressing uncertainty (e.g. 95%
-HPD interval for a divergence time estimate) — ggtree `geom_range`.
+Embed any plot object at a vertex or edge position.
 
-| Property | Options / Notes |
+### 6.7 Uncertainty / range bars
+
+Horizontal bars expressing uncertainty at leaves or vertices (95% HPD intervals
+for divergence-time estimates).
+
+| Property | Options |
 |---|---|
-| **Interval** | Min / max values |
-| **Centre** | Mean, median, or node coordinate |
-| **Colour / line width / alpha** | Standard |
+| Interval | Min / max values |
+| Centre | Mean, median, or vertex coordinate |
+| Color / line width / alpha | Standard |
 
----
+### Tier classification for data overlay layers
 
-## 7. Multi-Panel / Comparative Layouts
-
-### 7.1 Tanglegram (Paired Trees)
-
-Two mirrored trees connected by association lines — ggtree `ggdoubletree`.
-
-| Property | Options / Notes |
+| Layer | Tier |
 |---|---|
-| **Ladderise / optimise** | Minimise link crossings by rotating nodes |
-| **Link style** | Straight, curved, sigmoid |
-| **Link colour / alpha** | Uniform or mapped to association strength |
-| **Gap** | Space between the two trees |
+| Uncertainty / range bars | 2 |
+| Aligned heatmap panel | 2 |
+| Tanglegram / paired-tree layout | 2 |
+| Faceted data panel | 4 |
+| MSA panel | 4 |
+| Vertex pie / bar chart insets | 4 |
+| Arbitrary subplot insets | 4 |
 
-### 7.2 Tree Density Plot
+## 7. Multi-panel and comparative layouts
 
-Overlay of many trees (e.g. MCMC posterior sample) to show topological and
-branch-length uncertainty — ggtree `ggdensitree`.
+### 7.1 Tanglegram (paired trees)
 
-| Property | Options / Notes |
+Two mirrored trees connected by association lines.
+
+| Property | Options |
 |---|---|
-| **Colour / alpha** | Per-tree colouring or global translucency |
-| **Alignment** | Align at tips, root, or internal node |
-| **Summary tree overlay** | Consensus or MCC tree drawn on top |
+| Ladderise / optimise | Minimise link crossings |
+| Link style | Straight, curved, sigmoid |
+| Link color / alpha | Uniform or mapped to association strength |
+| Gap | Space between the two trees |
 
----
+### 7.2 Tree density plot
 
-## 8. Axes, Time Scale, and Legends
+Overlay of many trees (e.g. MCMC posterior sample) showing topological and
+edge-length uncertainty.
 
-### 8.1 Time / Branch-Length Axis
-
-| Property | Options / Notes |
+| Property | Options |
 |---|---|
-| **Direction** | Forward (root → tips) or reverse (present time at right) |
-| **Geological time scale** | Optional coloured epoch/period bands with labels |
-| **Custom tick positions and labels** | Override auto ticks |
-| **Reverse time scale** | ggtree `revts()` — flip x-axis so present is at right |
+| Color / alpha | Per-tree or global translucency |
+| Alignment | Align at leaves, rootvertex, or internal vertex |
+| Summary tree overlay | Consensus or MCC tree drawn on top |
 
-### 8.2 Scale Bar
+### Tier classification
 
-Standalone bar (section 2.8 above); alternative to a full axis for
-unlabelled phylograms.
+| Capacity | Tier |
+|---|---|
+| Tanglegram (paired trees) | 2 |
+| Tree density overlay | 4 |
 
-### 8.3 Colour Legend / Colourbar
+## 8. Axes, time scale, and legends
 
-For any continuous data mapped to colour.
+### 8.1 Primary axis
+
+The `LineageAxis` primary dimension axis (see section 0 for full description).
+
+| Property | Options |
+|---|---|
+| Direction | Controlled by `axis_polarity` + `display_polarity` (see section 0) |
+| Geological time scale | Named interval bands with labels (Tier 4; `interval_schema`) |
+| Custom tick positions and labels | Override auto ticks |
+| Reversed display | Controlled by `display_polarity = :reversed` |
+
+### 8.2 Scale bar
+
+Standalone scale bar as an alternative to a full axis.
+
+### 8.3 Color legend / color bar
+
+For any continuous data mapped to color.
 
 ### 8.4 Theme
 
-Overall plot appearance.
-
 | Element | Options |
 |---|---|
-| **Background** | White, transparent, custom colour |
-| **Grid lines** | None (standard for trees), horizontal, both |
-| **Axis visibility** | No axes (classic tree), x-axis only (phylogram), both |
-| **Panel border** | On/off |
-| **Legend position** | Standard Makie options |
+| Background | White, transparent, custom color |
+| Grid lines | None (standard for trees), horizontal, both |
+| Axis visibility | No axes (classic tree), x-axis only, both |
+| Panel border | On/off |
+| Legend position | Standard Makie options |
 
----
+### Tier classification
 
-## 9. Aesthetic Mapping Summary
-
-All layers should support mapping any of the following aesthetics to data
-columns attached to nodes, tips, or edges.
-
-| Aesthetic | Applicable Layers |
+| Capacity | Tier |
 |---|---|
-| **colour** | branches, nodes, tips, labels, highlights |
-| **fill** | node/tip markers, clade highlights, bars |
-| **size / linewidth** | branches, markers |
-| **linetype / dash pattern** | branches, connector lines |
-| **alpha** | all layers |
-| **shape / marker** | node and tip markers |
-| **label (text)** | tip labels, node labels, edge labels |
-| **font size** | label layers |
-| **font style** | label layers (bold, italic) |
+| Primary axis with optional tick marks | 1 |
+| Scale bar layer | 1 |
+| Reversed axis (`display_polarity`) | 1 |
+| Dendrogram y-axis | 2 |
+| Color legend / color bar | 2 |
+| Geological time scale bands (`interval_schema`) | 4 |
 
-Data can originate from:
-- Node / tip / edge attributes in the tree object itself
-- External data joined by tip label or node identifier (analogous to ggtree's
-  `%<+%` operator)
+## 9. Aesthetic mapping summary
 
----
+All layers support mapping any of the following aesthetics to data callables
+applied per-vertex, per-leaf, or per-edge.
 
-## 10. Interactivity (Aspirational)
-
-Not required for initial release but should be architecturally possible via
-Makie's native interaction system (no external JS dependency, unlike D3Trees).
-
-| Feature | Description |
+| Aesthetic | Applicable layers |
 |---|---|
-| **Hover tooltip** | Show node/tip name, branch length, γ, or any attribute on hover |
-| **Click to select** | Select a clade or tip for further inspection |
-| **Click to collapse/expand** | Interactive clade folding |
-| **Pan and zoom** | Standard Makie axis interaction |
-| **Lazy expansion** | For very large trees: render subtrees on demand (analogous to D3Trees lazy loading) |
+| `color` | Edges, vertices, leaves, labels, highlights |
+| `fill` | Vertex/leaf markers, clade highlights, bars |
+| `linewidth` | Edges, markers (stroke) |
+| `linestyle` | Edges, connector lines |
+| `alpha` | All layers |
+| `marker` | Vertex and leaf markers |
+| `text` (via `text_func` / `value_func`) | Leaf labels, vertex labels, edge labels |
+| `fontsize` | Label layers |
+| `italic` | Label layers |
 
----
+Data sources:
+- Per-vertex, per-leaf, or per-edge attributes in the tree object itself
+  (accessed via `vertexvalue`, `edgelength`, or any accessor callable)
+- External data joined to the tree before calling `lineageplot` (no bespoke
+  join operator; users join prior to plotting, consistent with
+  STYLE-julia.md's prohibition on bespoke operators)
 
-## 11. Priority / Tier Classification
+## 10. Interactivity
 
-To guide implementation order.
+Not required for Tier 1 but architecturally possible via Makie's native
+interaction system. All recipes are Observable-native; the interaction layer
+is just a matter of wiring.
 
-### Tier 1 — Core (must have at initial release)
+| Feature | Description | Tier |
+|---|---|---|
+| Hover tooltip | Show vertex/leaf name, edge length, γ, or any attribute on hover | 4 |
+| Click to select | Select a clade or leaf for further inspection | 4 |
+| Click to collapse/expand | Interactive clade folding | 4 |
+| Pan and zoom | Standard Makie axis interaction (provided by `Axis` / `LineageAxis`) | 1 |
+| Lazy expansion | For very large trees: render subtrees on demand | 4 |
+| Observable-reactive re-layout | Wrapping tree in Observable; updating triggers full re-render | 1 |
+| Observable-reactive attributes | Per-attribute Observables (color, alpha, etc.) update without re-calling `lineageplot!` | 1 |
 
+## 11. Priority and tier classification summary
+
+### Tier 1 — Core MVP
+
+- `LineageAxis` with full semantic axis abstraction (axis_polarity,
+  display_polarity, lineage_orientation, CoordTransform, viewport-reactive
+  pixel↔data mapping)
 - Rectangular (cladogram + phylogram) and circular layouts
-- Branch layer with colour, width, linetype, alpha
-- Tip and node marker layers
-- Tip label layer (text, offset, italic)
-- Node label layer (bootstrap/posterior display with threshold filter)
-- Clade highlight (rectangle)
-- Clade label / bar
-- Scale bar
-- Basic theme (no axes / x-axis only)
+- All eight positioning modes (`:edgelengths`, `:branchingtime`,
+  `:coalescenceage`, `:vertexdepths`, `:vertexheights`, `:vertexlevels`,
+  `:vertexcoords`, `:vertexpos`)
+- `EdgeLayer`, `VertexLayer`, `LeafLayer`, `LeafLabelLayer`,
+  `VertexLabelLayer`, `CladeHighlightLayer` (rectangle), `CladeLabelLayer`,
+  `ScaleBarLayer`
+- `LineagePlot` composite recipe
+- Observable-native reactivity throughout
+- Primary axis with optional tick marks for quantitative modes
+- AbstractTrees.jl adapter
+- Full test coverage (unit, integration, smoke, Aqua, JET)
 
 ### Tier 2 — Standard annotation
 
-- Fan layout; slanted layout; equal-angle (unrooted)
-- Edge labels (branch length, bootstrap, γ)
+- Fan layout; slanted layout; equal-angle (unrooted); dendrogram orientation
+- Layout transformations (flip, rotate, ladderise)
+- Edge labels (edge length, bootstrap, γ)
 - Clade collapse (triangle)
 - Clade zoom / inset view
-- Continuous colour / width gradient along branches
+- Continuous color / width gradient along edges
+- Root edge stub
 - Aligned heatmap panel
 - Uncertainty / range bars
 - Tanglegram layout
+- Rootvertex layer
+- Graphs.jl adapter
 
-### Tier 3 — Network-specific
+### Tier 3 — Network-specific and advanced layout
 
-- Hybrid node marker layer
-- Hybrid / reticulation edge rendering (major + minor, with colour distinction)
+- Hybrid vertex marker layer
+- Hybrid / reticulation edge rendering (major + minor, color distinction)
 - Gamma (γ) label layer
 - Full-network vs. major-tree view mode toggle
 - Arrow / directionality rendering on reticulation edges
+- Inward circular layout
+- Geographic tip coordinate constraints
+- PhyloNetworks.jl adapter
 
-### Tier 4 — Advanced / aspirational
+### Tier 4 — Advanced and aspirational
 
 - Taxa-link / cross-taxon curve layer
-- Node pie / bar insets
+- Vertex pie / bar chart insets
 - MSA panel
 - Faceted generic data panel
 - Tree density overlay
-- Time-scale axis with geological periods
-- Interactive features (tooltip, click, lazy expand)
+- Geological time scale axis with interval schema
+- Hover tooltip; click-to-collapse; lazy expand
 - Daylight / tree-and-leaf unrooted layouts
+- 3D lineage embeddings (tubes, morphospace)
+- Interval-indexed overlay layers (backgrounds, fills, annotations by epoch)
+- Arbitrary subplot insets at vertices

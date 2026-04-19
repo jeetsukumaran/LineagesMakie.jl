@@ -20,9 +20,35 @@ explicit approval. No amendment or exception may be made unilaterally.
 For the decision log and ratification history, see
 `.workflow-docs/log.20260418T2301--vocabulary.md`.
 
----
-
 ## Entries
+
+### `axis_polarity`
+
+**Part of speech:** noun (semantic concept); `LineageAxis` attribute name
+
+**Definition:** The relationship between increasing process-coordinate values
+and the direction of the modeled process. Has two values:
+
+- `:forward` — increasing process coordinates move in the root-to-leaf
+  direction (forward time). Modes `:edgelengths`, `:branchingtime`,
+  `:vertexdepths`, and `:vertexlevels` produce forward process coordinates
+  (rootvertex = 0, increases toward leaves).
+- `:backward` — increasing process coordinates move in the leaf-to-root
+  direction (backward time, as in coalescent models). Modes `:coalescenceage`
+  and `:vertexheights` produce backward process coordinates (leaves = 0,
+  increases toward root).
+
+`axis_polarity` is a property of the data and positioning mode, not of the
+screen. It is distinct from `display_polarity`, which governs the screen
+direction. A `:backward` process coordinate does not imply a reversed plot;
+the two are independently settable.
+
+`LineageAxis` infers a default `axis_polarity` from the active positioning
+mode and exposes it as an overridable attribute for axis labeling and
+semantic documentation.
+
+**Proscribed alternates:** conflating with `display_polarity`; `time_direction`,
+`polarity`, `orientation`.
 
 ---
 
@@ -143,6 +169,30 @@ explicitly approves).
 
 ---
 
+### `display_polarity`
+
+**Part of speech:** noun (rendering concept); `LineageAxis` attribute name
+
+**Definition:** The mapping from process-coordinate values to screen direction
+along the lineage axis. Has two values:
+
+- `:standard` (default) — increasing process coordinates map to increasing
+  screen position along `lineage_orientation` (right in `:left_to_right`
+  orientation, up in `:bottom_to_top`). With forward axis polarity, this places
+  the rootvertex at the left and leaves at the right.
+- `:reversed` — increasing process coordinates map to decreasing screen
+  position. Allows, for example, a forward-time tree to be drawn root-at-right
+  (paleontological or stratigraphic convention), or a `:coalescenceage` tree to
+  be drawn with the rootvertex at the left and leaves at the right.
+
+`display_polarity` is independent of `axis_polarity`. The combination of the
+two determines how the biological direction of the process maps to the screen.
+
+**Proscribed alternates:** conflating with `axis_polarity`; `flip`, `invert`,
+`reverse`, `reverse_axis`.
+
+---
+
 ### `edge`
 
 **Part of speech:** noun (structural concept)
@@ -225,6 +275,28 @@ entirely).
 
 ---
 
+### `interval_schema`
+
+**Part of speech:** noun (future capability); field name
+
+**Definition:** A mapping from named intervals to axis coordinate ranges,
+enabling visual elements to be placed by interval name rather than raw
+coordinate. Geological timescales (epochs, periods, eras) are the motivating
+example, but any named partition of the primary lineage axis qualifies.
+
+An `interval_schema` value would map a symbol such as `:eocene` to a numeric
+range on the `process_coordinate` axis, allowing annotations, background fills,
+and overlays to be addressed by interval key. With two or more transverse
+dimensions, intervals define cells in a coordinate lattice that can hold
+arbitrary visual layers.
+
+**Scope:** `interval_schema` is explicitly **Tier 4**. The term is recorded
+here to reserve it and prevent incompatible uses in earlier tiers.
+
+**Proscribed alternates:** `time_scale`, `epoch_map`, `interval_map`.
+
+---
+
 ### `leaf` / `leaves`
 
 **Part of speech:** noun (role)
@@ -269,6 +341,37 @@ layout units.
 
 ---
 
+### `lineage_orientation`
+
+**Part of speech:** noun (rendering concept); `LineageAxis` attribute name
+
+**Definition:** How the primary lineage axis is embedded in the 2D scene.
+Controls which screen axis corresponds to lineage progression and which
+corresponds to the transverse (leaf-spacing) dimension.
+
+Values:
+- `:left_to_right` (default for rectangular layouts) — the lineage axis runs
+  along the x-axis; the transverse axis is y; rootvertex is at the left by
+  default.
+- `:right_to_left` — lineage axis runs along x, transverse is y; rootvertex
+  is at the right by default (use with `:standard` `display_polarity` and a
+  leaf-relative mode such as `:coalescenceage`, or with `:reversed`
+  `display_polarity` and a root-relative mode).
+- `:bottom_to_top` — lineage axis runs along y; transverse is x.
+- `:top_to_bottom` — lineage axis runs along y inverted; classic dendrogram
+  orientation.
+- `:radial` (default for circular layouts) — lineage axis is the radial
+  dimension; transverse axis is angular.
+
+`lineage_orientation` defines which physical screen axis carries the process
+coordinate. `display_polarity` then controls which end of that axis has the
+smaller values.
+
+**Proscribed alternates:** `orientation`, `direction`, `tree_direction`,
+`axis_orientation`.
+
+---
+
 ### `marker`
 
 **Part of speech:** noun (visual concept)
@@ -278,6 +381,31 @@ diamond, etc.). Follows Makie's naming convention. In prose, "glyph" is an
 acceptable synonym; in code, `marker` is the only permitted term.
 
 **Proscribed alternates (in code):** `glyph`, `symbol`, `shape`.
+
+---
+
+### `process_coordinate`
+
+**Part of speech:** noun (conceptual / documentation term)
+
+**Definition:** The scalar value that positions a vertex along the lineage axis.
+In any given plot, the process coordinate is determined by the active
+positioning mode: `branchingtime` values for `:branchingtime` or `:edgelengths`
+mode, `coalescenceage` values for `:coalescenceage` mode, topological edge
+counts for `:vertexlevels` / `:vertexdepths` / `:vertexheights`, or
+user-supplied coordinates for `:vertexcoords` / `:vertexpos`.
+
+This is a documentation and design term that unifies all positioning modes under
+a single concept. It does not appear as a code identifier (there is no function
+or struct field named `process_coordinate`). When writing code, use the specific
+accessor or mode name.
+
+`process_coordinate` is the concept that `axis_polarity` and `display_polarity`
+operate on: `axis_polarity` describes the semantic direction of increasing
+process-coordinate values; `display_polarity` describes their screen direction.
+
+**Proscribed alternates (as a code identifier):** use specific accessor names
+(`branchingtime`, `coalescenceage`, etc.).
 
 ---
 
@@ -304,6 +432,24 @@ positional argument of `edgelength(fromvertex, tovertex)` and any other
 edge-level accessor. Written as one word without underscore.
 
 **Proscribed alternates:** `child`, `v2`, `dst`, `to_vertex`.
+
+---
+
+### `transverse_axis`
+
+**Part of speech:** noun (conceptual / documentation term)
+
+**Definition:** The dimension perpendicular to the primary lineage axis, along
+which leaves are spaced. In rectangular layouts with `:left_to_right`
+orientation, this is the y-axis; in circular layouts it is the angular
+dimension. Transverse placement is determined by layout algorithms and
+controlled primarily by `leaf_spacing`.
+
+This is a documentation term providing a consistent name for the concept across
+layout types. It does not appear as a code identifier.
+
+**Proscribed alternates (as a code identifier):** use `leaf_spacing` and
+`leaf_order`.
 
 ---
 
@@ -363,33 +509,30 @@ without underscore.
 | `ScaleBarLayer` | `scalebarlayer!` | — |
 | `LineagePlot` | `lineageplot!` | — |
 
----
-
 ## Layout positioning modes
 
-| Symbol | Accessor required | x-coordinate source | Polarity |
-|---|---|---|---|
-| `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from `rootvertex`; computes `branchingtime` on the fly | Root = 0, increases toward leaves |
-| `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | Root = 0, increases toward leaves |
-| `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; requires ultrametric tree (or `nonultrametric` policy) | Leaf = 0, increases toward root |
-| `:vertexdepths` | none | Cumulative topological edge count from `rootvertex` (all edge weights = 1) | Root = 0, increases toward leaves |
-| `:vertexheights` | none | Per-vertex height (edge count to farthest leaf); all leaves at x = 0; topological analogue of `:coalescenceage` | Leaf = 0, increases toward root |
-| `:vertexlevels` | none | Integer level = edge count from `rootvertex`; equal spacing between levels; topological analogue of `:branchingtime` | Root = 0, increases toward leaves |
-| `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined |
-| `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined |
+| Symbol | Accessor required | x-coordinate source | Polarity | `axis_polarity` |
+|---|---|---|---|---|
+| `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from `rootvertex`; computes `branchingtime` on the fly | Root = 0, increases toward leaves | `:forward` |
+| `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | Root = 0, increases toward leaves | `:forward` |
+| `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; requires ultrametric tree (or `nonultrametric` policy) | Leaf = 0, increases toward root | `:backward` |
+| `:vertexdepths` | none | Cumulative topological edge count from `rootvertex` (all edge weights = 1) | Root = 0, increases toward leaves | `:forward` |
+| `:vertexheights` | none | Per-vertex height (edge count to farthest leaf); all leaves at x = 0; topological analogue of `:coalescenceage` | Leaf = 0, increases toward root | `:backward` |
+| `:vertexlevels` | none | Integer level = edge count from `rootvertex`; equal spacing between levels; topological analogue of `:branchingtime` | Root = 0, increases toward leaves | `:forward` |
+| `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
+| `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
 
 **Default mode:** `:edgelengths` if an `edgelength` accessor is supplied;
 `:vertexheights` otherwise.
 
 **Polarity summary:** Modes that are root-relative (`:edgelengths`,
-`:branchingtime`, `:vertexdepths`, `:vertexlevels`) assign the root x = 0 and
-increase toward the leaves, so leaves appear to the right. Modes that are
-leaf-relative (`:coalescenceage`, `:vertexheights`) assign leaves x = 0 and
-increase toward the root, so the root appears to the right. Both conventions
-are standard in different phylogenetic contexts; the mode name makes the
-polarity unambiguous.
-
----
+`:branchingtime`, `:vertexdepths`, `:vertexlevels`) have `:forward`
+`axis_polarity` and assign the root x = 0 increasing toward the leaves.
+Modes that are leaf-relative (`:coalescenceage`, `:vertexheights`) have
+`:backward` `axis_polarity` and assign leaves x = 0 increasing toward the
+root. With the default `display_polarity = :standard` and
+`lineage_orientation = :left_to_right`, forward modes place leaves at the
+right; backward modes place the rootvertex at the right.
 
 ## Compound-word naming convention
 
@@ -401,4 +544,5 @@ STYLE-julia.md §2.1, which permits omitting underscores when the name is not
 hard to read.
 
 Multi-word field names on structs retain underscores: `vertex_positions`,
-`edge_paths`, `leaf_order`, `leaf_spacing`.
+`edge_paths`, `leaf_order`, `leaf_spacing`, `axis_polarity`, `display_polarity`,
+`lineage_orientation`, `interval_schema`.
