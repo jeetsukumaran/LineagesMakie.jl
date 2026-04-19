@@ -38,6 +38,7 @@ authoritative reference; this section provides a quick-reference summary.
 | `lineage_orientation` | How the lineage axis is embedded in the scene | `orientation`, `direction` |
 | `process_coordinate` | Documentation term: the scalar that positions a vertex along the lineage axis | (not a code identifier) |
 | `interval_schema` | Named bins on the lineage axis; Tier 4 | `time_scale`, `epoch_map` |
+| `lineageunits` | Keyword arg selecting how vertex process coordinates are determined | `mode`, `positioning_mode`, `layout_mode` |
 
 ## User statement
 
@@ -53,8 +54,8 @@ authoritative reference; this section provides a quick-reference summary.
 > keyword-arg controlled with equal spacing as default. Edge lengths are
 > supplied via an accessor `edgelength(fromvertex, tovertex) -> value` (data
 > units) or `edgelength(fromvertex, tovertex) -> (; value, units)` (with
-> explicit unit; converted to data units); leaf-aligned topology mode computes
-> positions internally. Recipe architecture: separate composable layers, all
+> explicit unit; converted to data units); leaf-aligned topology `lineageunits`
+> value computes positions internally. Recipe architecture: separate composable layers, all
 > Tier 1; Observable-native; `LineageAxis` custom Block is Tier 1. No bespoke
 > operators — everything idiomatic Julia/Makie. Every public function gets full
 > tests (unit, integration, smoke, Aqua, JET). The target reference capacities
@@ -111,7 +112,7 @@ constraint on which Makie backend is used (CairoMakie, GLMakie, WGLMakie).
 
 The plot will support three layout algorithms (rectangular leaf-aligned
 topology, rectangular edge-length proportional, circular), all eight
-positioning modes (`:edgelengths`, `:branchingtime`, `:coalescenceage`,
+`lineageunits` values (`:edgelengths`, `:branchingtime`, `:coalescenceage`,
 `:vertexdepths`, `:vertexheights`, `:vertexlevels`, `:vertexcoords`,
 `:vertexpos`), independently togglable visual layers (edges, internal vertex
 markers, leaf markers, leaf labels, vertex labels, clade highlight, clade
@@ -134,14 +135,15 @@ addressable throughout the implementation.
 
 **Tree-centric view** — What is the structure? What scalar positions each
 vertex along the primary dimension? This is determined by the data and the
-positioning mode. The result is a set of `process_coordinate` values for each
-vertex.
+`lineageunits` value. The result is a set of `process_coordinate` values for
+each vertex.
 
 **User-centric view** — What does the researcher mean by those scalar values?
 Are they forward evolutionary time (diversification), backward coalescent time,
 substitutions per site, event ranks? The package records the `axis_polarity`
-of the active positioning mode (`:forward` for root-relative modes, `:backward`
-for leaf-relative modes) but imposes no further biological interpretation.
+of the active `lineageunits` value (`:forward` for root-relative values,
+`:backward` for leaf-relative values) but imposes no further biological
+interpretation.
 
 **Plotting-centric view** — How does the tree appear on screen? Which physical
 axis carries the process coordinate (`lineage_orientation`)? Does increasing
@@ -185,7 +187,7 @@ carries the screen attributes without encoding any biological meaning.
    specification), so that I can control whether unit conversion is applied.
 
 6. As a researcher, I want to omit `edgelength` entirely and get a leaf-aligned
-   topology plot (`:vertexheights` mode) with all leaves at the same
+   topology plot (`lineageunits = :vertexheights`) with all leaves at the same
    x-coordinate, so that I can visualize topology without requiring
    edge-length data.
 
@@ -200,23 +202,23 @@ carries the screen attributes without encoding any biological meaning.
 
 9. As a researcher, I want to supply `coalescenceage` as a function
    `vertex -> Float64` (leaf = 0, increases toward root) and use the
-   `:coalescenceage` positioning mode, so that coalescent trees are laid out
+   `lineageunits = :coalescenceage`, so that coalescent trees are laid out
    with leaves at one end and the rootvertex at the other.
 
 10. As a researcher, I want to supply `branchingtime` as a function
-    `vertex -> Float64` and use the `:branchingtime` positioning mode, so that
+    `vertex -> Float64` and use `lineageunits = :branchingtime`, so that
     I can provide pre-computed divergence times directly without re-deriving
     them from per-edge lengths.
 
 ### Layout
 
-11. As a researcher, I want to choose a positioning mode via the `mode` keyword
-    (`:edgelengths`, `:branchingtime`, `:coalescenceage`, `:vertexheights`,
-    `:vertexlevels`, `:vertexdepths`, `:vertexcoords`, `:vertexpos`), so that I
-    can control how vertex process coordinates are determined independently of
-    the tree data type.
+11. As a researcher, I want to choose a `lineageunits` value via the
+    `lineageunits` keyword (`:edgelengths`, `:branchingtime`, `:coalescenceage`,
+    `:vertexheights`, `:vertexlevels`, `:vertexdepths`, `:vertexcoords`,
+    `:vertexpos`), so that I can control how vertex process coordinates are
+    determined independently of the tree data type.
 
-12. As a researcher, I want the positioning mode to default to `:edgelengths`
+12. As a researcher, I want the `lineageunits` to default to `:edgelengths`
     when an `edgelength` accessor is supplied, and to `:vertexheights` otherwise,
     so that I get a sensible plot with no configuration.
 
@@ -241,7 +243,7 @@ carries the screen attributes without encoding any biological meaning.
 ### The three-view model in use
 
 18. As a researcher, I want `LineageAxis` to infer `axis_polarity` automatically
-    from the active positioning mode, so that I do not need to specify it
+    from the active `lineageunits` value, so that I do not need to specify it
     manually for standard use cases.
 
 19. As a researcher, I want to override `axis_polarity` on `LineageAxis`, so
@@ -251,17 +253,17 @@ carries the screen attributes without encoding any biological meaning.
 20. As a researcher, I want to set `display_polarity = :reversed` on
     `LineageAxis` so that I can display a forward-time tree with the rootvertex
     at the right and leaves at the left (paleontological convention), without
-    changing the data or the positioning mode.
+    changing the data or the `lineageunits` value.
 
 21. As a researcher, I want to set `display_polarity = :reversed` on
-    `LineageAxis` so that I can display a coalescent tree (`:coalescenceage`
-    mode, backward polarity) with the rootvertex at the left and leaves at the
-    right, if my context requires that orientation.
+    `LineageAxis` so that I can display a coalescent tree
+    (`lineageunits = :coalescenceage`, backward polarity) with the rootvertex
+    at the left and leaves at the right, if my context requires that orientation.
 
 22. As a researcher, I want to set `lineage_orientation` on `LineageAxis` to
     control which screen axis carries the process coordinate, so that I can
     produce left-to-right, right-to-left, or (in Tier 2) top-to-bottom and
-    bottom-to-top layouts from the same positioning mode.
+    bottom-to-top layouts from the same `lineageunits` value.
 
 ### Visual layers
 
@@ -309,8 +311,9 @@ carries the screen attributes without encoding any biological meaning.
     configurable position on the figure, so that readers can interpret
     edge-length proportional layouts.
 
-34. As a researcher, when no edge lengths are encoded (`:vertexheights` or
-    `:vertexlevels` mode), I want the scale bar omitted by default, so that the
+34. As a researcher, when no edge lengths are encoded
+    (`lineageunits = :vertexheights` or `:vertexlevels`), I want the scale bar
+    omitted by default, so that the
     figure does not display meaningless scale information.
 
 35. As a researcher, I want each visual layer to be independently composable via
@@ -321,7 +324,7 @@ carries the screen attributes without encoding any biological meaning.
 
 36. As a researcher, I want a `LineageAxis` block that I can place in a Makie
     `Figure` layout, so that I have a tree-aware axis with sensible defaults
-    (no tick marks, no grid lines, optional x-axis for quantitative modes).
+    (no tick marks, no grid lines, optional x-axis for quantitative `lineageunits` values).
 
 37. As a researcher, I want `LineageAxis` to suppress tick marks, grid lines,
     and axis spines by default (classic naked-tree appearance), so that the
@@ -329,8 +332,8 @@ carries the screen attributes without encoding any biological meaning.
     configuration.
 
 38. As a researcher, I want `LineageAxis` to optionally display an x-axis with
-    quantitative scale when using `:edgelengths`, `:branchingtime`, or
-    `:coalescenceage` mode, so that calibrated positions are interpretable.
+    quantitative scale when `lineageunits` is `:edgelengths`, `:branchingtime`,
+    or `:coalescenceage`, so that calibrated positions are interpretable.
 
 39. As a researcher, I want `LineageAxis` to correctly manage pixel↔data
     coordinate conversion for non-isotropic axes, so that circular markers
@@ -365,8 +368,9 @@ carries the screen attributes without encoding any biological meaning.
     `ArgumentError` with a message identifying which edge is problematic, so
     that data errors are surfaced immediately.
 
-46. As a researcher, if `coalescenceage` is used in `:coalescenceage` mode and
-    the tree is not ultrametric, I want an `ArgumentError` by default, and
+46. As a researcher, if `coalescenceage` is used with
+    `lineageunits = :coalescenceage` and the tree is not ultrametric, I want an
+    `ArgumentError` by default, and
     control over the fallback policy via a `nonultrametric` keyword
     (`:minimum`, `:maximum`, `:error`), so that non-ultrametric trees are
     handled explicitly rather than silently.
@@ -403,14 +407,15 @@ directly to `lineageplot`:
   `(fromvertex, tovertex) -> (; value::Float64, units::Symbol)`; optional
 - `vertexvalue`: `vertex -> Any`; optional; used by label and color layers
 - `branchingtime`: `vertex -> Float64`; optional; required when
-  `mode = :branchingtime`; returns pre-computed cumulative edge-length sum from
-  `rootvertex`
+  `lineageunits = :branchingtime`; returns pre-computed cumulative edge-length
+  sum from `rootvertex`
 - `coalescenceage`: `vertex -> Float64`; optional; required when
-  `mode = :coalescenceage`; leaf = 0, increases toward rootvertex; ultrametric
-  tree required by default
+  `lineageunits = :coalescenceage`; leaf = 0, increases toward rootvertex;
+  ultrametric tree required by default
 - `vertexcoords`: `vertex -> Point2f`; optional; required when
-  `mode = :vertexcoords`
-- `vertexpos`: `vertex -> Point2f`; optional; required when `mode = :vertexpos`
+  `lineageunits = :vertexcoords`
+- `vertexpos`: `vertex -> Point2f`; optional; required when
+  `lineageunits = :vertexpos`
 
 All adapters — including the AbstractTrees.jl adapter — translate their source
 objects into these callables. The recipe's internal geometry and rendering code
@@ -421,13 +426,14 @@ The AbstractTrees adapter wraps `AbstractTrees.children` and optionally reads
 from `AbstractTrees.nodevalue` or user-supplied mappings, then forwards to the
 accessor interface.
 
-### Positioning modes
+### The `lineageunits` keyword
 
-The `mode` keyword selects how vertex process coordinates are determined. All
-modes ultimately populate `vertex_positions`. The modes form a layered stack:
-each higher-level mode delegates to shared traversal infrastructure.
+The `lineageunits` keyword selects how vertex process coordinates are
+determined. All `lineageunits` values ultimately populate `vertex_positions`.
+The `lineageunits` values form a layered stack: each higher-level value
+delegates to shared traversal infrastructure.
 
-| Mode | Accessor required | Process coordinate source | `axis_polarity` |
+| `lineageunits` value | Accessor required | Process coordinate source | `axis_polarity` |
 |---|---|---|---|
 | `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from rootvertex; computes `branchingtime` on the fly | `:forward` |
 | `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | `:forward` |
@@ -438,24 +444,26 @@ each higher-level mode delegates to shared traversal infrastructure.
 | `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined |
 | `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined |
 
-**Default mode detection:** If `edgelength` is supplied and `mode` is not set,
-the default is `:edgelengths`. If neither `edgelength` nor `mode` is supplied,
-the default is `:vertexheights`.
+**Default `lineageunits` detection:** If `edgelength` is supplied and
+`lineageunits` is not set, the default is `:edgelengths`. If neither
+`edgelength` nor `lineageunits` is supplied, the default is `:vertexheights`.
 
-**Polarity:** Forward modes (`:edgelengths`, `:branchingtime`, `:vertexdepths`,
-`:vertexlevels`) assign rootvertex process coordinate = 0 and increase toward
-leaves. Backward modes (`:coalescenceage`, `:vertexheights`) assign leaves
-process coordinate = 0 and increase toward root. With the default
-`display_polarity = :standard` and `lineage_orientation = :left_to_right`,
-forward modes place leaves at the right; backward modes place the rootvertex
-at the right.
+**Polarity:** Forward `lineageunits` values (`:edgelengths`, `:branchingtime`,
+`:vertexdepths`, `:vertexlevels`) assign rootvertex process coordinate = 0 and
+increase toward leaves. Backward `lineageunits` values (`:coalescenceage`,
+`:vertexheights`) assign leaves process coordinate = 0 and increase toward
+root. With the default `display_polarity = :standard` and
+`lineage_orientation = :left_to_right`, forward `lineageunits` values place
+leaves at the right; backward `lineageunits` values place the rootvertex at
+the right.
 
-**Missing edge lengths:** In `:edgelengths` mode, if `edgelength` returns
+**Missing edge lengths:** When `lineageunits = :edgelengths`, if `edgelength`
+returns
 `nothing` or `missing` for an edge, that edge falls back to unit length with a
 warning identifying the edge. Negative edge lengths raise `ArgumentError`
 immediately.
 
-**Non-ultrametric trees in `:coalescenceage` mode:** If any two children of a
+**Non-ultrametric trees with `lineageunits = :coalescenceage`:** If any two children of a
 vertex yield inconsistent coalescence age estimates, the default raises
 `ArgumentError`. Controlled by a `nonultrametric` keyword: `:error` (default),
 `:minimum` (min over all leaf paths), `:maximum` (max over all leaf paths).
@@ -476,7 +484,8 @@ implementation consequences that constrain module boundaries.
 coordinates, edge paths, leaf order) from the tree structure and accessor
 callables. Has no knowledge of screen layout, axis direction, or biological
 semantics. It produces process coordinates in their natural direction: forward
-modes produce values increasing from root to leaf; backward modes produce
+`lineageunits` values produce values increasing from root to leaf; backward
+`lineageunits` values produce
 values increasing from leaf to root.
 
 **`CoordTransform` module** (plotting-centric): handles pixel↔data conversions
@@ -504,12 +513,12 @@ Three layout geometries for Tier 1:
 
 - **Rectangular**: leaves placed on the transverse axis at equal spacing
   (default) or user-specified `leaf_spacing`; process coordinate determined by
-  the active positioning mode; right-angle edge segments connect parent
+  the active `lineageunits` value; right-angle edge segments connect parent
   transverse position to child transverse position then along the primary axis
   to the child's process coordinate.
 
 - **Circular**: leaves placed at equal angular spacing (default) on a circle;
-  radial position determined by the active positioning mode; edges are straight
+  radial position determined by the active `lineageunits` value; edges are straight
   radial segments with arc connectors between sibling groups.
 
 Leaf spacing is controlled via `leaf_spacing`. Default is `:equal`. A positive
@@ -563,8 +572,8 @@ rendering system.
 
 **Attributes (Tier 1):**
 
-- `axis_polarity` — `:forward` | `:backward`; inferred from active positioning
-  mode; overridable. Records the semantic direction of increasing process
+- `axis_polarity` — `:forward` | `:backward`; inferred from active `lineageunits`
+  value; overridable. Records the semantic direction of increasing process
   coordinates. Used by axis labeling and by `display_polarity` resolution.
 - `display_polarity` — `:standard` | `:reversed`; default `:standard`. Controls
   whether increasing process coordinates map to increasing or decreasing screen
@@ -575,7 +584,7 @@ rendering system.
   Controls which screen axis carries the process coordinate. Additional values
   (`:top_to_bottom`, `:bottom_to_top`) are Tier 2.
 - `show_x_axis` — `Bool`; default `false`. Enables quantitative x-axis for
-  modes that have meaningful process coordinates.
+  `lineageunits` values with meaningful process coordinates.
 - `show_y_axis` — `Bool`; default `false`.
 - `show_grid` — `Bool`; default `false`.
 - `title` — standard Makie attribute.
@@ -651,7 +660,7 @@ cycle detected during traversal → `ArgumentError` before layout.
 ### Module 2 — `Geometry`
 
 **Responsibility:** Compute 2D layout coordinates (process coordinates and
-transverse positions) from tree topology and the active positioning mode. Pure
+transverse positions) from tree topology and the active `lineageunits` value. Pure
 functional; no Makie dependency. Embodies the tree-centric view only: produces
 process-coordinate values in their natural direction without any
 screen-direction transformation.
@@ -661,20 +670,21 @@ screen-direction transformation.
 - `TreeGeometry` struct (immutable): `vertex_positions::Dict`,
   `edge_paths`, `leaf_order`, `boundingbox`
 - `rectangular_layout(rootvertex, accessor; leaf_spacing=:equal,
-  mode=:vertexheights) -> TreeGeometry`
+  lineageunits=:vertexheights) -> TreeGeometry`
 - `circular_layout(rootvertex, accessor; leaf_spacing=:equal,
-  mode=:vertexheights) -> TreeGeometry`
+  lineageunits=:vertexheights) -> TreeGeometry`
 - `boundingbox(geom::TreeGeometry) -> Rect2f`
 
-Positioning modes implemented: all eight listed in the positioning modes
-section. Forward and backward modes produce `vertex_positions` whose primary
+`lineageunits` values implemented: all eight listed in the `lineageunits`
+section. Forward and backward `lineageunits` values produce `vertex_positions`
+whose primary
 axis values reflect the natural process-coordinate direction. Screen direction
 is applied later by `LineageAxis` via `display_polarity`.
 
 **Failure modes:** negative edge length → `ArgumentError` with offending edge
 identified; zero-leaf tree → `ArgumentError`; missing edge length in
-`:edgelengths` mode → warning + unit-length fallback for that edge;
-non-ultrametric tree in `:coalescenceage` mode → `ArgumentError` by default,
+`lineageunits = :edgelengths` → warning + unit-length fallback for that edge;
+non-ultrametric tree with `lineageunits = :coalescenceage` → `ArgumentError` by default,
 controlled by `nonultrametric` keyword (`:error` | `:minimum` | `:maximum`).
 
 **Tested:** Yes
@@ -765,7 +775,7 @@ covering each combination of `axis_polarity` and `display_polarity`)
 
 Tests exercise the documented public contract, not implementation internals.
 A test for `rectangular_layout` checks that all vertices have positions, leaves
-are at the expected process coordinate for the active mode, transverse positions
+are at the expected process coordinate for the active `lineageunits` value, transverse positions
 are evenly spaced when `leaf_spacing = :equal`, and the `boundingbox` contains
 all positions — not that a specific private variable holds a given value.
 

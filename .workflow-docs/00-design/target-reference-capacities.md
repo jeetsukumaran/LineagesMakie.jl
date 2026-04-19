@@ -33,7 +33,7 @@ and become impossible to separate cleanly:
 
 1. **Tree-centric:** What is the process coordinate of each vertex? Which
    direction does the process run (root-to-leaf or leaf-to-root)? This is
-   determined by the data and the chosen positioning mode.
+   determined by the data and the chosen `lineageunits` value.
 2. **User-centric:** What does the process coordinate mean to the researcher?
    Is it "forward time" (species diversification) or "backward time"
    (coalescence)? Is it measured in millions of years, substitutions per site,
@@ -64,7 +64,7 @@ not a structural requirement. The primary dimension can be mapped to any screen
 axis in any direction.
 
 The process coordinate values assigned to vertices are determined by the
-active **positioning mode** (see section below). The canonical process
+active **`lineageunits`** value (see section below). The canonical process
 coordinate types in LineagesMakie.jl are:
 
 **`branchingtime`** — root-relative, forward polarity. Defined as the
@@ -84,7 +84,7 @@ have equal total `edgelength`) or an explicit non-ultrametric policy. The
 process runs in the backward direction: leaves are earliest (age = 0), the
 rootvertex is latest (age = maximum).
 
-**Topological variants** — four topology-based positioning modes do not use
+**Topological variants** — four topology-based `lineageunits` values do not use
 edge-length data:
 - `:vertexlevels` — integer level = edge count from rootvertex; forward polarity;
   analogue of `branchingtime` for topology-only displays.
@@ -105,15 +105,15 @@ coordinates and the screen.
 **`axis_polarity`** records the semantic direction of increasing process
 coordinates. `:forward` means increasing process coordinate moves in the
 root-to-leaf direction; `:backward` means it moves in the leaf-to-root
-direction. `LineageAxis` infers this from the active positioning mode:
+direction. `LineageAxis` infers this from the active `lineageunits` value:
 `:edgelengths`, `:branchingtime`, `:vertexdepths`, and `:vertexlevels` are
 `:forward`; `:coalescenceage` and `:vertexheights` are `:backward`. Users can
 override this for axis labeling purposes.
 
 **`display_polarity`** governs the mapping from process coordinates to screen
 position. `:standard` maps increasing process coordinates to increasing screen
-position along `lineage_orientation` (e.g., rightward in `:left_to_right`
-mode). `:reversed` inverts this mapping. Display polarity is independent of
+position along `lineage_orientation` (e.g., rightward with
+`lineage_orientation = :left_to_right`). `:reversed` inverts this mapping. Display polarity is independent of
 axis polarity.
 
 **`lineage_orientation`** selects the screen embedding. `:left_to_right` places
@@ -124,7 +124,7 @@ layouts.
 
 Some common combinations:
 
-| Positioning mode | `display_polarity` | `lineage_orientation` | Result |
+| `lineageunits` value | `display_polarity` | `lineage_orientation` | Result |
 |---|---|---|---|
 | `:edgelengths` (forward) | `:standard` | `:left_to_right` | Rootvertex at left, leaves at right (standard phylogram) |
 | `:edgelengths` (forward) | `:reversed` | `:left_to_right` | Rootvertex at right, leaves at left (paleontological convention) |
@@ -169,11 +169,11 @@ overlay layers. This is Tier 4.
 | Capacity | Tier |
 |---|---|
 | `LineageAxis` custom Makie `Block` with sensible tree defaults | 1 |
-| `axis_polarity` attribute (inferred from mode; overridable) | 1 |
+| `axis_polarity` attribute (inferred from `lineageunits`; overridable) | 1 |
 | `display_polarity` attribute (`:standard` / `:reversed`) | 1 |
 | `lineage_orientation` (`:left_to_right`, `:right_to_left`, `:top_to_bottom`, `:bottom_to_top`) | 1 |
 | `lineage_orientation = :radial` (circular layouts) | 1 |
-| Optional x-axis with tick marks for quantitative modes | 1 |
+| Optional x-axis with tick marks for quantitative `lineageunits` values | 1 |
 | `CoordTransform` module for non-isotropic pixel↔data conversion | 1 |
 | Viewport-reactive pixel↔data mapping (correct resize behavior) | 1 |
 | Dendrogram orientation (`:top_to_bottom` / `:bottom_to_top`) | 2 |
@@ -191,8 +191,8 @@ annotations must respect the active layout.
 
 | Layout | Description | Reference |
 |---|---|---|
-| Rectangular (cladogram) | Standard horizontal; rootvertex left, leaves right; edges at right angles; default positioning mode `:vertexheights` | ggtree `rectangular` |
-| Rectangular (phylogram) | Same but edge horizontal length proportional to `edgelength`; positioning mode `:edgelengths` or `:branchingtime` | ggtree `rectangular` + `branch.length` |
+| Rectangular (cladogram) | Standard horizontal; rootvertex left, leaves right; edges at right angles; default `lineageunits = :vertexheights` | ggtree `rectangular` |
+| Rectangular (phylogram) | Same but edge horizontal length proportional to `edgelength`; `lineageunits = :edgelengths` or `:branchingtime` | ggtree `rectangular` + `branch.length` |
 | Slanted | Diagonal (non-rectangular) edges forming a V-shape | ggtree `slanted` |
 | Dendrogram | Rootvertex at top, leaves at bottom; hierarchical-clustering style; `lineage_orientation = :top_to_bottom` | ggtree `dendrogram` |
 | Circular | Radial from centre; leaves at outer ring; `lineage_orientation = :radial` | ggtree `circular` |
@@ -671,7 +671,7 @@ is just a matter of wiring.
   display_polarity, lineage_orientation, CoordTransform, viewport-reactive
   pixel↔data mapping)
 - Rectangular (cladogram + phylogram) and circular layouts
-- All eight positioning modes (`:edgelengths`, `:branchingtime`,
+- All eight `lineageunits` values (`:edgelengths`, `:branchingtime`,
   `:coalescenceage`, `:vertexdepths`, `:vertexheights`, `:vertexlevels`,
   `:vertexcoords`, `:vertexpos`)
 - `EdgeLayer`, `VertexLayer`, `LeafLayer`, `LeafLabelLayer`,
@@ -679,7 +679,7 @@ is just a matter of wiring.
   `ScaleBarLayer`
 - `LineagePlot` composite recipe
 - Observable-native reactivity throughout
-- Primary axis with optional tick marks for quantitative modes
+- Primary axis with optional tick marks for quantitative `lineageunits` values
 - AbstractTrees.jl adapter
 - Full test coverage (unit, integration, smoke, Aqua, JET)
 

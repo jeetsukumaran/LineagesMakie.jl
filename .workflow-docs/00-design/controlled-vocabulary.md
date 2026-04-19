@@ -30,21 +30,21 @@ For the decision log and ratification history, see
 and the direction of the modeled process. Has two values:
 
 - `:forward` — increasing process coordinates move in the root-to-leaf
-  direction (forward time). Modes `:edgelengths`, `:branchingtime`,
-  `:vertexdepths`, and `:vertexlevels` produce forward process coordinates
-  (rootvertex = 0, increases toward leaves).
+  direction (forward time). `lineageunits` values `:edgelengths`,
+  `:branchingtime`, `:vertexdepths`, and `:vertexlevels` produce forward
+  process coordinates (rootvertex = 0, increases toward leaves).
 - `:backward` — increasing process coordinates move in the leaf-to-root
-  direction (backward time, as in coalescent models). Modes `:coalescenceage`
-  and `:vertexheights` produce backward process coordinates (leaves = 0,
-  increases toward root).
+  direction (backward time, as in coalescent models). `lineageunits` values
+  `:coalescenceage` and `:vertexheights` produce backward process coordinates
+  (leaves = 0, increases toward root).
 
-`axis_polarity` is a property of the data and positioning mode, not of the
-screen. It is distinct from `display_polarity`, which governs the screen
-direction. A `:backward` process coordinate does not imply a reversed plot;
-the two are independently settable.
+`axis_polarity` is a property of the data and the active `lineageunits` value,
+not of the screen. It is distinct from `display_polarity`, which governs the
+screen direction. A `:backward` process coordinate does not imply a reversed
+plot; the two are independently settable.
 
-`LineageAxis` infers a default `axis_polarity` from the active positioning
-mode and exposes it as an overridable attribute for axis labeling and
+`LineageAxis` infers a default `axis_polarity` from the active `lineageunits`
+value and exposes it as an overridable attribute for axis labeling and
 semantic documentation.
 
 **Proscribed alternates:** conflating with `display_polarity`; `time_direction`,
@@ -80,16 +80,17 @@ evolutionary or temporal distance accumulated since the root. Also called
 
 **Definition (as accessor):** The callable `branchingtime(vertex) -> Float64`
 returning a pre-computed branching time for a vertex. Supplied as a keyword
-argument when using the `:branchingtime` positioning mode, for cases where the
-user has a vector of pre-computed divergence times and does not want to
-re-derive them from per-edge lengths.
+argument when `lineageunits = :branchingtime`, for cases where the user has a
+vector of pre-computed divergence times and does not want to re-derive them
+from per-edge lengths.
 
-**Relationship to `:edgelengths` mode:** The `:edgelengths` positioning mode
-computes `branchingtime` on the fly by summing the `edgelength` accessor along
-the path from `rootvertex`. The `:branchingtime` mode bypasses that traversal
-and reads the value directly from the `branchingtime` accessor. Both modes
-produce identical vertex x-coordinates when the supplied times are consistent
-with the edge lengths.
+**Relationship to `lineageunits = :edgelengths`:** The `:edgelengths`
+`lineageunits` value computes `branchingtime` on the fly by summing the
+`edgelength` accessor along the path from `rootvertex`. The `:branchingtime`
+`lineageunits` value bypasses that traversal and reads the value directly from
+the `branchingtime` accessor. Both `lineageunits` values produce identical
+vertex x-coordinates when the supplied times are consistent with the edge
+lengths.
 
 **Relationship to `coalescenceage`:** `branchingtime` and `coalescenceage` have
 opposite polarity. For a strictly ultrametric tree:
@@ -129,7 +130,7 @@ age" or "backward time" in phylogenetic prose.
   value).
 - Polarity: increases in the backward-time direction (leaves → root), i.e., the
   x-axis reads left = distant past, right = present for a standard chronogram
-  using `:coalescenceage` mode.
+  when `lineageunits = :coalescenceage`.
 
 **Ultrametricity assumption:** `coalescenceage` is well-defined only for
 ultrametric trees (all paths from any vertex to any of its leaf descendants have
@@ -147,7 +148,7 @@ the `nonultrametric` policy).
 
 **Definition (as accessor):** The callable `coalescenceage(vertex) -> Float64`
 returning the pre-computed coalescence age for a vertex. Supplied as a keyword
-argument when using the `:coalescenceage` positioning mode.
+argument when `lineageunits = :coalescenceage`.
 
 **Relationship to `branchingtime`:** See the `branchingtime` entry.
 
@@ -220,8 +221,8 @@ which returns either:
 - a named tuple `(; value::Float64, units::Symbol)` with an explicit unit
   for conversion.
 
-When `edgelength` is not supplied, layout defaults to the `:vertexheights` mode
-(leaf-aligned topology plot).
+When `edgelength` is not supplied, layout defaults to
+`lineageunits = :vertexheights` (leaf-aligned topology plot).
 
 **Proscribed alternates:** `branch_length`, `edge_length` (underscored),
 `weight`, `len`, `w`.
@@ -263,7 +264,7 @@ tree, equals the `coalescenceage` of the `rootvertex`.
 
 **Definition (per-vertex):** The topological distance from a given vertex to
 its farthest descendant leaf, measured in edge count (ignoring `edgelength`
-values). Used by the `:vertexheights` positioning mode: all leaves have
+values). Used by the `:vertexheights` `lineageunits` value: all leaves have
 height = 0, and each internal vertex has height = max(heights of children) + 1.
 This naturally aligns all leaves at the same x-coordinate (the classic
 cladogram appearance). `height` is the topological, unweighted analogue of
@@ -341,6 +342,47 @@ layout units.
 
 ---
 
+### `lineageunits`
+
+**Part of speech:** noun (positioning concept); keyword argument name
+
+**Definition:** The keyword argument that selects how vertex process coordinates
+are determined during layout. Formerly referred to as `mode` in early design
+drafts; renamed to `lineageunits` because `mode` is too generic to convey that
+this keyword selects the unit and direction of the primary lineage axis.
+
+The value of `lineageunits` determines which accessor is consulted to compute
+the process coordinate (x in rectangular layouts, radial in circular) of each
+vertex, and what `axis_polarity` `LineageAxis` infers:
+
+- `:edgelengths` — cumulative edge lengths from rootvertex; requires `edgelength`
+  accessor; `:forward` polarity.
+- `:branchingtime` — pre-supplied branching times; requires `branchingtime`
+  accessor; `:forward` polarity.
+- `:coalescenceage` — pre-supplied coalescence ages; requires `coalescenceage`
+  accessor; leaf = 0, increases toward root; `:backward` polarity.
+- `:vertexdepths` — cumulative topological edge count from rootvertex; no
+  accessor required; `:forward` polarity.
+- `:vertexheights` — edge count to farthest leaf; leaves at 0; default when no
+  `edgelength` accessor is supplied; `:backward` polarity.
+- `:vertexlevels` — integer level from rootvertex; equal inter-level spacing;
+  no accessor required; `:forward` polarity.
+- `:vertexcoords` — user-supplied data coordinates; requires `vertexcoords`
+  accessor; polarity is user-defined.
+- `:vertexpos` — user-supplied pixel coordinates; requires `vertexpos` accessor;
+  polarity is user-defined.
+
+Default selection: `:edgelengths` if an `edgelength` accessor is supplied;
+`:vertexheights` otherwise.
+
+Written as one word without underscore, consistent with `edgelength`,
+`coalescenceage`, `branchingtime`.
+
+**Proscribed alternates:** `mode`, `positioning_mode`, `layout_mode`,
+`layout_type`, `tree_mode`.
+
+---
+
 ### `lineage_orientation`
 
 **Part of speech:** noun (rendering concept); `LineageAxis` attribute name
@@ -355,8 +397,8 @@ Values:
   default.
 - `:right_to_left` — lineage axis runs along x, transverse is y; rootvertex
   is at the right by default (use with `:standard` `display_polarity` and a
-  leaf-relative mode such as `:coalescenceage`, or with `:reversed`
-  `display_polarity` and a root-relative mode).
+  leaf-relative `lineageunits` such as `:coalescenceage`, or with `:reversed`
+  `display_polarity` and a root-relative `lineageunits` value).
 - `:bottom_to_top` — lineage axis runs along y; transverse is x.
 - `:top_to_bottom` — lineage axis runs along y inverted; classic dendrogram
   orientation.
@@ -390,15 +432,15 @@ acceptable synonym; in code, `marker` is the only permitted term.
 
 **Definition:** The scalar value that positions a vertex along the lineage axis.
 In any given plot, the process coordinate is determined by the active
-positioning mode: `branchingtime` values for `:branchingtime` or `:edgelengths`
-mode, `coalescenceage` values for `:coalescenceage` mode, topological edge
-counts for `:vertexlevels` / `:vertexdepths` / `:vertexheights`, or
-user-supplied coordinates for `:vertexcoords` / `:vertexpos`.
+`lineageunits` value: `branchingtime` values for `lineageunits = :branchingtime`
+or `:edgelengths`, `coalescenceage` values for `lineageunits = :coalescenceage`,
+topological edge counts for `:vertexlevels` / `:vertexdepths` / `:vertexheights`,
+or user-supplied coordinates for `:vertexcoords` / `:vertexpos`.
 
-This is a documentation and design term that unifies all positioning modes under
-a single concept. It does not appear as a code identifier (there is no function
-or struct field named `process_coordinate`). When writing code, use the specific
-accessor or mode name.
+This is a documentation and design term that unifies all `lineageunits` values
+under a single concept. It does not appear as a code identifier (there is no
+function or struct field named `process_coordinate`). When writing code, use
+the specific accessor or `lineageunits` value.
 
 `process_coordinate` is the concept that `axis_polarity` and `display_polarity`
 operate on: `axis_polarity` describes the semantic direction of increasing
@@ -509,7 +551,7 @@ without underscore.
 | `ScaleBarLayer` | `scalebarlayer!` | — |
 | `LineagePlot` | `lineageplot!` | — |
 
-## Layout positioning modes
+## Layout `lineageunits`
 
 | Symbol | Accessor required | x-coordinate source | Polarity | `axis_polarity` |
 |---|---|---|---|---|
@@ -522,24 +564,26 @@ without underscore.
 | `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
 | `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
 
-**Default mode:** `:edgelengths` if an `edgelength` accessor is supplied;
-`:vertexheights` otherwise.
+**Default `lineageunits`:** `:edgelengths` if an `edgelength` accessor is
+supplied; `:vertexheights` otherwise.
 
-**Polarity summary:** Modes that are root-relative (`:edgelengths`,
-`:branchingtime`, `:vertexdepths`, `:vertexlevels`) have `:forward`
-`axis_polarity` and assign the root x = 0 increasing toward the leaves.
-Modes that are leaf-relative (`:coalescenceage`, `:vertexheights`) have
-`:backward` `axis_polarity` and assign leaves x = 0 increasing toward the
-root. With the default `display_polarity = :standard` and
-`lineage_orientation = :left_to_right`, forward modes place leaves at the
-right; backward modes place the rootvertex at the right.
+**Polarity summary:** `lineageunits` values that are root-relative
+(`:edgelengths`, `:branchingtime`, `:vertexdepths`, `:vertexlevels`) have
+`:forward` `axis_polarity` and assign the root x = 0 increasing toward the
+leaves. `lineageunits` values that are leaf-relative (`:coalescenceage`,
+`:vertexheights`) have `:backward` `axis_polarity` and assign leaves x = 0
+increasing toward the root. With the default `display_polarity = :standard`
+and `lineage_orientation = :left_to_right`, forward `lineageunits` values
+place leaves at the right; backward `lineageunits` values place the
+rootvertex at the right.
 
 ## Compound-word naming convention
 
 Compound accessor names and domain-specific identifiers in this package are
 written without underscores when the compound reads naturally as a single
 concept: `edgelength`, `vertexvalue`, `coalescenceage`, `branchingtime`,
-`fromvertex`, `tovertex`, `rootvertex`, `boundingbox`. This is consistent with
+`fromvertex`, `tovertex`, `rootvertex`, `boundingbox`, `lineageunits`. This is
+consistent with
 STYLE-julia.md §2.1, which permits omitting underscores when the name is not
 hard to read.
 

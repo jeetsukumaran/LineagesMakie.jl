@@ -29,7 +29,7 @@ tree itself. It answers: which direction is root-to-leaf? What scalar is
 attached to each vertex along its primary dimension? What topology connects
 the vertices?
 
-This view is captured by the **positioning mode** and **accessor callables**:
+This view is captured by the **`lineageunits`** selection and **accessor callables**:
 `edgelength`, `branchingtime`, `coalescenceage`, `children`. The resulting
 `process_coordinate` values (see controlled vocabulary) determine the position
 of each vertex along the lineage axis.
@@ -49,9 +49,10 @@ backward coalescent time (coalescence)? Is the axis measured in substitutions,
 millions of years, or event ranks? Is a larger value "more recent" or "more
 ancient"?
 
-The package makes no assumption about semantic interpretation. The positioning
-mode name (`axis_polarity` in `LineageAxis`) records which direction increasing
-process-coordinate values point, but no further biological meaning is imposed.
+The package makes no assumption about semantic interpretation. The `axis_polarity`
+attribute in `LineageAxis` records which direction increasing process-coordinate
+values point; its value is inferred from the active `lineageunits`. No further
+biological meaning is imposed.
 
 ### Plotting-centric view
 
@@ -84,9 +85,9 @@ does not depend on any external tree type.
 
 ### Topology-only plot (default)
 
-When no edge-length data is available, the default mode (`:vertexheights`)
-places all leaves at x = 0 and spaces internal vertices by topological
-distance. This requires only a `children` function.
+When no edge-length data is available, the default `lineageunits`
+(`:vertexheights`) places all leaves at x = 0 and spaces internal vertices by
+topological distance. This requires only a `children` function.
 
 ```julia
 using LineagesMakie, CairoMakie
@@ -111,8 +112,9 @@ save("topology.pdf", fig)
 
 ### Edge-length proportional layout
 
-Supply `edgelength` and the default mode shifts to `:edgelengths`, placing
-vertices at x = cumulative edge length from the rootvertex (`branchingtime`).
+Supply `edgelength` and the default `lineageunits` shifts to `:edgelengths`,
+placing vertices at x = cumulative edge length from the rootvertex
+(`branchingtime`).
 
 ```julia
 struct PhyloNode
@@ -136,7 +138,7 @@ root. The `vertexvalue` accessor drives the `LeafLabelLayer` text by default.
 
 When the user has a dictionary of divergence times (e.g. from a Bayesian dating
 analysis) and does not want to re-derive them from per-edge lengths, supply
-`branchingtime` directly and set `mode = :branchingtime`.
+`branchingtime` directly and set `lineageunits = :branchingtime`.
 
 ```julia
 divergence_times = Dict(node_id => time_ma for ...)   # millions of years
@@ -145,7 +147,7 @@ fig, ax, plt = lineageplot(
     root;
     children       = v -> v.children,
     branchingtime  = v -> divergence_times[v.id],
-    mode           = :branchingtime,
+    lineageunits   = :branchingtime,
 )
 ```
 
@@ -155,8 +157,8 @@ per-edge summation.
 ### Coalescent tree (backward time)
 
 A coalescent tree has process coordinates measured from the leaves backward
-to the root. Supply `coalescenceage` and use `mode = :coalescenceage`. The
-tree must be ultrametric (all root-to-leaf path lengths equal) or a
+to the root. Supply `coalescenceage` and set `lineageunits = :coalescenceage`.
+The tree must be ultrametric (all root-to-leaf path lengths equal) or a
 `nonultrametric` policy must be specified.
 
 ```julia
@@ -165,7 +167,7 @@ fig, ax, plt = lineageplot(
     root;
     children       = v -> v.children,
     coalescenceage = v -> v.coalescent_age,   # leaf = 0, root = maximum
-    mode           = :coalescenceage,
+    lineageunits   = :coalescenceage,
 )
 
 # Non-ultrametric with fallback policy
@@ -173,7 +175,7 @@ fig, ax, plt = lineageplot(
     root;
     children          = v -> v.children,
     coalescenceage    = v -> v.coalescent_age,
-    mode              = :coalescenceage,
+    lineageunits      = :coalescenceage,
     nonultrametric    = :maximum,             # use max over leaf paths
 )
 ```
@@ -210,8 +212,8 @@ fig, ax, plt = lineageplot(
 ### Polarity and orientation control via LineageAxis
 
 The three-view model is fully expressed through `LineageAxis` attributes. The
-tree-centric polarity (which mode was chosen) is inferred automatically, but
-the screen polarity and orientation are independently controllable.
+tree-centric polarity (which `lineageunits` was chosen) is inferred automatically,
+but the screen polarity and orientation are independently controllable.
 
 ```julia
 using GLMakie
@@ -244,7 +246,7 @@ ax3 = LineageAxis(fig[2, 1];
 )
 lineageplot!(ax3, root;
     coalescenceage = v -> v.coal_age,
-    mode           = :coalescenceage,
+    lineageunits   = :coalescenceage,
 )
 
 # Coalescent tree, displayed reversed: root at left, leaves at right
@@ -256,7 +258,7 @@ ax4 = LineageAxis(fig[2, 2];
 )
 lineageplot!(ax4, root;
     coalescenceage = v -> v.coal_age,
-    mode           = :coalescenceage,
+    lineageunits   = :coalescenceage,
 )
 
 fig
@@ -289,8 +291,8 @@ using CairoMakie
 geom = rectangular_layout(
     root;
     children   = v -> v.children,
-    edgelength = (u, v) -> v.branch_length,
-    mode       = :edgelengths,
+    edgelength   = (u, v) -> v.branch_length,
+    lineageunits = :edgelengths,
 )
 
 fig = Figure()
@@ -397,7 +399,7 @@ fig
 
 ### Circular layout
 
-The `layout` keyword selects the geometric embedding. All positioning modes
+The `layout` keyword selects the geometric embedding. All `lineageunits` values
 work with all layout geometries.
 
 ```julia
