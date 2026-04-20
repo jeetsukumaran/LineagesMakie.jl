@@ -28,7 +28,17 @@ Every issue must comply with:
 - `CONTRIBUTING.md` — PR process and community standards.
 - `.workflow-docs/00-design/controlled-vocabulary.md` — all identifiers, type
   names, keyword arguments, symbols, and documentation must use canonical terms.
-  No proscribed alternates anywhere.
+  No proscribed alternates anywhere. New terms may be proposed and added only
+  after explicit discussion with and approval from the project owner.
+
+### Version control responsibilities
+
+Read-only and non-mutating Git and shell commands (status, log, diff, show,
+grep, find, read) may be used freely without restriction during implementation.
+
+Mutating Git operations — commits, merges, rebases, pushes, branch creation or
+deletion, tags — are the responsibility of the human project owner. Implementing
+agents must not perform these operations unilaterally.
 
 These requirements are not repeated in each issue but are binding for all of
 them.

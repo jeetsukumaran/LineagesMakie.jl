@@ -914,10 +914,20 @@ All implementation must follow:
 - `CONTRIBUTING.md` — Community and PR process. Applies to all contributions.
 - `.workflow-docs/00-design/controlled-vocabulary.md` — Authoritative term
   list. All identifiers, types, symbols, and prose must use canonical terms.
-  No amendment without explicit project-owner approval.
+  New terms may be proposed and added only after explicit discussion with and
+  approval from the project owner. No unilateral additions.
 
 Issues and tasks generated from this PRD must reference all of these documents
 and require compliance.
+
+### Version control responsibilities
+
+Read-only and non-mutating Git and shell commands (status, log, diff, show,
+grep, find, read) may be used freely without restriction during implementation.
+
+Mutating Git operations — commits, merges, rebases, pushes, branch creation or
+deletion, tags — are the responsibility of the human project owner. Implementing
+agents must not perform these operations unilaterally.
 
 ### Makie documentation
 
