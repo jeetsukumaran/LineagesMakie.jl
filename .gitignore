@@ -4,6 +4,7 @@
 # =====================================
 
 .vscode/*
+.workflow-docs/LineagesMakie.jl.code-workspace
 
 # =====================================
 # Quarto: output directories and formats
