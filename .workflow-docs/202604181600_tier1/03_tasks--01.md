@@ -81,17 +81,3 @@ existing Aqua and JET checks so quality gates always run first. Run
 `julia --project=test test/runtests.jl` and confirm all tests pass trivially.
 
 ---
-
-### 5. Add Runic formatting check to CI
-
-**Type**: CONFIG
-**Output**: `.github/workflows/CI.yml` contains a step that runs
-`runic --check src/ test/` and fails CI if any file is not Runic-formatted.
-**Depends on**: Task 3
-
-Open `.github/workflows/CI.yml`. Add a new job or step named
-`format-check` (or similar) that installs Runic.jl and runs
-`julia -e 'using Pkg; Pkg.add("Runic")' && julia -m Runic --check src/ test/`.
-Place it early in the workflow so it fails fast. Ensure the step runs on the
-same Julia version as the test matrix. Do not modify any other part of the CI
-configuration. Verify the YAML is valid by inspecting it for syntax errors.
