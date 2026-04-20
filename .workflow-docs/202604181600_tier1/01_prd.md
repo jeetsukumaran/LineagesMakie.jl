@@ -54,7 +54,7 @@ authoritative reference; this section provides a quick-reference summary.
 > keyword-arg controlled with equal spacing as default. Edge lengths are
 > supplied via an accessor `edgelength(fromvertex, tovertex) -> value` (data
 > units) or `edgelength(fromvertex, tovertex) -> (; value, units)` (with
-> explicit unit; converted to data units); leaf-aligned topology `lineageunits`
+> explicit unit; converted to data units); leaf-aligned clade graph `lineageunits`
 > value computes positions internally. Recipe architecture: separate composable layers, all
 > Tier 1; Observable-native; `LineageAxis` custom Block is Tier 1. No bespoke
 > operators — everything idiomatic Julia/Makie. Every public function gets full
@@ -110,8 +110,8 @@ passed to `lineageplot` and rendered as a phylogenetic tree in a Makie figure,
 with no internet access, no R, no package-specific conversion, and no
 constraint on which Makie backend is used (CairoMakie, GLMakie, WGLMakie).
 
-The plot will support three layout algorithms (rectangular leaf-aligned
-topology, rectangular edge-length proportional, circular), all eight
+The plot will support three layout algorithms (rectangular leaf-aligned clade
+graph, rectangular edge-length proportional, circular), all eight
 `lineageunits` values (`:edgelengths`, `:branchingtime`, `:coalescenceage`,
 `:vertexdepths`, `:vertexheights`, `:vertexlevels`, `:vertexcoords`,
 `:vertexpos`), independently togglable visual layers (edges, internal vertex
@@ -187,9 +187,9 @@ carries the screen attributes without encoding any biological meaning.
    specification), so that I can control whether unit conversion is applied.
 
 6. As a researcher, I want to omit `edgelength` entirely and get a leaf-aligned
-   topology plot (`lineageunits = :vertexheights`) with all leaves at the same
-   x-coordinate, so that I can visualize topology without requiring
-   edge-length data.
+   clade graph plot (`lineageunits = :vertexheights`) with all leaves at the same
+   x-coordinate, so that I can visualize the clade graph (branching pattern)
+   without requiring edge-length data.
 
 7. As a researcher, if I supply `edgelength` but some edges return `nothing` or
    `missing`, I want those edges rendered with a unit-length fallback and a
@@ -438,9 +438,9 @@ delegates to shared traversal infrastructure.
 | `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from rootvertex; computes `branchingtime` on the fly | `:forward` |
 | `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | `:forward` |
 | `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; leaf = 0; requires ultrametric tree (see `nonultrametric`) | `:backward` |
-| `:vertexdepths` | none | Cumulative topological edge count from rootvertex (all weights = 1) | `:forward` |
-| `:vertexheights` | none | Per-vertex height (edge count to farthest leaf); topology-only analogue of `:coalescenceage` | `:backward` |
-| `:vertexlevels` | none | Integer level = edge count from rootvertex; equal inter-level spacing; topology-only analogue of `:branchingtime` | `:forward` |
+| `:vertexdepths` | none | Cumulative path distance (edge count) from rootvertex (all edge weights = 1) | `:forward` |
+| `:vertexheights` | none | Per-vertex path distance to farthest leaf; clade graph (unweighted) analogue of `:coalescenceage` | `:backward` |
+| `:vertexlevels` | none | Integer level = edge count from rootvertex; equal inter-level spacing; clade graph (unweighted) analogue of `:branchingtime` | `:forward` |
 | `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined |
 | `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined |
 
@@ -660,7 +660,7 @@ cycle detected during traversal → `ArgumentError` before layout.
 ### Module 2 — `Geometry`
 
 **Responsibility:** Compute 2D layout coordinates (process coordinates and
-transverse positions) from tree topology and the active `lineageunits` value. Pure
+transverse positions) from the tree's clade graph structure and the active `lineageunits` value. Pure
 functional; no Makie dependency. Embodies the tree-centric view only: produces
 process-coordinate values in their natural direction without any
 screen-direction transformation.
@@ -780,7 +780,7 @@ are evenly spaced when `leaf_spacing = :equal`, and the `boundingbox` contains
 all positions — not that a specific private variable holds a given value.
 
 Tests are deterministic. No wall-clock time, no external network. Tree fixtures
-are constructed inline using simple topologies: 4-leaf balanced, 6-leaf
+are constructed inline using simple clade graphs: 4-leaf balanced, 6-leaf
 unbalanced, polytomy, single-leaf.
 
 Tests for `LineageAxis` cover: default attribute values; correct axis limit

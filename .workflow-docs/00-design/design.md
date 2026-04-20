@@ -26,8 +26,8 @@ the design.
 
 The tree-centric view concerns the combinatorial and geometric structure of the
 tree itself. It answers: which direction is root-to-leaf? What scalar is
-attached to each vertex along its primary dimension? What topology connects
-the vertices?
+attached to each vertex along its primary dimension? What branching structure
+(clade graph) connects the vertices?
 
 This view is captured by the **`lineageunits`** selection and **accessor callables**:
 `edgelength`, `branchingtime`, `coalescenceage`, `children`. The resulting
@@ -83,11 +83,13 @@ does not depend on any external tree type.
 
 ## Minimum working examples
 
-### Topology-only plot (default)
+### Clade graph layout (default)
 
 When no edge-length data is available, the default `lineageunits`
-(`:vertexheights`) places all leaves at x = 0 and spaces internal vertices by
-topological distance. This requires only a `children` function.
+(`:vertexheights`) produces a **clade graph layout** — the tree rendered as a
+graph up to label-preserving isomorphism (the phylogenetic "topology"), with all
+leaves at x = 0 and internal vertices spaced by path distance (unweighted path
+distance from root; number of edges). This requires only a `children` function.
 
 ```julia
 using LineagesMakie, CairoMakie
@@ -107,7 +109,7 @@ fig, ax, plt = lineageplot(
     root;
     children = v -> v.children,
 )
-save("topology.pdf", fig)
+save("cladegraph.pdf", fig)
 ```
 
 ### Edge-length proportional layout

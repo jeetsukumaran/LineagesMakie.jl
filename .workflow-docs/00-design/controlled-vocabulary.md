@@ -115,6 +115,56 @@ returns an empty iterable is a leaf.
 
 ---
 
+### `clade graph` / `cladegraph`
+
+**Part of speech:** noun (concept); one-word compound `cladegraph` in code
+identifiers; adjective `cladological`.
+
+**Definition:** The branching structure of a tree considered as a graph up to
+label-preserving isomorphism — that is, the combinatorial structure specifying
+which vertices are connected to which, without reference to any scalar quantity
+on vertices or edges (no branch lengths, times, or weights). Two trees share the
+same clade graph if and only if they are related by a label-preserving graph
+isomorphism.
+
+This is the sense in which the concept is colloquially called the
+*phylogenetic "topology"* of a tree.
+
+**Relationship to "topology":** The phylogenetic notion of "topology" (branching
+pattern, without branch lengths) corresponds formally to a label-preserving
+isomorphism class of graphs. This project uses `clade graph` in place of
+"topology" to avoid collision with the mathematical discipline of topology
+(continuity, open sets, homeomorphism), which is a distinct body of theory. On
+first occurrence in a document or major section, use the expanded form:
+
+> *the clade graph (the phylogenetic "topology", i.e. the tree as a graph up to
+> label-preserving isomorphism)*
+
+Subsequent uses within the same section may abbreviate to "clade graph".
+
+**Derived forms:**
+- `clade graph` — preferred prose form
+- `cladegraph` — code identifier form (one word, no underscore; consistent with
+  `edgelength`, `coalescenceage`, `lineageunits`)
+- `cladological` — adjectival form; e.g. "cladological distance" = path distance
+  along the unweighted clade graph
+
+**Usage notes:**
+- Preferred expanded phrase when contrasting with metric/weighted layouts:
+  `clade graph (branching pattern)` or `clade graph (unweighted edge layout)`.
+- "topology-only plot" → "clade graph layout"
+- "topology-only analogue" → "clade graph (unweighted) analogue"
+- For path distance across the unweighted clade graph: use `path distance
+  (number of edges)` or `unweighted path distance`; never "topological distance"
+  or "step count".
+
+**Proscribed alternates:** `topology` (unqualified), `tree topology`
+(unqualified), `graph topology` (unqualified), `tree shape` (reserved term in
+phylogenetics for an unlabeled/ranked structure). When citing prior literature,
+always qualify: the phylogenetic `"topology"` (in quotation marks).
+
+---
+
 ### `coalescenceage`
 
 **Part of speech:** noun (data concept); accessor name
@@ -222,7 +272,7 @@ which returns either:
   for conversion.
 
 When `edgelength` is not supplied, layout defaults to
-`lineageunits = :vertexheights` (leaf-aligned topology plot).
+`lineageunits = :vertexheights` (leaf-aligned clade graph plot).
 
 **Proscribed alternates:** `branch_length`, `edge_length` (underscored),
 `weight`, `len`, `w`.
@@ -262,13 +312,12 @@ accessor. Written as one word without underscore.
 tree, equivalently the `branchingtime` of the deepest leaf. For an ultrametric
 tree, equals the `coalescenceage` of the `rootvertex`.
 
-**Definition (per-vertex):** The topological distance from a given vertex to
-its farthest descendant leaf, measured in edge count (ignoring `edgelength`
-values). Used by the `:vertexheights` `lineageunits` value: all leaves have
-height = 0, and each internal vertex has height = max(heights of children) + 1.
-This naturally aligns all leaves at the same x-coordinate (the classic
-cladogram appearance). `height` is the topological, unweighted analogue of
-`coalescenceage`.
+**Definition (per-vertex):** The path distance (number of edges, ignoring
+`edgelength` values) from a given vertex to its farthest descendant leaf. Used
+by the `:vertexheights` `lineageunits` value: all leaves have height = 0, and
+each internal vertex has height = max(heights of children) + 1. This naturally
+aligns all leaves at the same x-coordinate (the classic cladogram appearance).
+`height` is the clade graph (unweighted edge) analogue of `coalescenceage`.
 
 **Proscribed alternates:** `max_depth` (for tree-level height), `depth` (for
 per-vertex height — these are now different concepts and `depth` is proscribed
@@ -361,7 +410,7 @@ vertex, and what `axis_polarity` `LineageAxis` infers:
   accessor; `:forward` polarity.
 - `:coalescenceage` — pre-supplied coalescence ages; requires `coalescenceage`
   accessor; leaf = 0, increases toward root; `:backward` polarity.
-- `:vertexdepths` — cumulative topological edge count from rootvertex; no
+- `:vertexdepths` — cumulative path distance (edge count) from rootvertex; no
   accessor required; `:forward` polarity.
 - `:vertexheights` — edge count to farthest leaf; leaves at 0; default when no
   `edgelength` accessor is supplied; `:backward` polarity.
@@ -434,7 +483,7 @@ acceptable synonym; in code, `marker` is the only permitted term.
 In any given plot, the process coordinate is determined by the active
 `lineageunits` value: `branchingtime` values for `lineageunits = :branchingtime`
 or `:edgelengths`, `coalescenceage` values for `lineageunits = :coalescenceage`,
-topological edge counts for `:vertexlevels` / `:vertexdepths` / `:vertexheights`,
+path distances (edge counts) for `:vertexlevels` / `:vertexdepths` / `:vertexheights`,
 or user-supplied coordinates for `:vertexcoords` / `:vertexpos`.
 
 This is a documentation and design term that unifies all `lineageunits` values
@@ -558,9 +607,9 @@ without underscore.
 | `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from `rootvertex`; computes `branchingtime` on the fly | Root = 0, increases toward leaves | `:forward` |
 | `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | Root = 0, increases toward leaves | `:forward` |
 | `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; requires ultrametric tree (or `nonultrametric` policy) | Leaf = 0, increases toward root | `:backward` |
-| `:vertexdepths` | none | Cumulative topological edge count from `rootvertex` (all edge weights = 1) | Root = 0, increases toward leaves | `:forward` |
-| `:vertexheights` | none | Per-vertex height (edge count to farthest leaf); all leaves at x = 0; topological analogue of `:coalescenceage` | Leaf = 0, increases toward root | `:backward` |
-| `:vertexlevels` | none | Integer level = edge count from `rootvertex`; equal spacing between levels; topological analogue of `:branchingtime` | Root = 0, increases toward leaves | `:forward` |
+| `:vertexdepths` | none | Cumulative path distance (edge count) from `rootvertex` (all edge weights = 1) | Root = 0, increases toward leaves | `:forward` |
+| `:vertexheights` | none | Per-vertex height (path distance to farthest leaf); all leaves at x = 0; clade graph (unweighted) analogue of `:coalescenceage` | Leaf = 0, increases toward root | `:backward` |
+| `:vertexlevels` | none | Integer level = edge count from `rootvertex`; equal spacing between levels; clade graph (unweighted) analogue of `:branchingtime` | Root = 0, increases toward leaves | `:forward` |
 | `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
 | `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
 

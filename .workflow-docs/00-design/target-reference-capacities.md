@@ -46,7 +46,7 @@ These three concerns are independent. A coalescent model with leaf-relative
 process coordinates (user-centric: backward time) can be drawn with the
 rootvertex at either the left or the right (plotting-centric choice), and the
 researcher may think of it as "coalescent time increasing toward the past"
-(user-centric) or simply as a topology display tool. Conflating these three
+(user-centric) or simply as a clade graph display tool. Conflating these three
 concerns leads to an API that either forces one convention on the user or
 requires ad-hoc workarounds for every deviation from that convention.
 
@@ -84,16 +84,16 @@ have equal total `edgelength`) or an explicit non-ultrametric policy. The
 process runs in the backward direction: leaves are earliest (age = 0), the
 rootvertex is latest (age = maximum).
 
-**Topological variants** — four topology-based `lineageunits` values do not use
-edge-length data:
+**Clade graph variants** — four clade graph-based `lineageunits` values do not
+use edge-length data:
 - `:vertexlevels` — integer level = edge count from rootvertex; forward polarity;
-  analogue of `branchingtime` for topology-only displays.
-- `:vertexdepths` — cumulative topological edge count from rootvertex; forward
-  polarity.
-- `:vertexheights` — per-vertex edge count to farthest leaf; backward polarity;
-  topology-only analogue of `coalescenceage`. This is the default when no
-  `edgelength` is supplied, because it aligns all leaves at the same
-  x-coordinate (classic cladogram appearance).
+  clade graph (unweighted) analogue of `branchingtime`.
+- `:vertexdepths` — cumulative path distance (edge count) from rootvertex;
+  forward polarity.
+- `:vertexheights` — per-vertex path distance to farthest leaf; backward
+  polarity; clade graph (unweighted) analogue of `coalescenceage`. This is the
+  default when no `edgelength` is supplied, because it aligns all leaves at the
+  same x-coordinate (classic cladogram appearance).
 - `:vertexcoords` / `:vertexpos` — user-supplied coordinates in data or pixel
   space respectively; polarity is user-defined.
 
@@ -565,8 +565,8 @@ Two mirrored trees connected by association lines.
 
 ### 7.2 Tree density plot
 
-Overlay of many trees (e.g. MCMC posterior sample) showing topological and
-edge-length uncertainty.
+Overlay of many trees (e.g. MCMC posterior sample) showing clade graph
+(branching structure) and edge-length uncertainty.
 
 | Property | Options |
 |---|---|
