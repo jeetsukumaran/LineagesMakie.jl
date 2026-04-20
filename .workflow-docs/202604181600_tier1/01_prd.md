@@ -668,12 +668,27 @@ screen-direction transformation.
 **Interface:**
 
 - `TreeGeometry` struct (immutable): `vertex_positions::Dict`,
-  `edge_paths`, `leaf_order`, `boundingbox`
+  `edge_paths`, `leaf_order`, `boundingbox`. The element type of `edge_paths`
+  is not specified here; the implementing agent must derive the appropriate
+  representation from Makie's line-data conventions in the local source
+  codebase (see Further Notes — Makie source codebase), specifically how
+  `lines!` / `linesegments!` consume path data. Do not invent a bespoke
+  representation.
 - `rectangular_layout(rootvertex, accessor; leaf_spacing=:equal,
   lineageunits=:vertexheights) -> TreeGeometry`
 - `circular_layout(rootvertex, accessor; leaf_spacing=:equal,
-  lineageunits=:vertexheights) -> TreeGeometry`
+  lineageunits=:vertexheights, circular_edge_style=:chord) -> TreeGeometry`
 - `boundingbox(geom::TreeGeometry) -> Rect2f`
+
+`circular_edge_style` values for `circular_layout`:
+- `:chord` (Tier 1, default) — angular connectors are straight line segments
+  (chords) between the parent's angular position and each child's angular
+  position, both at the parent's radial distance; radial segments are straight
+  lines from that connector point outward to the child's radial position.
+- `:arc` (Tier 2) — angular connectors are proper circular arc segments
+  following the circle at the parent's radius, using `BezierPath` or arc
+  primitives from Makie's `src/bezier.jl`. Deferred; do not implement in
+  Tier 1.
 
 `lineageunits` values implemented: all eight listed in the `lineageunits`
 section. Forward and backward `lineageunits` values produce `vertex_positions`
@@ -718,7 +733,9 @@ visual layers, and the composite `LineagePlot` recipe.
 **Interface** (each recipe follows Makie `@recipe` conventions):
 
 - `EdgeLayer` / `edgelayer!`: attributes — `color`, `linewidth`, `linestyle`,
-  `alpha`, `edge_style` (`:right_angle` | `:diagonal`)
+  `alpha`, `edge_style` (`:right_angle` | `:diagonal`; rectangular layouts),
+  `circular_edge_style` (`:chord` | `:arc`; circular layouts; Tier 1
+  implements `:chord` only)
 - `VertexLayer` / `vertexlayer!`: attributes — `marker`, `color`, `markersize`,
   `strokecolor`, `alpha`, `visible`
 - `LeafLayer` / `leaflayer!`: same attributes as `VertexLayer`
@@ -843,12 +860,11 @@ The architecture must not foreclose any of the above. In particular:
 
 ## Open questions
 
-1. **Makie version floor:** ComputeGraph (`map!` / `register_computation!`) is
-   Makie 0.24+. The minimum supported Makie version must be established before
-   implementation begins. If older versions must be supported, the
-   `Observable`-based (`onany`) pattern is the fallback.
-   *Owner:* implementation phase. *Resolution:* check Makie changelog; set
-   `[compat]` accordingly.
+1. **Makie version floor:** ~~RESOLVED~~ Makie ≥ 0.24 is required.
+   `map!` / `register_computation!` (ComputeGraph) is the mandated pattern
+   throughout. The `onany`-based fallback is not used. Set `[compat]` to
+   `"Makie" = "0.24"` in `Project.toml` before writing any recipe or Block
+   code.
 
 2. **Runic.jl CI integration:** STYLE-julia.md §3.1 requires Runic.jl
    formatting enforced in CI. A formatting check step must be added to
@@ -857,24 +873,31 @@ The architecture must not foreclose any of the above. In particular:
 
 3. **Circular layout minimum angular spacing:** Equal angular spacing is the
    default, but a `min_leaf_angle` floor may be needed for very large trees.
+   This question applies to both `circular_edge_style = :chord` and `:arc`
+   variants.
    *Owner:* Geometry module implementation. *Resolution:* decide during
    `circular_layout` implementation; document the parameter.
 
 4. **`display_polarity` and `reset_limits!` interaction:** When
    `display_polarity = :reversed`, `reset_limits!` must set axis limits so
    that the larger process-coordinate value is at the visual origin. The exact
-   Makie idiom for this (reversed limits, or `xreversed = true`) must be
-   confirmed against the Makie 0.24+ Block API before implementation.
-   *Owner:* `LineageAxis` implementation. *Resolution:* check Makie Block docs
-   and `Axis` `xreversed` attribute behavior.
+   Makie idiom (reversed limits vs. `xreversed = true`) must be confirmed from
+   source before any `reset_limits!` code is written.
+   *Owner:* `LineageAxis` implementation. *Resolution:* read
+   `src/makielayout/` in the local Makie source codebase (see Further Notes —
+   Makie source codebase) before implementing `reset_limits!`; look
+   specifically for `xreversed` / `yreversed` attribute handling and
+   reversed-limit idioms in `Axis` and existing custom `Block` examples.
 
 5. **`lineage_orientation` and transverse axis for Tier 1:** For Tier 1 only
-   `:left_to_right` and `:radial` are required. The `:right_to_left` value is
-   achievable via `display_polarity = :reversed` with `:left_to_right`
-   orientation, so it may be redundant in Tier 1. Confirm whether
-   `lineage_orientation = :right_to_left` is needed as a distinct value in Tier
-   1 or whether `display_polarity = :reversed` is sufficient.
-   *Owner:* `LineageAxis` implementation.
+   `:left_to_right` and `:radial` are required. The `:right_to_left` value may
+   be fully redundant with `display_polarity = :reversed` + `:left_to_right`;
+   if so, it should not be added as a distinct attribute value in Tier 1.
+   *Owner:* `LineageAxis` implementation. *Resolution:* the implementing agent
+   must evaluate this, propose a recommendation, and obtain explicit
+   project-owner approval **before** committing the `LineageAxis` attribute
+   API. This decision affects Tier 2+ additions (dendrogram, fan, unrooted
+   layouts) and must not be made unilaterally.
 
 ## Further notes
 
@@ -907,6 +930,25 @@ Key files:
 - `docs/src/explanations/architecture.md` — Scene, Plot, Block hierarchy
 - `GraphMakie.jl/src/recipes.jl` — reference for per-element attribute
   handling and ComputeGraph pixel-projection pattern
+
+### Makie source codebase
+
+The full Makie source is checked out locally and **must** be consulted before
+implementing any Makie-dependent module. Do not infer API surface from prior
+knowledge; this version may differ from training data.
+
+```
+/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/Makie/
+```
+
+Key subdirectories:
+- `src/makielayout/` — Block API, `Axis`, custom Block patterns; required
+  reading before implementing `LineageAxis` (see Open Q4)
+- `src/compute-plots.jl` — ComputeGraph (`map!`, `register_computation!`)
+  patterns; required reading before implementing any `@recipe`
+- `src/basic_recipes/` — `@recipe` reference implementations
+- `src/bezier.jl` — `BezierPath` and arc primitives (relevant to circular
+  edge geometry, `circular_edge_style = :arc`, Tier 2)
 
 ### Non-isotropic axis handling
 
