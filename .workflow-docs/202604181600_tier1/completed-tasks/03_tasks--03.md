@@ -19,10 +19,10 @@ Canonical terms enforced throughout: `vertex`/`vertices`, `leaf`/`leaves`,
 
 ## Tasks
 
-### 1. Research Makie `lines!` data conventions; define `TreeGeometry` and `boundingbox`
+### 1. Research Makie `lines!` data conventions; define `LineageGraphGeometry` and `boundingbox`
 
 **Type**: WRITE
-**Output**: `src/Geometry.jl` defines and exports `TreeGeometry` and
+**Output**: `src/Geometry.jl` defines and exports `LineageGraphGeometry` and
 `boundingbox`; the struct compiles and the module loads cleanly.
 **Depends on**: none
 
@@ -36,25 +36,25 @@ representation that best matches how multiple separate edge paths can be drawn i
 a single `lines!` or `linesegments!` call. Document the chosen representation
 and the Makie source file and line number in a comment in `src/Geometry.jl`.
 
-Define `TreeGeometry` as a parametric immutable `struct TreeGeometry{V}` with
+Define `LineageGraphGeometry` as a parametric immutable `struct LineageGraphGeometry{V}` with
 four fields: `vertex_positions::Dict{V,Point2f}`, `edge_paths::Vector{Point2f}`
 (type chosen from the research above), `leaf_order::Vector{V}`, and
 `boundingbox::Rect2f`. Per STYLE-julia.md §1.12 ("Concrete struct fields and
 parametric type design"), bare `Dict` and `Vector` are not acceptable field
 types — every field must be concretely typed or parameterized. In practice
 `V=Any` (both `leaves` and `preorder` return `Vector{Any}`), so the runtime
-type will be `TreeGeometry{Any}`; the parametric form is still required.
+type will be `LineageGraphGeometry{Any}`; the parametric form is still required.
 Write a triple-quoted docstring on the struct describing each field, the type
 parameter `V`, and the coordinate convention (process coordinate on the primary
 axis; transverse coordinate on the secondary axis).
 
-Define `boundingbox(geom::TreeGeometry) -> Rect2f` as a pure function that
+Define `boundingbox(geom::LineageGraphGeometry) -> Rect2f` as a pure function that
 computes the smallest axis-aligned bounding rectangle enclosing all values in
 `geom.vertex_positions`. Use `Makie.Rect2f` or `GeometryBasics.Rect2f`
 (whichever is re-exported by the loaded Makie version — confirm from source).
 Write a docstring. Export both names from `src/Geometry.jl`. This module must
 not import anything from `src/Accessors.jl` directly — it receives a
-`TreeAccessor` by type but the import direction is caller → callee only.
+`LineageGraphAccessor` by type but the import direction is caller → callee only.
 Confirm with `julia --project -e 'using LineagesMakie'`.
 
 ---
@@ -63,13 +63,13 @@ Confirm with `julia --project -e 'using LineagesMakie'`.
 
 **Type**: WRITE
 **Output**: `rectangular_layout(root, acc; lineageunits=:vertexheights)` returns
-a `TreeGeometry` where all leaves have process coordinate 0.0, internal vertices
+a `LineageGraphGeometry` where all leaves have process coordinate 0.0, internal vertices
 have positive process coordinates equal to their height, and `edge_paths`
 contains correct right-angle segment data.
 **Depends on**: Task 1
 
-Implement `rectangular_layout(rootvertex, accessor::TreeAccessor;
-leaf_spacing=:equal, lineageunits=:vertexheights) -> TreeGeometry`. In this
+Implement `rectangular_layout(rootvertex, accessor::LineageGraphAccessor;
+leaf_spacing=:equal, lineageunits=:vertexheights) -> LineageGraphGeometry`. In this
 task, only `:vertexheights` is implemented; the `lineageunits` dispatch
 infrastructure must be extensible (use an internal dispatch function or
 `if`/`elseif` block that will be extended in Task 3 and Issue 4).
@@ -101,7 +101,7 @@ on `rectangular_layout`. Export it.
 
 **Type**: WRITE
 **Output**: `rectangular_layout` supports `:vertexlevels`, accepts a `Float64`
-`leaf_spacing`, and raises `ArgumentError` for a zero-leaf tree.
+`leaf_spacing`, and raises `ArgumentError` for a zero-leaf lineage graph.
 **Depends on**: Task 2
 
 Extend the `lineageunits` dispatch in `rectangular_layout` to handle
@@ -120,7 +120,7 @@ Add a zero-leaf guard at the top of `rectangular_layout`: before any layout
 computation, call `leaves(accessor, rootvertex)` and check whether the resulting
 collection is empty; if so, raise `ArgumentError` identifying the rootvertex.
 
-Update the `TreeGeometry` struct's `boundingbox` field to be computed from the
+Update the `LineageGraphGeometry` struct's `boundingbox` field to be computed from the
 final `vertex_positions` at the end of layout, using the `boundingbox` function
 from Task 1. Confirm the module stays within 400–600 LOC.
 
@@ -132,12 +132,12 @@ from Task 1. Confirm the module stays within 400–600 LOC.
 **Output**: All `test_Geometry` assertions green; no Aqua or JET regressions.
 **Depends on**: Task 3
 
-Write `test/test_Geometry.jl`. Reuse or copy the four tree fixtures from
+Write `test/test_Geometry.jl`. Reuse or copy the four lineage graph fixtures from
 `test/test_Accessors.jl` (4-leaf balanced, 6-leaf unbalanced, polytomy, single-
 leaf). Organize `@testset` blocks by function and mode.
 
 Cover:
-- `TreeGeometry` construction: that it is an immutable struct with the expected
+- `LineageGraphGeometry` construction: that it is an immutable struct with the expected
   fields.
 - `rectangular_layout` with `:vertexheights` on all four fixtures: all leaves at
   process coordinate 0.0; root at maximum process coordinate; all vertices have
@@ -152,6 +152,6 @@ Cover:
 - `boundingbox` encloses all `vertex_positions` values: for each fixture, assert
   that every position `p` in `geom.vertex_positions` satisfies
   `p ∈ geom.boundingbox`.
-- Zero-leaf tree raises `ArgumentError` (construct a root with no children).
+- Zero-leaf lineage graph raises `ArgumentError` (construct a root with no children).
 
 Use `@test`, `@test_throws`, and `@testset` throughout. All tests deterministic.

@@ -26,9 +26,9 @@ process coordinates are computed from the active `lineageunits` value; the
 `min_leaf_angle` parameter is documented and implemented.
 **Depends on**: none
 
-Add `circular_layout(rootvertex, accessor::TreeAccessor; leaf_spacing=:equal,
+Add `circular_layout(rootvertex, accessor::LineageGraphAccessor; leaf_spacing=:equal,
 lineageunits=:vertexheights, circular_edge_style=:chord,
-min_leaf_angle=nothing) -> TreeGeometry` to `src/Geometry.jl`. Write a full
+min_leaf_angle=nothing) -> LineageGraphGeometry` to `src/Geometry.jl`. Write a full
 docstring.
 
 For angular leaf placement with `leaf_spacing = :equal`: collect all leaves in
@@ -92,7 +92,7 @@ tests still pass; no Aqua or JET regressions.
 **Depends on**: Task 2
 
 Extend `test/test_Geometry.jl` with a new `@testset "circular_layout"` block.
-Use the same four tree fixtures.
+Use the same four lineage graph fixtures.
 
 Cover:
 - Equal angular spacing: for the 4-leaf balanced fixture, verify that all leaves
@@ -105,7 +105,7 @@ Cover:
   rectangular layout.
 - `circular_edge_style = :chord`: inspect `edge_paths` and confirm all segment
   endpoints are finite `Point2f` values (no `NaN` in unexpected positions).
-- Zero-leaf tree raises `ArgumentError`.
+- Zero-leaf lineage graph raises `ArgumentError`.
 - Non-regression: run all existing `@testset "rectangular_layout"` assertions
   after the circular tests to confirm no shared state was corrupted.
 

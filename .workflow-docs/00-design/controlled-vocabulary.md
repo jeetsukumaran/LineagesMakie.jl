@@ -407,7 +407,7 @@ eventually to general networks.
 - In prose: "lineage graph" (two words).
 - In PascalCase type names: `LineageGraphAccessor`, `LineageGraphGeometry`.
 - In compound identifiers: `lineagegraph_accessor` (underscore before a
-  multi-word suffix, consistent with the pattern established by `tree_accessor`).
+  multi-word suffix, e.g. `lineagegraph_accessor`).
 - Code examples that explicitly load a Newick file or interface with
   `AbstractTrees` may use "tree" when referring to the external object type;
   once that object is passed to LineagesMakie it is a "lineage graph".

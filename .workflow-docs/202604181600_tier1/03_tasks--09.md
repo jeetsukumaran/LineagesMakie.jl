@@ -31,7 +31,7 @@ layer is wired into `lineageplot!`.
 **Depends on**: none
 
 Implement `LeafLabelLayer` in `src/Layers.jl` using `@recipe`. Positional input:
-a `TreeGeometry` and a `TreeAccessor`. Attributes: `text_func` (a callable
+a `LineageGraphGeometry` and a `LineageGraphAccessor`. Attributes: `text_func` (a callable
 `vertex -> String`; default: `string` applied to `vertexvalue` if present,
 otherwise the vertex itself), `font` (default Makie's default font), `fontsize`
 (default `12`), `color` (default `:black`), `offset` (default `Vec2f(4, 0)` in
@@ -59,7 +59,7 @@ raises an informative error at plot time.
 **Depends on**: Task 1
 
 Implement `VertexLabelLayer` in `src/Layers.jl` using `@recipe`. Positional
-input: a `TreeGeometry` and a `TreeAccessor`. Attributes: `value_func` (a
+input: a `LineageGraphGeometry` and a `LineageGraphAccessor`. Attributes: `value_func` (a
 callable `vertex -> Any`; default: `v -> ""`, i.e., empty string), `threshold`
 (a predicate callable `vertex -> Bool`; default: `v -> true`, meaning show all),
 `position` (`:vertex` | `:toward_parent`; default `:vertex`), `font` (default

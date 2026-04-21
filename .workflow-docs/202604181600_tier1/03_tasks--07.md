@@ -27,7 +27,7 @@ fields to the generated type.
 
 **Type**: WRITE
 **Output**: `src/Layers.jl` defines and exports `EdgeLayer`; `edgelayer!` draws
-right-angle edge segments from a `TreeGeometry`; `visible = false` suppresses
+right-angle edge segments from a `LineageGraphGeometry`; `visible = false` suppresses
 all edge rendering; per-edge color function works.
 **Depends on**: none
 
@@ -47,7 +47,7 @@ Before writing any code, read the following in the local Makie resources:
 Document the chosen ComputeGraph pattern in a comment citing source file and
 line before any recipe code.
 
-Implement `EdgeLayer` using `@recipe`. Positional input: a `TreeGeometry` value.
+Implement `EdgeLayer` using `@recipe`. Positional input: a `LineageGraphGeometry` value.
 Attributes: `color` (default `:black`; may be a single color or a function
 `(fromvertex, tovertex) -> color`), `linewidth` (default `1.0`), `linestyle`
 (default `:solid`), `alpha` (default `1.0`), `edge_style` (default
@@ -56,7 +56,7 @@ Attributes: `color` (default `:black`; may be a single color or a function
 
 In the `plot!` method, use `CoordTransform.register_pixel_projection!` so the
 layer is viewport-aware. Draw edges using the `edge_paths` from the
-`TreeGeometry` input via `lines!` or `linesegments!` — the choice must be
+`LineageGraphGeometry` input via `lines!` or `linesegments!` — the choice must be
 consistent with the `edge_paths` representation decided in Issue 3 Task 1.
 When `color` is a function, map it over edges at render time via ComputeGraph
 `map!` to produce a per-segment color array. Write a docstring on `EdgeLayer`.
@@ -74,14 +74,14 @@ a `CairoMakie` `Axis` without error; the figure is non-empty.
 
 Add a minimal `lineageplot!` function to `src/Layers.jl` that:
 1. Calls `Geometry.rectangular_layout(rootvertex, accessor)` to obtain a
-   `TreeGeometry`.
+   `LineageGraphGeometry`.
 2. Creates and returns an `EdgeLayer` plot on the given axis.
 
 This stub accepts `rootvertex` (a plain value, not yet an `Observable`) and an
-`accessor::TreeAccessor` as positional arguments, followed by keyword arguments
+`accessor::LineageGraphAccessor` as positional arguments, followed by keyword arguments
 forwarded to `EdgeLayer`. It dispatches on `Makie.Axis` for now; the
 `LineageAxis` dispatch will be added in Issue 11. Use explicit qualified names
-for `Geometry.rectangular_layout` and `Accessors.TreeAccessor`. Write a
+for `Geometry.rectangular_layout` and `Accessors.LineageGraphAccessor`. Write a
 docstring marking this as the Tier-1 composite entry point (stub). Export
 `lineageplot!`.
 
@@ -94,7 +94,7 @@ docstring marking this as the Tier-1 composite entry point (stub). Export
 smoke test passes; no Aqua or JET regressions.
 **Depends on**: Task 2
 
-Write the initial `test/test_Layers.jl`. Define the same four tree fixtures used
+Write the initial `test/test_Layers.jl`. Define the same four lineage graph fixtures used
 in `test/test_Accessors.jl`. Organize with `@testset "EdgeLayer"`.
 
 Cover:

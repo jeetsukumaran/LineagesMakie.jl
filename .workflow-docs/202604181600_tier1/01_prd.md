@@ -95,10 +95,11 @@ converting to a package-specific type and accepting the limitations above.
 There is no path from a generic Julia lineage graph to a Makie figure.
 
 A second, deeper problem: every existing tool conflates three independently
-variable concerns — the tree's intrinsic process coordinate, the researcher's
-semantic interpretation of that coordinate, and the plot's screen embedding.
-This conflation makes it impossible to, for example, display a forward-time
-tree root-at-right, or display a coalescent tree in a non-standard orientation,
+variable concerns — the lineage graph's intrinsic process coordinate, the
+researcher's semantic interpretation of that coordinate, and the plot's screen
+embedding. This conflation makes it impossible to, for example, display a
+forward-time lineage graph root-at-right, or display a coalescent lineage graph
+in a non-standard orientation,
 without special-casing the tool itself. `LineageAxis` resolves this by making
 the three concerns explicitly separable.
 
@@ -123,14 +124,14 @@ interactive use.
 All geometry is computed in a pure functional core that is independently
 testable. All rendering uses idiomatic Makie `@recipe` constructs.
 `LineageAxis` exposes `axis_polarity`, `display_polarity`, and
-`lineage_orientation` as independent attributes so that the tree-centric,
-user-centric, and plotting-centric views of the same tree are always
+`lineage_orientation` as independent attributes so that the lineage graph-centric,
+user-centric, and plotting-centric views of the same lineage graph are always
 independently controllable. Every public function has full test coverage.
 
 ## Foundational design principle: the three-view model
 
 Every design decision in this PRD is governed by a three-view model of any
-tree plot. The three views are independent and must remain separately
+lineage graph plot. The three views are independent and must remain separately
 addressable throughout the implementation.
 
 **Lineage graph-centric view** — What is the structure? What scalar positions
@@ -167,12 +168,12 @@ carries the screen attributes without encoding any biological meaning.
 ### Input and data model
 
 1. As a researcher, I want to pass any AbstractTrees.jl-compliant rootvertex to
-   `lineageplot` and get a rendered tree, so that I can visualize trees from
-   any Julia package without conversion.
+   `lineageplot` and get a rendered lineage graph, so that I can visualize
+   lineage graphs from any Julia package without conversion.
 
 2. As a researcher, I want to pass explicit `children`, `edgelength`, and
    `vertexvalue` keyword functions to `lineageplot`, so that I can visualize
-   any tree-like data structure that does not implement AbstractTrees.jl.
+   any lineage graph structure that does not implement AbstractTrees.jl.
 
 3. As a researcher, I want the package to work with no internet connection and
    no R installation, so that it is usable in offline and non-R environments.
@@ -202,8 +203,8 @@ carries the screen attributes without encoding any biological meaning.
 
 9. As a researcher, I want to supply `coalescenceage` as a function
    `vertex -> Float64` (leaf = 0, increases toward root) and use the
-   `lineageunits = :coalescenceage`, so that coalescent trees are laid out
-   with leaves at one end and the rootvertex at the other.
+   `lineageunits = :coalescenceage`, so that coalescent lineage graphs are laid
+   out with leaves at one end and the rootvertex at the other.
 
 10. As a researcher, I want to supply `branchingtime` as a function
     `vertex -> Float64` and use `lineageunits = :branchingtime`, so that
@@ -216,24 +217,26 @@ carries the screen attributes without encoding any biological meaning.
     `lineageunits` keyword (`:edgelengths`, `:branchingtime`, `:coalescenceage`,
     `:vertexheights`, `:vertexlevels`, `:vertexdepths`, `:vertexcoords`,
     `:vertexpos`), so that I can control how vertex process coordinates are
-    determined independently of the tree data type.
+    determined independently of the lineage graph data type.
 
 12. As a researcher, I want the `lineageunits` to default to `:edgelengths`
     when an `edgelength` accessor is supplied, and to `:vertexheights` otherwise,
     so that I get a sensible plot with no configuration.
 
 13. As a researcher, using any rectangular layout, I want leaves to be equally
-    spaced on the transverse axis by default, so that the tree is legible
-    without any configuration.
+    spaced on the transverse axis by default, so that the lineage graph is
+    legible without any configuration.
 
 14. As a researcher, I want to control leaf spacing via the `leaf_spacing`
-    keyword argument, so that I can adjust density for trees of different sizes.
+    keyword argument, so that I can adjust density for lineage graphs of
+    different sizes.
 
 15. As a researcher, using the circular layout, I want leaves equally spaced
-    angularly by default, so that the tree is legible without configuration.
+    angularly by default, so that the lineage graph is legible without
+    configuration.
 
 16. As a researcher, I want the layout to be recomputed reactively when the
-    input tree Observable is updated, so that animated or interactive updates
+    input lineage graph Observable is updated, so that animated or interactive updates
     work correctly.
 
 17. As a researcher, when I resize the figure, I want marker sizes and label
@@ -251,12 +254,12 @@ carries the screen attributes without encoding any biological meaning.
     process direction when the default inference is wrong for my use case.
 
 20. As a researcher, I want to set `display_polarity = :reversed` on
-    `LineageAxis` so that I can display a forward-time tree with the rootvertex
-    at the right and leaves at the left (paleontological convention), without
-    changing the data or the `lineageunits` value.
+    `LineageAxis` so that I can display a forward-time lineage graph with the
+    rootvertex at the right and leaves at the left (paleontological convention),
+    without changing the data or the `lineageunits` value.
 
 21. As a researcher, I want to set `display_polarity = :reversed` on
-    `LineageAxis` so that I can display a coalescent tree
+    `LineageAxis` so that I can display a coalescent lineage graph
     (`lineageunits = :coalescenceage`, backward polarity) with the rootvertex
     at the left and leaves at the right, if my context requires that orientation.
 
@@ -268,8 +271,8 @@ carries the screen attributes without encoding any biological meaning.
 ### Visual layers
 
 23. As a researcher, I want edges rendered as right-angle segments (horizontal
-    + vertical) for the rectangular layout, so that the tree has the standard
-    phylogenetic appearance.
+    + vertical) for the rectangular layout, so that the lineage graph has the
+    standard phylogenetic appearance.
 
 24. As a researcher, I want to set edge color, line width, line style, and alpha
     either uniformly or via a function `(fromvertex, tovertex) -> value` mapped
@@ -323,11 +326,11 @@ carries the screen attributes without encoding any biological meaning.
 ### LineageAxis
 
 36. As a researcher, I want a `LineageAxis` block that I can place in a Makie
-    `Figure` layout, so that I have a tree-aware axis with sensible defaults
+    `Figure` layout, so that I have a lineage graph-aware axis with sensible defaults
     (no tick marks, no grid lines, optional x-axis for quantitative `lineageunits` values).
 
 37. As a researcher, I want `LineageAxis` to suppress tick marks, grid lines,
-    and axis spines by default (classic naked-tree appearance), so that the
+    and axis spines by default (classic naked-lineage appearance), so that the
     figure matches phylogenetic publication conventions without manual
     configuration.
 
@@ -345,8 +348,8 @@ carries the screen attributes without encoding any biological meaning.
 
 ### Observables and reactivity
 
-41. As a researcher, I want to wrap my tree in an `Observable` and pass it to
-    `lineageplot!`, so that updating the Observable triggers a full re-layout
+41. As a researcher, I want to wrap my lineage graph in an `Observable` and
+    pass it to `lineageplot!`, so that updating the Observable triggers a full re-layout
     and re-render reactively.
 
 42. As a researcher, I want to pass `Observable`-valued attributes (color,
@@ -355,31 +358,31 @@ carries the screen attributes without encoding any biological meaning.
     re-calling `lineageplot!`.
 
 43. As a researcher, I want to use Makie's `lift` to derive plot attributes from
-    Observables I control, so that I can wire tree visualization to sliders,
+    Observables I control, so that I can wire lineage graph visualization to sliders,
     buttons, or other interactive elements using standard Makie idioms.
 
 ### Error handling
 
-44. As a researcher, if `children` returns a cycle (not a tree), I want an
-    informative error before layout begins, so that I do not receive a cryptic
-    stack overflow or silent infinite loop.
+44. As a researcher, if `children` returns a cycle (not an acyclic lineage
+    graph), I want an informative error before layout begins, so that I do not
+    receive a cryptic stack overflow or silent infinite loop.
 
 45. As a researcher, if `edgelength` returns a negative value, I want an
     `ArgumentError` with a message identifying which edge is problematic, so
     that data errors are surfaced immediately.
 
 46. As a researcher, if `coalescenceage` is used with
-    `lineageunits = :coalescenceage` and the tree is not ultrametric, I want an
-    `ArgumentError` by default, and
-    control over the fallback policy via a `nonultrametric` keyword
-    (`:minimum`, `:maximum`, `:error`), so that non-ultrametric trees are
+    `lineageunits = :coalescenceage` and the lineage graph is not ultrametric,
+    I want an `ArgumentError` by default, and control over the fallback policy
+    via a `nonultrametric` keyword (`:minimum`, `:maximum`, `:error`), so that
+    non-ultrametric lineage graphs are
     handled explicitly rather than silently.
 
 47. As a researcher, if `vertexvalue` returns a value of an unexpected type for
     a label layer, I want an informative error at plot time, not a silent
     rendering failure.
 
-48. As a researcher, if the tree has zero leaves, I want a clear error rather
+48. As a researcher, if the lineage graph has zero leaves, I want a clear error rather
     than an empty or broken figure, so that I can diagnose the data problem.
 
 ### Testing
@@ -388,7 +391,7 @@ carries the screen attributes without encoding any biological meaning.
     covering the documented contract, edge cases, and failure modes, so that
     regressions are caught immediately.
 
-50. As a developer, I want integration tests that render a tree end-to-end with
+50. As a developer, I want integration tests that render a lineage graph end-to-end with
     CairoMakie (non-interactive backend) and verify that the output is
     non-empty, so that the full pipeline is exercised in CI.
 
@@ -411,7 +414,7 @@ directly to `lineageplot`:
   sum from `rootvertex`
 - `coalescenceage`: `vertex -> Float64`; optional; required when
   `lineageunits = :coalescenceage`; leaf = 0, increases toward rootvertex;
-  ultrametric tree required by default
+  ultrametric lineage graph required by default
 - `vertexcoords`: `vertex -> Point2f`; optional; required when
   `lineageunits = :vertexcoords`
 - `vertexpos`: `vertex -> Point2f`; optional; required when
@@ -419,7 +422,7 @@ directly to `lineageplot`:
 
 All adapters — including the AbstractTrees.jl adapter — translate their source
 objects into these callables. The recipe's internal geometry and rendering code
-depends only on these callables, never on the source tree type. This is the
+depends only on these callables, never on the source type. This is the
 dependency inversion principle applied to the input boundary.
 
 The AbstractTrees adapter wraps `AbstractTrees.children` and optionally reads
@@ -437,7 +440,7 @@ delegates to shared traversal infrastructure.
 |---|---|---|---|
 | `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from rootvertex; computes `branchingtime` on the fly | `:forward` |
 | `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | `:forward` |
-| `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; leaf = 0; requires ultrametric tree (see `nonultrametric`) | `:backward` |
+| `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; leaf = 0; requires ultrametric lineage graph (see `nonultrametric`) | `:backward` |
 | `:vertexdepths` | none | Cumulative path distance (edge count) from rootvertex (all edge weights = 1) | `:forward` |
 | `:vertexheights` | none | Per-vertex path distance to farthest leaf; clade graph (unweighted) analogue of `:coalescenceage` | `:backward` |
 | `:vertexlevels` | none | Integer level = edge count from rootvertex; equal inter-level spacing; clade graph (unweighted) analogue of `:branchingtime` | `:forward` |
@@ -463,7 +466,7 @@ returns
 warning identifying the edge. Negative edge lengths raise `ArgumentError`
 immediately.
 
-**Non-ultrametric trees with `lineageunits = :coalescenceage`:** If any two children of a
+**Non-ultrametric lineage graphs with `lineageunits = :coalescenceage`:** If any two children of a
 vertex yield inconsistent coalescence age estimates, the default raises
 `ArgumentError`. Controlled by a `nonultrametric` keyword: `:error` (default),
 `:minimum` (min over all leaf paths), `:maximum` (max over all leaf paths).
@@ -593,10 +596,10 @@ rendering system.
 **Viewport-aware coordinate infrastructure:**
 - Wraps a `CoordTransform`-backed pixel↔data infrastructure so that all layers
   receive correct pixel-to-data mappings after resize.
-- Implements `reset_limits!` and `autolimits!` using `TreeGeometry.boundingbox`.
+- Implements `reset_limits!` and `autolimits!` using `LineageGraphGeometry.boundingbox`.
 
 **Dispatch:** `lineageplot!` dispatches on `Union{LineageAxis, Axis}` so both
-work; `LineageAxis` provides tree-specific defaults and the polarity/orientation
+work; `LineageAxis` provides lineage graph-specific defaults and the polarity/orientation
 semantics.
 
 ### Observables and reactivity
@@ -666,8 +669,9 @@ cycle detected during traversal → `ArgumentError` before layout.
 ### Module 2 — `Geometry`
 
 **Responsibility:** Compute 2D layout coordinates (process coordinates and
-transverse positions) from the tree's clade graph structure and the active `lineageunits` value. Pure
-functional; no Makie dependency. Embodies the tree-centric view only: produces
+transverse positions) from the lineage graph's clade graph structure and the
+active `lineageunits` value. Pure functional; no Makie dependency. Embodies the
+lineage graph-centric view only: produces
 process-coordinate values in their natural direction without any
 screen-direction transformation.
 
@@ -704,9 +708,9 @@ axis values reflect the natural process-coordinate direction. Screen direction
 is applied later by `LineageAxis` via `display_polarity`.
 
 **Failure modes:** negative edge length → `ArgumentError` with offending edge
-identified; zero-leaf tree → `ArgumentError`; missing edge length in
+identified; zero-leaf lineage graph → `ArgumentError`; missing edge length in
 `lineageunits = :edgelengths` → warning + unit-length fallback for that edge;
-non-ultrametric tree with `lineageunits = :coalescenceage` → `ArgumentError` by default,
+non-ultrametric lineage graph with `lineageunits = :coalescenceage` → `ArgumentError` by default,
 controlled by `nonultrametric` keyword (`:error` | `:minimum` | `:maximum`).
 
 **Tested:** Yes
@@ -767,9 +771,10 @@ non-isotropic-safe coordinate handling.
 ### Module 5 — `LineageAxis`
 
 **Responsibility:** Custom Makie `Block` that joins the three-view model to
-the Makie rendering system. Provides tree-specific axis defaults, viewport-
-managed pixel↔data coordinate infrastructure, and the polarity/orientation
-attributes that map tree-centric process coordinates to screen positions.
+the Makie rendering system. Provides lineage graph-specific axis defaults,
+viewport-managed pixel↔data coordinate infrastructure, and the
+polarity/orientation attributes that map lineage graph-centric process
+coordinates to screen positions.
 
 **Interface:**
 
@@ -777,7 +782,7 @@ attributes that map tree-centric process coordinates to screen positions.
 - Attributes: `axis_polarity`, `display_polarity`, `lineage_orientation`,
   `show_x_axis` (default `false`), `show_y_axis` (default `false`),
   `show_grid` (default `false`), `title`, `xlabel`, `ylabel`
-- `reset_limits!(ax::LineageAxis)`: fits axis to tree `boundingbox`, accounting
+- `reset_limits!(ax::LineageAxis)`: fits axis to `boundingbox`, accounting
   for `display_polarity` when setting axis limits
 - `autolimits!(ax::LineageAxis)`: equivalent to `reset_limits!`
 
@@ -788,7 +793,7 @@ This ensures all downstream layers receive correct data-space coordinates with
 no per-layer special-casing.
 
 `lineageplot!` dispatches on `Union{LineageAxis, Axis}` so both work;
-`LineageAxis` provides tree-specific defaults and the three-view attributes.
+`LineageAxis` provides lineage graph-specific defaults and the three-view attributes.
 
 **Tested:** Yes (including visual smoke test via CairoMakie, with tests
 covering each combination of `axis_polarity` and `display_polarity`)
@@ -803,9 +808,9 @@ are at the expected process coordinate for the active `lineageunits` value, tran
 are evenly spaced when `leaf_spacing = :equal`, and the `boundingbox` contains
 all positions — not that a specific private variable holds a given value.
 
-Tests are deterministic. No wall-clock time, no external network. Tree fixtures
-are constructed inline using simple clade graphs: 4-leaf balanced, 6-leaf
-unbalanced, polytomy, single-leaf.
+Tests are deterministic. No wall-clock time, no external network. Lineage graph
+fixtures are constructed inline using simple clade graphs: 4-leaf balanced,
+6-leaf unbalanced, polytomy, single-leaf.
 
 Tests for `LineageAxis` cover: default attribute values; correct axis limit
 direction for each `display_polarity`; correct screen direction for each
@@ -851,7 +856,7 @@ The following are explicitly deferred to later tiers:
 - **Geographic tip coordinate constraints** — Tier 3
 - **Interactive features** (tooltip, click-to-collapse, lazy expand) — Tier 4
 - **External data join operator** (no bespoke operators; users join data to
-  the tree before calling `lineageplot`)
+  the lineage graph before calling `lineageplot`)
 - **File I/O** (Newick, Nexus parsing) — not in scope for this package
 - **Layout transformation operations** (flip, rotate, ladderise) — Tier 2
 
@@ -879,7 +884,7 @@ The architecture must not foreclose any of the above. In particular:
    *Owner:* implementation phase. *Resolution:* add `runic --check` to CI.
 
 3. **Circular layout minimum angular spacing:** Equal angular spacing is the
-   default, but a `min_leaf_angle` floor may be needed for very large trees.
+   default, but a `min_leaf_angle` floor may be needed for very large lineage graphs.
    This question applies to both `circular_edge_style = :chord` and `:arc`
    variants.
    *Owner:* Geometry module implementation. *Resolution:* decide during

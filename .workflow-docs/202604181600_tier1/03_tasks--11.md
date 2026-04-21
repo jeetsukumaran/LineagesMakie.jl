@@ -29,11 +29,11 @@ internal type; do not add raw `struct` fields to the generated block type.
 
 ## Tasks
 
-### 1. Read Makie `@Block` source; define `LineageAxis` with all attributes and naked-tree defaults
+### 1. Read Makie `@Block` source; define `LineageAxis` with all attributes and naked lineage graph defaults
 
 **Type**: WRITE
 **Output**: `LineageAxis` is defined with `Makie.@Block`; all nine attributes
-are declared; naked-tree defaults (no ticks, no grid, no spines) are active;
+are declared; naked lineage graph defaults (no ticks, no grid, no spines) are active;
 `julia --project -e 'using LineagesMakie; using CairoMakie; fig = Figure();
 LineageAxis(fig[1,1])'` succeeds.
 **Depends on**: none
@@ -60,7 +60,7 @@ AbstractAxis`. Declare all nine Tier-1 attributes as documented in the PRD:
 `false`), `show_grid` (`Bool`; default `false`), `title`, `xlabel`, `ylabel`.
 
 In `initialize_block!`, configure the inner `Axis` (or equivalent) to suppress
-tick marks, grid lines, and axis spines by default (naked-tree appearance).
+tick marks, grid lines, and axis spines by default (naked lineage graph appearance).
 `show_x_axis = true` must activate the quantitative x-axis; implement this as
 a reactive connection (`on` or `map!`) on the `show_x_axis` attribute.
 
@@ -73,12 +73,12 @@ source). Confirm the module loads without error.
 ### 2. `reset_limits!` and `autolimits!` with `display_polarity` logic
 
 **Type**: WRITE
-**Output**: `reset_limits!(ax::LineageAxis, geom::TreeGeometry)` sets axis
-limits fitting the tree bounding box; `display_polarity = :reversed` correctly
+**Output**: `reset_limits!(ax::LineageAxis, geom::LineageGraphGeometry)` sets axis
+limits fitting the lineage graph bounding box; `display_polarity = :reversed` correctly
 flips the primary axis; `autolimits!` delegates to `reset_limits!`.
 **Depends on**: Task 1
 
-Implement `reset_limits!(ax::LineageAxis, geom::TreeGeometry) -> Nothing`. This
+Implement `reset_limits!(ax::LineageAxis, geom::LineageGraphGeometry) -> Nothing`. This
 function must: (1) extract the bounding box from `geom.boundingbox`; (2) apply
 `display_polarity`: if `:standard`, set `xlims!` (or equivalent) to
 `(bbox_xmin, bbox_xmax)`; if `:reversed`, use the idiom confirmed from the Makie
@@ -92,7 +92,7 @@ fitting the circular bounding box. Write a docstring explaining each branch and
 citing the Makie idiom used.
 
 Implement `autolimits!(ax::LineageAxis) -> Nothing` as a one-liner delegating to
-`reset_limits!` with the last-known `TreeGeometry` (store it on the block during
+`reset_limits!` with the last-known `LineageGraphGeometry` (store it on the block during
 `lineageplot!` dispatch, Task 4). Export both functions.
 
 ---
@@ -139,9 +139,9 @@ Extend `lineageplot!` in `src/Layers.jl` to dispatch on
 `Union{LineageAxis, Makie.Axis}`. When the axis is a `LineageAxis`: (1) call
 `_infer_axis_polarity(lineageunits)` and set `ax.axis_polarity` if not already
 overridden by the user; (2) call `reset_limits!(ax, geom)` after layout to fit
-the tree; (3) delegate to the same layer calls as the `Makie.Axis` path.
+the lineage graph; (3) delegate to the same layer calls as the `Makie.Axis` path.
 
-Store the last `TreeGeometry` on the `LineageAxis` block in a field or
+Store the last `LineageGraphGeometry` on the `LineageAxis` block in a field or
 observable so `autolimits!` can use it. Write a docstring update on
 `lineageplot!` documenting the `LineageAxis` path. Export nothing new (both
 dispatch methods are already exported under `lineageplot!`).

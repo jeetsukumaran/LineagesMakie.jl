@@ -31,7 +31,7 @@ correctly mapped back to data space via `CoordTransform`.
 **Depends on**: none
 
 Implement `CladeHighlightLayer` in `src/Layers.jl` using `@recipe`. Positional
-input: a `TreeGeometry` and a `TreeAccessor`. Attributes: `clade_vertices` (a
+input: a `LineageGraphGeometry` and a `LineageGraphAccessor`. Attributes: `clade_vertices` (a
 `Vector` of MRCA vertex values whose subtrees should be highlighted; default
 `[]`), `color` (default `RGBA(0.2, 0.6, 1.0, 0.15)`), `alpha` (default `0.15`),
 `padding` (default `Vec2f(4, 4)` in pixels), `visible` (default `true`).
@@ -56,7 +56,7 @@ bracket is positioned in data space from the clade's bounding box.
 **Depends on**: Task 1
 
 Implement `CladeLabelLayer` in `src/Layers.jl` using `@recipe`. Positional
-input: a `TreeGeometry` and a `TreeAccessor`. Attributes: `clade_vertices`
+input: a `LineageGraphGeometry` and a `LineageGraphAccessor`. Attributes: `clade_vertices`
 (default `[]`), `label_func` (a callable `mrca_vertex -> String`; default:
 `v -> ""`), `color` (default `:black`), `fontsize` (default `11`), `offset`
 (default `Vec2f(6, 0)` pixels beyond the leaf label column), `visible` (default
@@ -82,7 +82,7 @@ correctly sized bar with label when visible.
 **Depends on**: Task 2
 
 Implement `ScaleBarLayer` in `src/Layers.jl` using `@recipe`. Positional input:
-a `TreeGeometry`, a `TreeAccessor`, and a `Symbol` `lineageunits` value. Attributes:
+a `LineageGraphGeometry`, a `LineageGraphAccessor`, and a `Symbol` `lineageunits` value. Attributes:
 `position` (default `(:left, :bottom)` as a tuple of anchor hints), `length`
 (default: auto-computed as 10% of the process-coordinate range), `label` (default
 `""`), `color` (default `:black`), `linewidth` (default `1.5`), `visible`

@@ -18,14 +18,14 @@ Use these in all identifiers, docstrings, and comments without exception.
 
 ## Tasks
 
-### 1. `TreeAccessor` struct and `tree_accessor` constructor
+### 1. `LineageGraphAccessor` struct and `lineagegraph_accessor` constructor
 
 **Type**: WRITE
-**Output**: `src/Accessors.jl` defines and exports `TreeAccessor` and
-`tree_accessor`; `julia --project -e 'using LineagesMakie'` loads without error.
+**Output**: `src/Accessors.jl` defines and exports `LineageGraphAccessor` and
+`lineagegraph_accessor`; `julia --project -e 'using LineagesMakie'` loads without error.
 **Depends on**: none
 
-In `src/Accessors.jl`, define `TreeAccessor` as a fully parametric immutable
+In `src/Accessors.jl`, define `LineageGraphAccessor` as a fully parametric immutable
 `struct` (per `STYLE-julia.md`: `struct` is default; `mutable struct` requires
 justification) with seven fields: `children`, `edgelength`, `vertexvalue`,
 `branchingtime`, `coalescenceage`, `vertexcoords`, `vertexpos`. Use a type
@@ -34,7 +34,7 @@ parametric type design", every struct field must be concretely typed or made
 concrete through type parameters at instantiation:
 
 ```julia
-struct TreeAccessor{C, E, V, B, CA, VC, VP}
+struct LineageGraphAccessor{C, E, V, B, CA, VC, VP}
     children::C
     edgelength::Union{Nothing, E}
     vertexvalue::Union{Nothing, V}
@@ -55,13 +55,13 @@ high-priority design for performance: Julia's compiler can specialise on every
 instantiation, and small `Union{Nothing, F}` unions are stack-allocated with a
 tag bit rather than boxed.
 
-Define `tree_accessor(rootvertex; children, edgelength=nothing,
+Define `lineagegraph_accessor(rootvertex; children, edgelength=nothing,
 vertexvalue=nothing, branchingtime=nothing, coalescenceage=nothing,
-vertexcoords=nothing, vertexpos=nothing) -> TreeAccessor`. Include an explicit
-return type annotation `-> TreeAccessor`. Validate that `children` is callable
+vertexcoords=nothing, vertexpos=nothing) -> LineageGraphAccessor`. Include an explicit
+return type annotation `-> LineageGraphAccessor`. Validate that `children` is callable
 using `isa(children, Base.Callable)` or equivalent; raise `ArgumentError` with a
 message identifying the non-callable value if not. Write a triple-quoted
-docstring on both `TreeAccessor` and `tree_accessor` describing fields,
+docstring on both `LineageGraphAccessor` and `lineagegraph_accessor` describing fields,
 parameters, return value, and the `ArgumentError` condition. Export both names
 from the module. Verify the file stays within 400–600 LOC (it will be far below
 at this stage).
@@ -77,18 +77,18 @@ before producing any output.
 **Depends on**: Task 1
 
 Add `abstracttrees_accessor(rootvertex; edgelength=nothing, vertexvalue=nothing,
-branchingtime=nothing, coalescenceage=nothing) -> TreeAccessor`. This function
+branchingtime=nothing, coalescenceage=nothing) -> LineageGraphAccessor`. This function
 must use `AbstractTrees.children` as the `children` callable. Use a
 `hasmethod(AbstractTrees.children, Tuple{typeof(rootvertex)})` check (or
 equivalent) to raise an informative `ArgumentError` if the rootvertex type does
 not implement the AbstractTrees interface. Import from `AbstractTrees` using the
 explicit form `using AbstractTrees: children` (not bare `using AbstractTrees`).
 
-Add `is_leaf(accessor::TreeAccessor, vertex) -> Bool`: returns `true` when
+Add `is_leaf(accessor::LineageGraphAccessor, vertex) -> Bool`: returns `true` when
 `accessor.children(vertex)` returns an empty iterable. Add
-`leaves(accessor::TreeAccessor, rootvertex) -> iterator` returning all leaf
+`leaves(accessor::LineageGraphAccessor, rootvertex) -> iterator` returning all leaf
 vertices in a deterministic traversal order. Add
-`preorder(accessor::TreeAccessor, rootvertex) -> iterator` returning all
+`preorder(accessor::LineageGraphAccessor, rootvertex) -> iterator` returning all
 vertices in preorder.
 
 For both `leaves` and `preorder`, implement cycle detection using a `Set` of
@@ -106,15 +106,16 @@ functions. Export all four names.
 `test_Accessors` assertions green; JET reports no new dispatch errors.
 **Depends on**: Task 2
 
-Write `test/test_Accessors.jl`. Define four shared tree fixtures at the top of
-the file as constants: a 4-leaf balanced binary tree, a 6-leaf unbalanced tree,
-a polytomy (one root with 4 direct leaf children), and a single-leaf tree.
-Construct these using a minimal anonymous struct or named `struct` defined inside
-the test file — do not import any tree package. Each fixture must be compatible
-with both the keyword-accessor and AbstractTrees adapter paths.
+Write `test/test_Accessors.jl`. Define four shared lineage graph fixtures at the top of
+the file as constants: a 4-leaf balanced binary lineage graph, a 6-leaf unbalanced
+lineage graph, a polytomy (one root with 4 direct leaf children), and a single-leaf
+lineage graph. Construct these using a minimal anonymous struct or named `struct`
+defined inside the test file — do not import any external lineage graph package.
+Each fixture must be compatible with both the keyword-accessor and AbstractTrees
+adapter paths.
 
 Organize tests in `@testset` blocks grouped by function name. Cover:
-`tree_accessor` construction with all keyword combinations (including all-nothing
+`lineagegraph_accessor` construction with all keyword combinations (including all-nothing
 optionals); `ArgumentError` when `children` is not callable (pass an integer);
 `abstracttrees_accessor` wrapping; `is_leaf` returning correct `Bool` for leaf
 and internal vertices on each fixture; `leaves` returning the exact expected

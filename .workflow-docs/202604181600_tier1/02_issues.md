@@ -142,18 +142,18 @@ no Makie dependency.
 
 Deliver:
 
-- `TreeAccessor` struct holding the seven accessor callables (`children`
+- `LineageGraphAccessor` struct holding the seven accessor callables (`children`
   required; the remaining six optional, defaulting to `nothing`).
-- `tree_accessor(rootvertex; children, edgelength=nothing, vertexvalue=nothing,
+- `lineagegraph_accessor(rootvertex; children, edgelength=nothing, vertexvalue=nothing,
   branchingtime=nothing, coalescenceage=nothing, vertexcoords=nothing,
-  vertexpos=nothing) -> TreeAccessor`: validates that `children` is callable;
+  vertexpos=nothing) -> LineageGraphAccessor`: validates that `children` is callable;
   raises `ArgumentError` otherwise.
 - `abstracttrees_accessor(rootvertex; edgelength=nothing, vertexvalue=nothing,
-  branchingtime=nothing, coalescenceage=nothing) -> TreeAccessor`: wraps
+  branchingtime=nothing, coalescenceage=nothing) -> LineageGraphAccessor`: wraps
   `AbstractTrees.children`; requires `AbstractTrees` to be loaded.
-- `is_leaf(accessor::TreeAccessor, vertex) -> Bool`
-- `leaves(accessor::TreeAccessor, rootvertex) -> iterator`
-- `preorder(accessor::TreeAccessor, rootvertex) -> iterator`
+- `is_leaf(accessor::LineageGraphAccessor, vertex) -> Bool`
+- `leaves(accessor::LineageGraphAccessor, rootvertex) -> iterator`
+- `preorder(accessor::LineageGraphAccessor, rootvertex) -> iterator`
 - Cycle detection in `preorder` and `leaves`: raises `ArgumentError` with an
   informative message (including the repeated vertex) before any layout begins.
 
@@ -176,7 +176,7 @@ using LineagesMakie
 struct Node; children::Vector{Node}; name::String end
 root = Node([Node([Node([], "a"), Node([], "b")], "ab"),
              Node([Node([], "c"), Node([], "d")], "cd")], "root")
-acc = tree_accessor(root; children = n -> n.children)
+acc = lineagegraph_accessor(root; children = n -> n.children)
 collect(leaves(acc, root))   # should return 4 leaf nodes
 collect(preorder(acc, root)) # should return all 7 nodes
 ```
@@ -188,16 +188,16 @@ collect(preorder(acc, root)) # should return all 7 nodes
 
 ### Acceptance criteria
 
-- [ ] Given a callable `children` keyword, when `tree_accessor` is called,
-  then a `TreeAccessor` is returned.
-- [ ] Given a non-callable value for `children`, when `tree_accessor` is
+- [ ] Given a callable `children` keyword, when `lineagegraph_accessor` is called,
+  then a `LineageGraphAccessor` is returned.
+- [ ] Given a non-callable value for `children`, when `lineagegraph_accessor` is
   called, then `ArgumentError` is raised with a descriptive message.
 - [ ] Given an `AbstractTrees`-compliant object, when `abstracttrees_accessor`
-  is called, then a `TreeAccessor` wrapping `AbstractTrees.children` is
+  is called, then a `LineageGraphAccessor` wrapping `AbstractTrees.children` is
   returned.
-- [ ] Given a tree with a cycle in `children`, when `leaves` or `preorder` is
+- [ ] Given a lineage graph with a cycle in `children`, when `leaves` or `preorder` is
   called, then `ArgumentError` is raised before any output is produced.
-- [ ] Given a 4-leaf balanced tree, when `leaves` is called, then exactly 4
+- [ ] Given a 4-leaf balanced lineage graph, when `leaves` is called, then exactly 4
   leaf vertices are returned in a deterministic order.
 
 ### User stories addressed
@@ -205,7 +205,7 @@ collect(preorder(acc, root)) # should return all 7 nodes
 - User story 1: AbstractTrees-compliant rootvertex accepted.
 - User story 2: Explicit `children`, `edgelength`, `vertexvalue` keyword
   functions accepted.
-- User story 8: `vertexvalue` callable stored in `TreeAccessor`.
+- User story 8: `vertexvalue` callable stored in `LineageGraphAccessor`.
 - User story 44: Cycle detection raises informative error.
 
 ---
@@ -223,22 +223,22 @@ collect(preorder(acc, root)) # should return all 7 nodes
 
 Implement the `Geometry` module skeleton and the two no-accessor `lineageunits`
 modes for rectangular layout. This slice delivers the minimal geometry needed
-for a renderable tree, independently testable with no Makie dependency.
+for a renderable lineage graph, independently testable with no Makie dependency.
 
 Deliver in `src/Geometry.jl`:
 
-- `TreeGeometry{V}` immutable parametric struct: `vertex_positions::Dict{V,Point2f}`,
+- `LineageGraphGeometry{V}` immutable parametric struct: `vertex_positions::Dict{V,Point2f}`,
   `edge_paths::Vector{Point2f}` (element type determined by reading Makie's
   `lines!` conventions in the local source — `Vector{Point2f}` with `NaN`
   separators), `leaf_order::Vector{V}`, `boundingbox::Rect2f`. `V` is the
   vertex identity type; in generic use `V` is `Any`. Per STYLE-julia.md §1.12
   and the governance rule above, bare `Dict` and `Vector` are not acceptable.
-- `rectangular_layout(rootvertex, accessor::TreeAccessor;
-  leaf_spacing=:equal, lineageunits=:vertexheights) -> TreeGeometry`:
+- `rectangular_layout(rootvertex, accessor::LineageGraphAccessor;
+  leaf_spacing=:equal, lineageunits=:vertexheights) -> LineageGraphGeometry`:
   implements `:vertexheights` and `:vertexlevels` modes only in this issue.
   Right-angle edge segments. Equal or explicit positive real number `leaf_spacing`.
-- `boundingbox(geom::TreeGeometry) -> Rect2f`.
-- Zero-leaf tree raises `ArgumentError`.
+- `boundingbox(geom::LineageGraphGeometry) -> Rect2f`.
+- Zero-leaf lineage graph raises `ArgumentError`.
 
 Leaf positions on the transverse axis use equal spacing by default; a positive
 `Float64` `leaf_spacing` value sets an explicit inter-leaf distance in layout
@@ -246,9 +246,9 @@ units. Process coordinates for `:vertexheights`: leaves = 0, increases toward
 root. For `:vertexlevels`: rootvertex = 0, integer level increases toward
 leaves.
 
-Write `test/test_Geometry.jl` (initial slice): `TreeGeometry` construction;
+Write `test/test_Geometry.jl` (initial slice): `LineageGraphGeometry` construction;
 `rectangular_layout` with `:vertexheights` and `:vertexlevels` on all four
-tree fixtures (4-leaf balanced, 6-leaf unbalanced, polytomy, single-leaf);
+lineage graph fixtures (4-leaf balanced, 6-leaf unbalanced, polytomy, single-leaf);
 equal spacing invariant (all leaf transverse gaps equal); `leaf_spacing` as
 `Float64`; `boundingbox` contains all vertex positions; zero-leaf
 `ArgumentError`.
@@ -259,7 +259,7 @@ equal spacing invariant (all leaf transverse gaps equal); `leaf_spacing` as
 ```julia
 using LineagesMakie
 # reuse Node fixture from Issue 2
-acc = tree_accessor(root; children = n -> n.children)
+acc = lineagegraph_accessor(root; children = n -> n.children)
 geom = rectangular_layout(root, acc; lineageunits = :vertexheights)
 geom.vertex_positions  # Dict: vertex => Point2f
 geom.boundingbox       # Rect2f enclosing all positions
@@ -274,7 +274,7 @@ geom.boundingbox       # Rect2f enclosing all positions
 
 ### Acceptance criteria
 
-- [ ] Given a 4-leaf balanced tree and `lineageunits = :vertexheights`, when
+- [ ] Given a 4-leaf balanced lineage graph and `lineageunits = :vertexheights`, when
   `rectangular_layout` is called, then all leaves have process coordinate 0.0
   and the root has the highest process coordinate.
 - [ ] Given `lineageunits = :vertexlevels`, when `rectangular_layout` is
@@ -284,9 +284,9 @@ geom.boundingbox       # Rect2f enclosing all positions
   then all adjacent leaf transverse positions are equal distances apart.
 - [ ] Given a positive `Float64` `leaf_spacing`, when `rectangular_layout` is
   called, then adjacent leaves are that distance apart in layout units.
-- [ ] Given a tree with zero leaves, when `rectangular_layout` is called, then
+- [ ] Given a lineage graph with zero leaves, when `rectangular_layout` is called, then
   `ArgumentError` is raised.
-- [ ] Given any `TreeGeometry`, when `boundingbox` is called, then the returned
+- [ ] Given any `LineageGraphGeometry`, when `boundingbox` is called, then the returned
   `Rect2f` contains every entry in `vertex_positions`.
 
 ### User stories addressed
@@ -325,7 +325,7 @@ Deliver:
 - `:branchingtime` mode: reads `branchingtime(vertex)` directly; preorder
   traversal.
 - `:coalescenceage` mode: postorder traversal; reads `coalescenceage(vertex)`;
-  leaves = 0; requires ultrametric tree by default (`nonultrametric = :error`);
+  leaves = 0; requires ultrametric lineage graph by default (`nonultrametric = :error`);
   `nonultrametric = :minimum` / `:maximum` selects the fallback policy when
   sibling coalescence-age estimates are inconsistent.
 - `:vertexdepths` mode: cumulative edge count from rootvertex (all weights = 1).
@@ -347,7 +347,7 @@ edge-length `ArgumentError`; non-ultrametric `ArgumentError` with
 
 **Manual:**
 ```julia
-acc = tree_accessor(root;
+acc = lineagegraph_accessor(root;
     children  = n -> n.children,
     edgelength = (u, v) -> 1.5)
 geom = rectangular_layout(root, acc)   # defaults to :edgelengths
@@ -359,9 +359,9 @@ geom = rectangular_layout(root, acc)   # defaults to :edgelengths
 - `@warn` is emitted (captured with `@test_warn`) when an edge returns
   `nothing`.
 - Negative edge length raises `ArgumentError` naming the offending edge.
-- Non-ultrametric tree raises `ArgumentError` under `nonultrametric = :error`.
+- Non-ultrametric lineage graph raises `ArgumentError` under `nonultrametric = :error`.
 - `:minimum` / `:maximum` modes produce positions without error on a
-  non-ultrametric tree.
+  non-ultrametric lineage graph.
 
 ### Acceptance criteria
 
@@ -372,10 +372,10 @@ geom = rectangular_layout(root, acc)   # defaults to :edgelengths
   is used, then a warning is emitted and that edge uses unit-length fallback.
 - [ ] Given `edgelength` returning a negative value, when `:edgelengths` is
   used, then `ArgumentError` is raised identifying the specific edge.
-- [ ] Given a non-ultrametric tree and `lineageunits = :coalescenceage` with
+- [ ] Given a non-ultrametric lineage graph and `lineageunits = :coalescenceage` with
   `nonultrametric = :error`, then `ArgumentError` is raised.
 - [ ] Given `nonultrametric = :minimum`, when layout is computed on a
-  non-ultrametric tree, then positions are produced without error.
+  non-ultrametric lineage graph, then positions are produced without error.
 - [ ] Given `vertexcoords` accessor, when `lineageunits = :vertexcoords`,
   then `vertex_positions` matches the `vertexcoords` output directly.
 
@@ -407,8 +407,8 @@ Implement `circular_layout` in `src/Geometry.jl` with `circular_edge_style =
 
 Deliver:
 
-- `circular_layout(rootvertex, accessor::TreeAccessor; leaf_spacing=:equal,
-  lineageunits=:vertexheights, circular_edge_style=:chord) -> TreeGeometry`
+- `circular_layout(rootvertex, accessor::LineageGraphAccessor; leaf_spacing=:equal,
+  lineageunits=:vertexheights, circular_edge_style=:chord) -> LineageGraphGeometry`
 - Leaves placed at equal angular spacing by default. Radial position
   determined by the active `lineageunits` value.
 - `:chord` edge style: angular connectors are straight line segments (chords)
@@ -440,13 +440,13 @@ angles = [atan(p[2], p[1]) for p in values(geom.vertex_positions)
 
 ### Acceptance criteria
 
-- [ ] Given a 4-leaf tree and `circular_layout`, when `leaf_spacing = :equal`,
+- [ ] Given a 4-leaf lineage graph and `circular_layout`, when `leaf_spacing = :equal`,
   then all leaves are at equal angular spacing (π/2 apart for 4 leaves).
 - [ ] Given any `circular_layout` result, when `boundingbox` is called, then
   every vertex position is inside the returned `Rect2f`.
 - [ ] Given `circular_edge_style = :chord`, when layout is computed, then all
   edge path segments are straight lines (no arc data).
-- [ ] Given a tree with zero leaves, when `circular_layout` is called, then
+- [ ] Given a lineage graph with zero leaves, when `circular_layout` is called, then
   `ArgumentError` is raised.
 
 ### User stories addressed
@@ -545,7 +545,7 @@ Deliver:
   Issue 12/13), `visible`. Uses `CoordTransform.register_pixel_projection!`.
 - A minimal `lineageplot!` that accepts `rootvertex`, `accessor`, and renders
   `EdgeLayer` only. Full composite recipe is Issue 12.
-- A stub `test/test_Integration.jl` with one smoke test: render a 4-leaf tree
+- A stub `test/test_Integration.jl` with one smoke test: render a 4-leaf lineage graph
   via `lineageplot!` on a `CairoMakie` `Axis`; assert the scene is non-empty
   and no error is raised.
 
@@ -574,7 +574,7 @@ save("smoke.png", fig)  # non-empty PNG
 
 ### Acceptance criteria
 
-- [ ] Given a 4-leaf tree, when `lineageplot!` is called on a `CairoMakie`
+- [ ] Given a 4-leaf lineage graph, when `lineageplot!` is called on a `CairoMakie`
   `Axis`, then the figure saves to a non-empty PNG without error.
 - [ ] Given `visible = false` on `EdgeLayer`, when the scene is rendered, then
   no edge lines appear.
@@ -588,7 +588,7 @@ save("smoke.png", fig)  # non-empty PNG
 - User story 24: Edge color, linewidth, linestyle, alpha controllable uniformly
   or per edge.
 - User story 25: Edge layer independently toggleable.
-- User story 50: Integration test renders tree end-to-end via CairoMakie.
+- User story 50: Integration test renders lineage graph end-to-end via CairoMakie.
 
 ---
 
@@ -629,7 +629,7 @@ positions; no regression in edge-layer tests.
 
 ### Acceptance criteria
 
-- [ ] Given a 4-leaf balanced tree, when `VertexLayer` is rendered, then
+- [ ] Given a 4-leaf balanced lineage graph, when `VertexLayer` is rendered, then
   markers appear at exactly the 3 internal vertices and not at any leaf.
 - [ ] Given `visible = false` on `LeafLayer`, when the scene is rendered, then
   `VertexLayer` markers are still visible.
@@ -802,11 +802,11 @@ Deliver:
   public and independently settable. `show_x_axis` (default `false`),
   `show_y_axis` (default `false`), `show_grid` (default `false`), `title`,
   `xlabel`, `ylabel`.
-- Default axis appearance: no tick marks, no grid lines, no spines (naked tree
+- Default axis appearance: no tick marks, no grid lines, no spines (naked lineage graph
   appearance). `show_x_axis = true` activates a quantitative x-axis.
 - `axis_polarity` is inferred from the active `lineageunits` value when not
   set manually (forward modes → `:forward`; backward modes → `:backward`).
-- `reset_limits!(ax::LineageAxis)`: fits axis to `TreeGeometry.boundingbox`,
+- `reset_limits!(ax::LineageAxis)`: fits axis to `LineageGraphGeometry.boundingbox`,
   applying `display_polarity` and `lineage_orientation` when setting limits.
 - `autolimits!(ax::LineageAxis)`: delegates to `reset_limits!`.
 - `lineageplot!` dispatches on `Union{LineageAxis, Axis}`.
@@ -861,12 +861,12 @@ save("reversed.png", fig)
 
 - User story 18: `axis_polarity` inferred automatically from `lineageunits`.
 - User story 19: `axis_polarity` overridable.
-- User story 20: `display_polarity = :reversed` on forward-time tree.
-- User story 21: `display_polarity = :reversed` on coalescent tree.
+- User story 20: `display_polarity = :reversed` on forward-time lineage graph.
+- User story 21: `display_polarity = :reversed` on coalescent lineage graph.
 - User story 22: `lineage_orientation` controls which screen axis carries the
   process coordinate.
 - User story 36: `LineageAxis` block placeable in a `Figure` layout.
-- User story 37: Default naked-tree appearance (no ticks, no grid, no spines).
+- User story 37: Default naked lineage graph appearance (no ticks, no grid, no spines).
 - User story 38: Optional quantitative x-axis via `show_x_axis`.
 - User story 39: Non-isotropic pixel↔data correctness.
 - User story 40: `lineageplot!` works on both `LineageAxis` and `Axis`.
@@ -917,24 +917,24 @@ recipe attribute works; circular layout integration smoke test.
 **Manual:**
 ```julia
 using CairoMakie, LineagesMakie, Observables
-tree_obs = Observable(root)
+lineagegraph_obs = Observable(root)
 fig = Figure()
 ax = LineageAxis(fig[1,1])
-lineageplot!(ax, tree_obs, acc)
-# Update the tree Observable — layout should recompute
-tree_obs[] = new_root
+lineageplot!(ax, lineagegraph_obs, acc)
+# Update the lineage graph Observable — layout should recompute
+lineagegraph_obs[] = new_root
 ```
 
 **Automated:**
-- Updating `tree_obs` triggers a layout recomputation (all vertex positions
-  change to reflect the new tree).
+- Updating `lineagegraph_obs` triggers a layout recomputation (all vertex positions
+  change to reflect the new lineage graph).
 - Updating a color `Observable` triggers a color update without full re-layout.
 - A `lift`-derived attribute tracks its source Observable.
 
 ### Acceptance criteria
 
 - [ ] Given `rootvertex` wrapped in an `Observable`, when the Observable is
-  updated, then `vertex_positions` in the rendered scene reflect the new tree.
+  updated, then `vertex_positions` in the rendered scene reflect the new lineage graph.
 - [ ] Given an `Observable`-valued `color` attribute, when the Observable is
   updated, then the rendered edge colors change without re-calling
   `lineageplot!`.
@@ -949,10 +949,10 @@ tree_obs[] = new_root
 
 ### User stories addressed
 
-- User story 16: Layout recomputed reactively when input tree Observable
+- User story 16: Layout recomputed reactively when input lineage graph Observable
   updates.
 - User story 35: Each layer composable via separate `layer!` calls.
-- User story 41: `rootvertex` wrapped in `Observable` triggers reactive update.
+- User story 41: `rootvertex` (lineage graph) wrapped in `Observable` triggers reactive update.
 - User story 42: `Observable`-valued attributes update live.
 - User story 43: `lift` works on recipe attributes using standard Makie idioms.
 
@@ -980,10 +980,10 @@ Deliver:
   `CairoMakie` `LineageAxis` with `lineage_orientation = :radial`.
 - Polarity matrix: 2 `axis_polarity` values × 2 `display_polarity` values on
   `LineageAxis` — all four combinations render without error.
-- Resize test: render a tree, simulate a viewport resize event, assert that
+- Resize test: render a lineage graph, simulate a viewport resize event, assert that
   markers remain the same pixel size.
-- Observable reactivity test: update the tree `Observable` and assert
-  `vertex_positions` reflect the new tree.
+- Observable reactivity test: update the lineage graph `Observable` and assert
+  `vertex_positions` reflect the new lineage graph.
 - Aqua and JET: confirm all new modules pass `Aqua.test_all(LineagesMakie)` and
   `JET.test_package(LineagesMakie)` with no new violations.
 

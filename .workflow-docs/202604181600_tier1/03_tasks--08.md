@@ -30,7 +30,7 @@ the recipe is wired into the `lineageplot!` stub.
 **Depends on**: none
 
 Implement `VertexLayer` in `src/Layers.jl` using `@recipe`. Positional input: a
-`TreeGeometry` value and a `TreeAccessor` value (needed to distinguish internal
+`LineageGraphGeometry` value and a `LineageGraphAccessor` value (needed to distinguish internal
 vertices from leaves via `Accessors.is_leaf`). Attributes: `marker` (default
 `:circle`), `color` (default `:black`), `markersize` (default `8`), `strokecolor`
 (default `:black`), `alpha` (default `1.0`), `visible` (default `true`).
@@ -42,7 +42,7 @@ In the `plot!` method, extract the positions of internal vertices only: iterate
 of axis scale. Use `CoordTransform.register_pixel_projection!` to keep the
 mapping reactive on resize. Write a docstring. Export `VertexLayer` and
 `vertexlayer!`. Wire `vertexlayer!` into the `lineageplot!` stub: after the
-`EdgeLayer` call, add a `vertexlayer!` call passing the same `TreeGeometry` and
+`EdgeLayer` call, add a `vertexlayer!` call passing the same `LineageGraphGeometry` and
 `accessor`.
 
 ---
