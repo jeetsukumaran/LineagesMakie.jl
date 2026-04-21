@@ -673,19 +673,19 @@ screen-direction transformation.
 
 **Interface:**
 
-- `TreeGeometry{V}` struct (immutable, parametric): `vertex_positions::Dict{V,Point2f}`,
+- `LineageGraphGeometry{V}` struct (immutable, parametric): `vertex_positions::Dict{V,Point2f}`,
   `edge_paths::Vector{Point2f}`, `leaf_order::Vector{V}`, `boundingbox::Rect2f`.
   `V` is the vertex identity type; in generic use `V` is `Any` (yielding
-  `TreeGeometry{Any}` at runtime), since `leaves` and `preorder` both return
+  `LineageGraphGeometry{Any}` at runtime), since `leaves` and `preorder` both return
   `Vector{Any}`. Per STYLE-julia.md §1.12, all fields must be concrete or
   parameterized — bare `Dict` and `Vector` are not acceptable. The element type
   of `edge_paths` (`Point2f`, with `NaN` separators) was determined by reading
   Makie's `lines!` conventions in the local source codebase.
 - `rectangular_layout(rootvertex, accessor; leaf_spacing=:equal,
-  lineageunits=:vertexheights) -> TreeGeometry`
+  lineageunits=:vertexheights) -> LineageGraphGeometry`
 - `circular_layout(rootvertex, accessor; leaf_spacing=:equal,
-  lineageunits=:vertexheights, circular_edge_style=:chord) -> TreeGeometry`
-- `boundingbox(geom::TreeGeometry) -> Rect2f`
+  lineageunits=:vertexheights, circular_edge_style=:chord) -> LineageGraphGeometry`
+- `boundingbox(geom::LineageGraphGeometry) -> Rect2f`
 
 `circular_edge_style` values for `circular_layout`:
 - `:chord` (Tier 1, default) — angular connectors are straight line segments
