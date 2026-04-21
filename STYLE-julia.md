@@ -443,6 +443,37 @@ habitat(::TerrestrialOccurrence)::Symbol = :terrestrial
   dispatch and defeats the compiler.
 - Use `@code_warntype` to check for type instability in hot paths.
 
+
+#### Concrete struct fields and parametric type design
+
+> In Julia, struct fields must not be left undefined in type, must not be
+> abstractly typed, and must not use `Any` except in rare and explicitly
+> justified cases. Every struct field must be either concretely typed or made
+> concrete through type parameters at instantiation.
+
+**Rules:**
+- Every struct field must have a concrete type or a type parameter that becomes
+  concrete for each instantiated object.
+- Do not store `Any`, abstract types, or broad unions in struct fields unless
+  there is no sound alternative and the design justification is stated
+  explicitly in a comment or docstring.
+- Prefer parametric structs:
+  `struct Foo{T}; x::T; end`
+  over abstractly typed fields:
+  `struct Foo; x::AbstractThing; end`
+- Do not use undefined, unknown, or placeholder field types in structs.
+  Representation types must be fully specified by the struct definition and its
+  type parameters.
+- Distinguish function argument abstraction from struct field design:
+  function arguments should usually be typed at the appropriate abstract level,
+  but struct fields must usually be concrete or concretized through type
+  parameters.
+- Use abstract supertypes to define interfaces; use concrete field types and
+  parametric structs to obtain performance.
+- If a field appears to require `Any`, an abstract type, or a broad union,
+  redesign the representation first. Such fields are a last resort, not a
+  normal design option.
+
 ---
 
 ### 1.13 Annotations
@@ -1175,11 +1206,11 @@ end
 - **Types**: `PascalCase` — first letter of each word capitalized.
   E.g. `OccurrenceRecord`, `MarineHabitat`.
 - **Modules**: `PascalCase`. E.g. `PaleobioDatabase`, `DiversityMetrics`.
-- **Functions**: 
+- **Functions**:
     - **Non-constructor functions**: all lowercase; underscores between words when the name would
       otherwise be hard to read. E.g. `compute_diversity`, `filter_valid`, `taxon_richness`.
     - **Constructor functions**: follow their type name. E.g. `Foo()::Foo`
-    
+
 
 ### 2.2 Module file naming
 
@@ -1265,7 +1296,7 @@ end
   picture (`@.`, `@view`, `@inbounds`, `@muladd`).
 - Do not define macros that generate non-obvious code or change program
   semantics in opaque ways.
-  
+
 ### 3.8 Docuumentation
 
 - Use a dedicated Documenter.jl subproject in `docs/`, with its own `Project.toml` to managem documentation.
