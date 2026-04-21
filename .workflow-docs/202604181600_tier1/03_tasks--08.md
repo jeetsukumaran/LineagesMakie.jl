@@ -14,6 +14,9 @@ Canonical terms: `vertex`/`vertices`, `leaf`/`leaves`. Per the PRD:
 `VertexLayer` renders at internal vertices only; `LeafLayer` renders at leaf
 vertices only. These are distinct categories and must not be conflated.
 
+If any helper `struct` is introduced alongside the `@recipe` types, all fields
+must be concretely typed or parameterized (STYLE-julia.md §1.12).
+
 ---
 
 ## Tasks

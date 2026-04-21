@@ -15,6 +15,9 @@ Canonical terms: `clade_vertices` (the attribute holding MRCA vertices),
 exactly. The term `MRCA` (most recent common ancestor) is acceptable in
 docstrings for biological context but the code identifier must be `clade_vertices`.
 
+If any helper `struct` is introduced alongside the `@recipe` types, all fields
+must be concretely typed or parameterized (STYLE-julia.md §1.12).
+
 ---
 
 ## Tasks

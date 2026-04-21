@@ -618,6 +618,11 @@ All code follows STYLE-julia.md exactly:
 - All other public functions have argument annotations at the correct abstract
   level and explicit return type annotations (§1.13.1, §1.13.2)
 - `struct` is default; `mutable struct` only with justification
+- All `struct` fields must be concretely typed or made concrete via type
+  parameters (STYLE-julia.md §1.12 "Concrete struct fields and parametric type
+  design"). Do not use bare `Dict`, `Vector`, or other abstract types as field
+  types. Prefer parametric structs (`struct Foo{V}`) over `Any`-typed fields.
+  This requirement applies to every module in this package.
 - `@recipe` macro follows Makie conventions; its generated code is not
   overridden
 - File-per-module structure; 400–600 LOC per file (§8)
@@ -667,13 +672,14 @@ screen-direction transformation.
 
 **Interface:**
 
-- `TreeGeometry` struct (immutable): `vertex_positions::Dict`,
-  `edge_paths`, `leaf_order`, `boundingbox`. The element type of `edge_paths`
-  is not specified here; the implementing agent must derive the appropriate
-  representation from Makie's line-data conventions in the local source
-  codebase (see Further Notes — Makie source codebase), specifically how
-  `lines!` / `linesegments!` consume path data. Do not invent a bespoke
-  representation.
+- `TreeGeometry{V}` struct (immutable, parametric): `vertex_positions::Dict{V,Point2f}`,
+  `edge_paths::Vector{Point2f}`, `leaf_order::Vector{V}`, `boundingbox::Rect2f`.
+  `V` is the vertex identity type; in generic use `V` is `Any` (yielding
+  `TreeGeometry{Any}` at runtime), since `leaves` and `preorder` both return
+  `Vector{Any}`. Per STYLE-julia.md §1.12, all fields must be concrete or
+  parameterized — bare `Dict` and `Vector` are not acceptable. The element type
+  of `edge_paths` (`Point2f`, with `NaN` separators) was determined by reading
+  Makie's `lines!` conventions in the local source codebase.
 - `rectangular_layout(rootvertex, accessor; leaf_spacing=:equal,
   lineageunits=:vertexheights) -> TreeGeometry`
 - `circular_layout(rootvertex, accessor; leaf_spacing=:equal,

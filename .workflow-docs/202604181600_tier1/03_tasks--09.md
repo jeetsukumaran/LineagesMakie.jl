@@ -15,6 +15,9 @@ Canonical terms: `leaf`/`leaves`, `vertex`/`vertices`, `vertexvalue`. The
 `vertex -> Any` callable. Do not use `node`, `tip`, or other proscribed
 alternates anywhere.
 
+If any helper `struct` is introduced alongside the `@recipe` types, all fields
+must be concretely typed or parameterized (STYLE-julia.md §1.12).
+
 ---
 
 ## Tasks

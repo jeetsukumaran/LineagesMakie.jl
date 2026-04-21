@@ -64,7 +64,7 @@ end
     @testset "TreeGeometry — struct fields and immutability" begin
         vp   = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
         ep   = Point2f[]
-        lo   = [GEO_SINGLE]
+        lo   = Any[GEO_SINGLE]
         bb   = Rect2f(0, 0, 0, 0)
         geom = TreeGeometry(vp, ep, lo, bb)
         @test geom isa TreeGeometry
@@ -78,7 +78,7 @@ end
     @testset "boundingbox — delegates to stored field" begin
         vp   = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
         bb   = Rect2f(0, 0, 5, 3)
-        geom = TreeGeometry(vp, Point2f[], [GEO_SINGLE], bb)
+        geom = TreeGeometry(vp, Point2f[], Any[GEO_SINGLE], bb)
         @test boundingbox(geom) === bb
     end
 
@@ -160,11 +160,30 @@ end
         geom = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :vertexlevels)
         vp   = geom.vertex_positions
 
-        @test vp[GEO_UNBALANCED][1] ≈ 0.0
-        ls = leaves(acc, GEO_UNBALANCED)
-        for leaf in ls
-            @test vp[leaf][1] >= 0.0
-        end
+        # GEO_UNBALANCED structure (levels):
+        #   root  (0) → a (1), bc (1), def (1)
+        #   bc    (1) → b (2), c (2)
+        #   def   (1) → d (2), ef (2)
+        #   ef    (2) → e (3), f (3)
+        root = GEO_UNBALANCED
+        a    = root.children[1]
+        bc   = root.children[2]
+        b, c = bc.children[1], bc.children[2]
+        def  = root.children[3]
+        d    = def.children[1]
+        ef   = def.children[2]
+        e, f = ef.children[1], ef.children[2]
+
+        @test vp[root][1] ≈ 0.0
+        @test vp[a][1]   ≈ 1.0
+        @test vp[bc][1]  ≈ 1.0
+        @test vp[b][1]   ≈ 2.0
+        @test vp[c][1]   ≈ 2.0
+        @test vp[def][1] ≈ 1.0
+        @test vp[d][1]   ≈ 2.0
+        @test vp[ef][1]  ≈ 2.0
+        @test vp[e][1]   ≈ 3.0
+        @test vp[f][1]   ≈ 3.0
     end
 
     @testset "rectangular_layout :vertexlevels — polytomy" begin
@@ -211,7 +230,7 @@ end
         @test all(diff(leaf_ys) .≈ 1.0)
     end
 
-    # ── Float64 leaf_spacing ────────────────────────────────────────────────────
+    # ── Real leaf_spacing ───────────────────────────────────────────────────────
 
     @testset "leaf_spacing Float64 2.5 — adjacent gaps all 2.5" begin
         acc     = _acc(GEO_BALANCED)
@@ -220,15 +239,23 @@ end
         @test all(diff(leaf_ys) .≈ 2.5)
     end
 
+    @testset "leaf_spacing Int — accepted and converted to Float64" begin
+        acc     = _acc(GEO_BALANCED)
+        geom    = rectangular_layout(GEO_BALANCED, acc; leaf_spacing = 3)
+        leaf_ys = sort([geom.vertex_positions[v][2] for v in geom.leaf_order])
+        @test all(diff(leaf_ys) .≈ 3.0)
+    end
+
     @testset "leaf_spacing negative raises ArgumentError" begin
         acc = _acc(GEO_BALANCED)
         @test_throws ArgumentError rectangular_layout(GEO_BALANCED, acc; leaf_spacing = -1.0)
-        @test_throws ArgumentError rectangular_layout(GEO_BALANCED, acc; leaf_spacing = -0.1)
+        @test_throws ArgumentError rectangular_layout(GEO_BALANCED, acc; leaf_spacing = -1)
     end
 
     @testset "leaf_spacing zero raises ArgumentError" begin
         acc = _acc(GEO_BALANCED)
         @test_throws ArgumentError rectangular_layout(GEO_BALANCED, acc; leaf_spacing = 0.0)
+        @test_throws ArgumentError rectangular_layout(GEO_BALANCED, acc; leaf_spacing = 0)
     end
 
     # ── boundingbox containment ─────────────────────────────────────────────────

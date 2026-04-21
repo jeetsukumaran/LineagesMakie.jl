@@ -30,6 +30,13 @@ Every issue must comply with:
   names, keyword arguments, symbols, and documentation must use canonical terms.
   No proscribed alternates anywhere. New terms may be proposed and added only
   after explicit discussion with and approval from the project owner.
+- **Concrete struct fields** — every `struct` field must be concretely typed or
+  made concrete via type parameters (STYLE-julia.md §1.12 "Concrete struct
+  fields and parametric type design"). Bare `Dict`, `Vector`, abstract types,
+  and `Any` are not acceptable field types without an explicit, justified
+  comment in the code. Prefer parametric structs (`struct Foo{V}`) over
+  `Any`-typed fields. This applies to every explicit `struct` definition in
+  every module.
 
 ### Version control responsibilities
 
@@ -220,14 +227,16 @@ for a renderable tree, independently testable with no Makie dependency.
 
 Deliver in `src/Geometry.jl`:
 
-- `TreeGeometry` immutable struct: `vertex_positions::Dict`,
-  `edge_paths` (element type derived from Makie's `lines!` / `linesegments!`
-  data conventions — read `src/basic_recipes/` in the local Makie source
-  before deciding the representation), `leaf_order`, `boundingbox::Rect2f`.
+- `TreeGeometry{V}` immutable parametric struct: `vertex_positions::Dict{V,Point2f}`,
+  `edge_paths::Vector{Point2f}` (element type determined by reading Makie's
+  `lines!` conventions in the local source — `Vector{Point2f}` with `NaN`
+  separators), `leaf_order::Vector{V}`, `boundingbox::Rect2f`. `V` is the
+  vertex identity type; in generic use `V` is `Any`. Per STYLE-julia.md §1.12
+  and the governance rule above, bare `Dict` and `Vector` are not acceptable.
 - `rectangular_layout(rootvertex, accessor::TreeAccessor;
   leaf_spacing=:equal, lineageunits=:vertexheights) -> TreeGeometry`:
   implements `:vertexheights` and `:vertexlevels` modes only in this issue.
-  Right-angle edge segments. Equal or explicit `Float64` `leaf_spacing`.
+  Right-angle edge segments. Equal or explicit positive real number `leaf_spacing`.
 - `boundingbox(geom::TreeGeometry) -> Rect2f`.
 - Zero-leaf tree raises `ArgumentError`.
 

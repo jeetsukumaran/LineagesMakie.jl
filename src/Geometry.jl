@@ -15,9 +15,13 @@ using ..Accessors: TreeAccessor, is_leaf, leaves, preorder
 # ── TreeGeometry ───────────────────────────────────────────────────────────────
 
 """
-    TreeGeometry
+    TreeGeometry{V}
 
 Immutable struct holding the computed 2D layout of a tree.
+
+`V` is the vertex identity type. In generic use `V` is `Any`; callers that
+work with a uniform vertex type may instantiate a more specific `V` for
+better type-inference downstream.
 
 Coordinate convention: the first component of each `Point2f` is the process
 coordinate (primary lineage axis); the second is the transverse coordinate
@@ -25,19 +29,19 @@ coordinate (primary lineage axis); the second is the transverse coordinate
 coordinate is on the x-axis and the transverse coordinate is on the y-axis.
 
 Fields:
-- `vertex_positions::Dict`: maps each vertex to its `Point2f` position.
+- `vertex_positions::Dict{V,Point2f}`: maps each vertex to its `Point2f` position.
 - `edge_paths::Vector{Point2f}`: all edge right-angle polylines concatenated
   into a single vector with `Point2f(NaN, NaN)` separators between paths.
   Suitable for a single `lines!` call.
-- `leaf_order::Vector`: leaves in the order they appear along the transverse
+- `leaf_order::Vector{V}`: leaves in the order they appear along the transverse
   axis (preorder depth-first traversal order).
 - `boundingbox::Rect2f`: smallest axis-aligned rectangle enclosing all entries
   in `vertex_positions`.
 """
-struct TreeGeometry
-    vertex_positions::Dict
+struct TreeGeometry{V}
+    vertex_positions::Dict{V,Point2f}
     edge_paths::Vector{Point2f}
-    leaf_order::Vector
+    leaf_order::Vector{V}
     boundingbox::Rect2f
 end
 
@@ -81,7 +85,7 @@ followed by a `Point2f(NaN, NaN)` separator.
 - `accessor::TreeAccessor`: supplies the `children` callable and optional
   accessor fields. Only `children` is required for this function.
 - `leaf_spacing`: `:equal` (default) for unit inter-leaf spacing, or a
-  positive `Float64` for an explicit inter-leaf distance in layout units.
+  positive real number for an explicit inter-leaf distance in layout units.
 - `lineageunits::Symbol`: selects how process coordinates are computed.
   Supported values: `:vertexheights`, `:vertexlevels`.
 
@@ -90,7 +94,7 @@ A `TreeGeometry` with fully populated fields.
 
 # Throws
 - `ArgumentError` if the tree has zero leaves.
-- `ArgumentError` if `leaf_spacing` is a negative `Float64`.
+- `ArgumentError` if `leaf_spacing` is a non-positive real number.
 - `ArgumentError` if `lineageunits` is not a supported value for this function.
 """
 function rectangular_layout(
@@ -126,17 +130,17 @@ end
 function _validate_leaf_spacing(leaf_spacing)::Float64
     if leaf_spacing === :equal
         return 1.0
-    elseif leaf_spacing isa Float64
-        leaf_spacing > 0.0 || throw(
+    elseif leaf_spacing isa Real
+        leaf_spacing > 0 || throw(
             ArgumentError(
-                "leaf_spacing must be a positive Float64; got $(leaf_spacing)",
+                "leaf_spacing must be a positive real number; got $(leaf_spacing)",
             ),
         )
-        return leaf_spacing
+        return Float64(leaf_spacing)
     else
         throw(
             ArgumentError(
-                "leaf_spacing must be :equal or a positive Float64; " *
+                "leaf_spacing must be :equal or a positive real number; " *
                 "got $(repr(leaf_spacing)) ($(typeof(leaf_spacing)))",
             ),
         )
@@ -217,9 +221,13 @@ function _assign_transverse(
     end
     for v in Iterators.reverse(all_vertices)
         haskey(transverse, v) && continue
-        ch = collect(accessor.children(v))
-        n = length(ch)
-        transverse[v] = sum(transverse[c] for c in ch) / n
+        n = 0
+        s = 0.0
+        for c in accessor.children(v)
+            n += 1
+            s += transverse[c]
+        end
+        transverse[v] = s / n
     end
     return transverse
 end
@@ -270,11 +278,16 @@ end
 
 function _compute_boundingbox(vertex_positions::Dict{Any,Point2f})::Rect2f
     isempty(vertex_positions) && return Rect2f(0.0f0, 0.0f0, 0.0f0, 0.0f0)
-    pts = values(vertex_positions)
-    xmin = minimum(p[1] for p in pts)
-    xmax = maximum(p[1] for p in pts)
-    ymin = minimum(p[2] for p in pts)
-    ymax = maximum(p[2] for p in pts)
+    first_p = first(values(vertex_positions))
+    xmin = xmax = first_p[1]
+    ymin = ymax = first_p[2]
+    for p in values(vertex_positions)
+        x, y = p[1], p[2]
+        x < xmin && (xmin = x)
+        x > xmax && (xmax = x)
+        y < ymin && (ymin = y)
+        y > ymax && (ymax = y)
+    end
     return Rect2f(xmin, ymin, xmax - xmin, ymax - ymin)
 end
 

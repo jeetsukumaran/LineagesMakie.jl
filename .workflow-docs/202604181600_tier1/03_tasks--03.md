@@ -36,11 +36,17 @@ representation that best matches how multiple separate edge paths can be drawn i
 a single `lines!` or `linesegments!` call. Document the chosen representation
 and the Makie source file and line number in a comment in `src/Geometry.jl`.
 
-Define `TreeGeometry` as an immutable `struct` with four fields:
-`vertex_positions::Dict`, `edge_paths` (type chosen from the research above),
-`leaf_order::Vector`, and `boundingbox::Rect2f`. Write a triple-quoted docstring
-on the struct describing each field and the coordinate convention (process
-coordinate on the primary axis; transverse coordinate on the secondary axis).
+Define `TreeGeometry` as a parametric immutable `struct TreeGeometry{V}` with
+four fields: `vertex_positions::Dict{V,Point2f}`, `edge_paths::Vector{Point2f}`
+(type chosen from the research above), `leaf_order::Vector{V}`, and
+`boundingbox::Rect2f`. Per STYLE-julia.md §1.12 ("Concrete struct fields and
+parametric type design"), bare `Dict` and `Vector` are not acceptable field
+types — every field must be concretely typed or parameterized. In practice
+`V=Any` (both `leaves` and `preorder` return `Vector{Any}`), so the runtime
+type will be `TreeGeometry{Any}`; the parametric form is still required.
+Write a triple-quoted docstring on the struct describing each field, the type
+parameter `V`, and the coordinate convention (process coordinate on the primary
+axis; transverse coordinate on the secondary axis).
 
 Define `boundingbox(geom::TreeGeometry) -> Rect2f` as a pure function that
 computes the smallest axis-aligned bounding rectangle enclosing all values in

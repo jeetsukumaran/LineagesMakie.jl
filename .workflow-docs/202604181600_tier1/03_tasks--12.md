@@ -14,6 +14,9 @@ ComputeGraph (`map!` / `register_computation!`) is mandatory throughout. The
 `onany`-based pattern must not be used. All reactive wiring must go through the
 ComputeGraph so that Makie's update-ordering guarantees apply.
 
+If any helper `struct` is introduced alongside the `@recipe` type, all fields
+must be concretely typed or parameterized (STYLE-julia.md §1.12).
+
 ---
 
 ## Tasks

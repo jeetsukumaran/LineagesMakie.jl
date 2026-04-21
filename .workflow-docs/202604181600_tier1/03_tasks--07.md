@@ -14,6 +14,11 @@ Canonical terms: `edge_paths`, `edgelayer!`, `lineageplot!`. Use
 `ComputeGraph` (`map!` / `register_computation!`) throughout; the `onany`-based
 fallback pattern must not appear anywhere in this codebase.
 
+If any helper `struct` is introduced alongside the `@recipe` type, all fields
+must be concretely typed or parameterized (STYLE-julia.md §1.12). The
+`@recipe` macro generates its own type internally; do not add raw `struct`
+fields to the generated type.
+
 ---
 
 ## Tasks

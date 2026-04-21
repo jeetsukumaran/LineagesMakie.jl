@@ -18,6 +18,13 @@ The three-view model must be respected: `LineageAxis` joins the three views but
 must not re-derive process coordinates (`Geometry`'s job) or interpret
 pixel↔data mappings beyond applying them (`CoordTransform`'s job).
 
+**Concrete struct fields** — if any helper `struct` is introduced alongside the
+`@Block` type, all fields must be concretely typed or parameterized
+(STYLE-julia.md §1.12 "Concrete struct fields and parametric type design").
+Bare `Dict`, `Vector`, and abstract types are not acceptable field types
+without an explicit, justified comment. The `@Block` macro generates its own
+internal type; do not add raw `struct` fields to the generated block type.
+
 ---
 
 ## Tasks
