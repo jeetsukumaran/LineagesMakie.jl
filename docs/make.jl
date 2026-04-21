@@ -4,7 +4,7 @@ using Documenter
 DocMeta.setdocmeta!(LineagesMakie, :DocTestSetup, :(using LineagesMakie); recursive=true)
 
 makedocs(;
-    modules=[LineagesMakie, LineagesMakie.Accessors, LineagesMakie.Geometry],
+    modules=[LineagesMakie, LineagesMakie.Accessors, LineagesMakie.Geometry, LineagesMakie.Layers],
     authors="Jeet Sukumaran <jeetsukumaran@gmail.com>",
     sitename="LineagesMakie.jl",
     format=Documenter.HTML(;

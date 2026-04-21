@@ -10,5 +10,5 @@ Documentation for [LineagesMakie](https://github.com/jeetsukumaran/LineagesMakie
 ```
 
 ```@autodocs
-Modules = [LineagesMakie, LineagesMakie.Accessors, LineagesMakie.Geometry, LineagesMakie.CoordTransform]
+Modules = [LineagesMakie, LineagesMakie.Accessors, LineagesMakie.Geometry, LineagesMakie.CoordTransform, LineagesMakie.Layers]
 ```
