@@ -25,7 +25,7 @@ jobs:
         version:
           - '1.11'
           - '1.12'
-          - 'pre'
+          # - 'pre' # Jet not available
         os:
           - ubuntu-latest
         arch:
