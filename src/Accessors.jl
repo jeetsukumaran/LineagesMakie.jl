@@ -1,0 +1,3 @@
+module Accessors
+
+end

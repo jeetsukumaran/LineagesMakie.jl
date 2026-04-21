@@ -12,5 +12,10 @@ using JET
     @testset "Code linting (JET.jl)" begin
         JET.test_package(LineagesMakie; target_modules = (LineagesMakie,))
     end
-    # Write your tests here.
+    include("test_Accessors.jl")
+    include("test_Geometry.jl")
+    include("test_CoordTransform.jl")
+    include("test_Layers.jl")
+    include("test_LineageAxis.jl")
+    include("test_Integration.jl")
 end
