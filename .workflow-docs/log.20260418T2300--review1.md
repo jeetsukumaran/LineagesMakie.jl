@@ -58,7 +58,7 @@ Otherwise:
 
 (1) Add `age` to the list of terms, based on my further responses below
 
-(2) Update the document, the PRD, etc. to cleanly reflect the vocabulary that we decided here. In each, add a note that we shall be using the controlled vocabulary file at `.workflow-docs/00-design/controlled-vocabulary.md` which remains the authoritative list. In BOTH, do provide a summary list of key prefererd terms, brief definition, and proscribed by understood alternates: vertex, edge, seedvertex, length, height, depth, ages etc
+(2) Update the document, the PRD, etc. to cleanly reflect the vocabulary that we decided here. In each, add a note that we shall be using the controlled vocabulary file at `VOCABULARY.md` which remains the authoritative list. In BOTH, do provide a summary list of key prefererd terms, brief definition, and proscribed by understood alternates: vertex, edge, seedvertex, length, height, depth, ages etc
 
 (3) Then write another document in the design folder -- a vocabulary that essentially reproduces this matrix, but organized purely lexxically by canonical term, and with the idea that it can grow (or maybe be revised) as we need more terms controlled.  
 Add a note to that this list is not exhaustive nor is it final, but it absolutely needs my approval if it is to be amended or ignored. If any agent needs clarification on coining a new term, they must discuss it with me before implementing anything, and after the decision, if it is appropriate and I agree or ask for it, the list can be updated.
