@@ -14,6 +14,9 @@ using .CoordTransform:
 export data_to_pixel, pixel_to_data, pixel_offset_to_data_delta, register_pixel_projection!
 
 include("Layers.jl")
+using .Layers: EdgeLayer, edgelayer!, lineageplot!
+export EdgeLayer, edgelayer!, lineageplot!
+
 include("LineageAxis.jl")
 
 end

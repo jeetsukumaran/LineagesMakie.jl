@@ -30,9 +30,14 @@ coordinate is on the x-axis and the transverse coordinate is on the y-axis.
 
 Fields:
 - `vertex_positions::Dict{V,Point2f}`: maps each vertex to its `Point2f` position.
-- `edge_shapes::Vector{Point2f}`: all edge right-angle polylines concatenated
-  into a single vector with `Point2f(NaN, NaN)` separators between shapes.
-  Suitable for a single `lines!` call.
+- `edge_shapes::Vector{Point2f}`: all edge polylines concatenated into a single
+  vector with `Point2f(NaN, NaN)` separators between shapes. Each edge occupies
+  exactly 4 entries (3 geometry points + 1 NaN separator). Suitable for a single
+  `lines!` call.
+- `edges::Vector{Tuple{V,V}}`: `(fromvertex, tovertex)` pairs in the same
+  traversal order as `edge_shapes`. `edges[i]` corresponds to the i-th
+  NaN-terminated group of 4 points in `edge_shapes`. Used by rendering layers
+  to expand per-edge attribute functions without re-traversing the source tree.
 - `leaf_order::Vector{V}`: leaves in the order they appear along the transverse
   axis (preorder depth-first traversal order).
 - `boundingbox::Rect2f`: smallest axis-aligned rectangle enclosing all entries
@@ -41,6 +46,7 @@ Fields:
 struct LineageGraphGeometry{V}
     vertex_positions::Dict{V, Point2f}
     edge_shapes::Vector{Point2f}
+    edges::Vector{Tuple{V, V}}
     leaf_order::Vector{V}
     boundingbox::Rect2f
 end
@@ -163,8 +169,9 @@ function rectangular_layout(
         pc = Dict{Any, Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
         tc = Dict{Any, Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
         edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
+        edges = _build_edge_list(all_vertices, accessor)
         bb = _compute_boundingbox(vertex_positions)
-        return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+        return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
     end
 
     process_coords = _process_coords(rootvertex, accessor, lineageunits, all_vertices, nonultrametric)
@@ -172,9 +179,10 @@ function rectangular_layout(
 
     vertex_positions = _build_vertex_positions(all_vertices, process_coords, transverse_coords)
     edge_shapes = _build_edge_shapes(all_vertices, accessor, process_coords, transverse_coords)
+    edges = _build_edge_list(all_vertices, accessor)
     bb = _compute_boundingbox(vertex_positions)
 
-    return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+    return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
 end
 
 # ── Internal: default lineageunits detection ───────────────────────────────────
@@ -515,6 +523,23 @@ end
 
 # ── Internal: geometry assembly ────────────────────────────────────────────────
 
+# Build the ordered list of (fromvertex, tovertex) pairs.
+# Iterates all_vertices in preorder and loops over accessor.children(v) in the
+# same inner order as _build_edge_shapes, so edges[i] corresponds to the i-th
+# NaN-terminated group of 4 points in edge_shapes.
+function _build_edge_list(
+        all_vertices::Vector,
+        accessor::LineageGraphAccessor,
+    )::Vector{Tuple{Any, Any}}
+    edges = Tuple{Any, Any}[]
+    for v in all_vertices
+        for c in accessor.children(v)
+            push!(edges, (v, c))
+        end
+    end
+    return edges
+end
+
 function _build_vertex_positions(
         all_vertices::Vector,
         process_coords::Dict{Any, Float64},
@@ -673,8 +698,9 @@ function circular_layout(
         pc = Dict{Any, Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
         tc = Dict{Any, Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
         edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
+        edges = _build_edge_list(all_vertices, accessor)
         bb = _compute_boundingbox(vertex_positions)
-        return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+        return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
     end
 
     process_coords = _process_coords(rootvertex, accessor, lineageunits, all_vertices, nonultrametric)
@@ -690,9 +716,10 @@ function circular_layout(
     end
 
     edge_shapes = _build_circular_edge_shapes(all_vertices, accessor, process_coords, angles)
+    edges = _build_edge_list(all_vertices, accessor)
     bb = _compute_boundingbox(vertex_positions)
 
-    return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+    return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
 end
 
 # ── Internal: angular leaf step computation ────────────────────────────────────

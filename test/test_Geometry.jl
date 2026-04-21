@@ -66,7 +66,7 @@ end
         ep   = Point2f[]
         lo   = Any[GEO_SINGLE]
         bb   = Rect2f(0, 0, 0, 0)
-        geom = LineageGraphGeometry(vp, ep, lo, bb)
+        geom = LineageGraphGeometry(vp, ep, Tuple{Any,Any}[], lo, bb)
         @test geom isa LineageGraphGeometry
         @test geom.vertex_positions === vp
         @test geom.edge_shapes === ep
@@ -78,7 +78,7 @@ end
     @testset "boundingbox — delegates to stored field" begin
         vp   = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
         bb   = Rect2f(0, 0, 5, 3)
-        geom = LineageGraphGeometry(vp, Point2f[], Any[GEO_SINGLE], bb)
+        geom = LineageGraphGeometry(vp, Point2f[], Tuple{Any,Any}[], Any[GEO_SINGLE], bb)
         @test boundingbox(geom) === bb
     end
 
