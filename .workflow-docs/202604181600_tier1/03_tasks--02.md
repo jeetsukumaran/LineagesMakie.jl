@@ -25,14 +25,35 @@ Use these in all identifiers, docstrings, and comments without exception.
 `tree_accessor`; `julia --project -e 'using LineagesMakie'` loads without error.
 **Depends on**: none
 
-In `src/Accessors.jl`, define `TreeAccessor` as an immutable `struct` (per
-`STYLE-julia.md`: `struct` is default; `mutable struct` requires justification)
-with seven fields: `children`, `edgelength`, `vertexvalue`, `branchingtime`,
-`coalescenceage`, `vertexcoords`, `vertexpos`. All fields except `children` are
-`Union{Nothing, <T>}` where `T` is appropriate; `children` is required and must
-be callable. Do not annotate the types of accessor fields (`children`,
-`edgelength`, etc.) — per `STYLE-julia.md` §1.13.1, higher-order accessor
-arguments are left unannotated to preserve composability.
+In `src/Accessors.jl`, define `TreeAccessor` as a fully parametric immutable
+`struct` (per `STYLE-julia.md`: `struct` is default; `mutable struct` requires
+justification) with seven fields: `children`, `edgelength`, `vertexvalue`,
+`branchingtime`, `coalescenceage`, `vertexcoords`, `vertexpos`. Use a type
+parameter for each field — per `STYLE-julia.md` "Concrete struct fields and
+parametric type design", every struct field must be concretely typed or made
+concrete through type parameters at instantiation:
+
+```julia
+struct TreeAccessor{C, E, V, B, CA, VC, VP}
+    children::C
+    edgelength::Union{Nothing, E}
+    vertexvalue::Union{Nothing, V}
+    branchingtime::Union{Nothing, B}
+    coalescenceage::Union{Nothing, CA}
+    vertexcoords::Union{Nothing, VC}
+    vertexpos::Union{Nothing, VP}
+end
+```
+
+`C` captures the concrete type of the required `children` callable. Each
+optional field uses `Union{Nothing, F}` where `F` is its type parameter: when
+the caller passes `nothing`, `F = Nothing` and the field is typed `Nothing`;
+when the caller passes a lambda or function, `F` is that callable's concrete
+singleton type. All fields are therefore concretely typed at every instantiation
+— `Any`, abstract types, and unparameterised unions are not used. This is the
+high-priority design for performance: Julia's compiler can specialise on every
+instantiation, and small `Union{Nothing, F}` unions are stack-allocated with a
+tag bit rather than boxed.
 
 Define `tree_accessor(rootvertex; children, edgelength=nothing,
 vertexvalue=nothing, branchingtime=nothing, coalescenceage=nothing,
