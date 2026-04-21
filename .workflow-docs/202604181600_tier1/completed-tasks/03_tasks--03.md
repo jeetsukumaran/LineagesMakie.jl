@@ -12,7 +12,7 @@ Read-only git and shell commands may be used freely. Mutating git operations
 
 Canonical terms enforced throughout: `vertex`/`vertices`, `leaf`/`leaves`,
 `rootvertex`, `fromvertex`/`tovertex`, `edgelength`, `vertexvalue`,
-`branchingtime`, `coalescenceage`, `vertex_positions`, `edge_paths`,
+`branchingtime`, `coalescenceage`, `vertex_positions`, `edge_shapes`,
 `leaf_order`, `leaf_spacing`, `boundingbox`, `lineageunits`.
 
 ---
@@ -32,12 +32,12 @@ Before writing any code, read the following files in the local Makie source at
 defined), focusing on what data types and shapes they accept for the positional
 argument — specifically whether they consume `Vector{Point2f}`, vectors of
 `NaN`-separated segments, or a `Vector{Vector{Point2f}}`. Choose the
-representation that best matches how multiple separate edge paths can be drawn in
+representation that best matches how multiple separate edge shapes can be drawn in
 a single `lines!` or `linesegments!` call. Document the chosen representation
 and the Makie source file and line number in a comment in `src/Geometry.jl`.
 
 Define `LineageGraphGeometry` as a parametric immutable `struct LineageGraphGeometry{V}` with
-four fields: `vertex_positions::Dict{V,Point2f}`, `edge_paths::Vector{Point2f}`
+four fields: `vertex_positions::Dict{V,Point2f}`, `edge_shapes::Vector{Point2f}`
 (type chosen from the research above), `leaf_order::Vector{V}`, and
 `boundingbox::Rect2f`. Per STYLE-julia.md §1.12 ("Concrete struct fields and
 parametric type design"), bare `Dict` and `Vector` are not acceptable field
@@ -59,12 +59,12 @@ Confirm with `julia --project -e 'using LineagesMakie'`.
 
 ---
 
-### 2. `rectangular_layout` for `:vertexheights` — leaf positioning and edge paths
+### 2. `rectangular_layout` for `:vertexheights` — leaf positioning and edge shapes
 
 **Type**: WRITE
 **Output**: `rectangular_layout(root, acc; lineageunits=:vertexheights)` returns
 a `LineageGraphGeometry` where all leaves have process coordinate 0.0, internal vertices
-have positive process coordinates equal to their height, and `edge_paths`
+have positive process coordinates equal to their height, and `edge_shapes`
 contains correct right-angle segment data.
 **Depends on**: Task 1
 
@@ -82,7 +82,7 @@ height. For the transverse axis, with `leaf_spacing = :equal`, assign leaves
 integer positions 1, 2, 3, … in their traversal order; internal vertex
 transverse position is the mean of its children's transverse positions.
 
-For `edge_paths`, produce right-angle segments: for each edge from `fromvertex`
+For `edge_shapes`, produce right-angle segments: for each edge from `fromvertex`
 to `tovertex`, the path is two segments — a horizontal segment from
 `(process(fromvertex), transverse(fromvertex))` to
 `(process(fromvertex), transverse(tovertex))`, then a vertical segment from

@@ -228,7 +228,7 @@ for a renderable lineage graph, independently testable with no Makie dependency.
 Deliver in `src/Geometry.jl`:
 
 - `LineageGraphGeometry{V}` immutable parametric struct: `vertex_positions::Dict{V,Point2f}`,
-  `edge_paths::Vector{Point2f}` (element type determined by reading Makie's
+  `edge_shapes::Vector{Point2f}` (element type determined by reading Makie's
   `lines!` conventions in the local source — `Vector{Point2f}` with `NaN`
   separators), `leaf_order::Vector{V}`, `boundingbox::Rect2f`. `V` is the
   vertex identity type; in generic use `V` is `Any`. Per STYLE-julia.md §1.12

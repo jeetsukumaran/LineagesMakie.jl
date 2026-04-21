@@ -11,7 +11,7 @@ Read-only git and shell commands may be used freely. Mutating git operations
 (commit, merge, push, branch) are the human project owner's responsibility.
 
 Canonical terms: `leaf`/`leaves`, `vertex`/`vertices`, `rootvertex`,
-`leaf_spacing`, `edge_paths`, `vertex_positions`, `boundingbox`,
+`leaf_spacing`, `edge_shapes`, `vertex_positions`, `boundingbox`,
 `lineageunits`, `circular_edge_style`. Use these exactly.
 
 ---
@@ -53,10 +53,10 @@ the same zero-leaf guard as in `rectangular_layout`.
 
 ---
 
-### 2. `:chord` edge path construction
+### 2. `:chord` edge shape construction
 
 **Type**: WRITE
-**Output**: `circular_layout` produces `edge_paths` where all segments are
+**Output**: `circular_layout` produces `edge_shapes` where all segments are
 straight lines (no arc data); the bounding box correctly encloses all vertex
 and chord-midpoint positions.
 **Depends on**: Task 1
@@ -68,9 +68,9 @@ connector point at `(r_from, θ_to)` — both at the parent's radial distance bu
 spanning the angular difference; (2) a radial segment from that connector point
 `(r_from, θ_to)` to the child's polar position `(r_to, θ_to)`. All positions
 are converted to Cartesian `(x, y)` coordinates before being stored in
-`edge_paths`.
+`edge_shapes`.
 
-Use the same `edge_paths` representation confirmed in Issue 3 Task 1. Each edge
+Use the same `edge_shapes` representation confirmed in Issue 3 Task 1. Each edge
 contributes two segments (four points, or two point pairs depending on the
 chosen representation). Ensure `NaN`-separator logic (if used for `lines!`) or
 segment grouping is consistent with the rectangular layout path representation.
@@ -103,7 +103,7 @@ Cover:
   `:vertexlevels` layout, verify rootvertex is at radius 0.
 - `boundingbox` encloses all `vertex_positions`: same assertion as for
   rectangular layout.
-- `circular_edge_style = :chord`: inspect `edge_paths` and confirm all segment
+- `circular_edge_style = :chord`: inspect `edge_shapes` and confirm all segment
   endpoints are finite `Point2f` values (no `NaN` in unexpected positions).
 - Zero-leaf lineage graph raises `ArgumentError`.
 - Non-regression: run all existing `@testset "rectangular_layout"` assertions

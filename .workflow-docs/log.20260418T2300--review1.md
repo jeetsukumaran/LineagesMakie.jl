@@ -28,7 +28,7 @@ E6/ OK
 E7/ OK
 
 F1/ `vertex_positions`; update PRD
-F2/ `edge_paths`
+F2/ `edge_shapes`
 F3/ `leaf_order` is canonical
 F4/ 'boundingbox' is canonical
 F5/ see below

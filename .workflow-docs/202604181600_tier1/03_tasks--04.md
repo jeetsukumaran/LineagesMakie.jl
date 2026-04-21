@@ -123,7 +123,7 @@ Add `:vertexcoords` to the dispatch. For `:vertexcoords`, the process coordinate
 and transverse coordinate of each vertex are read directly from
 `accessor.vertexcoords(vertex)` which returns a `Point2f`. No layout computation
 is performed; `vertex_positions` is populated by iterating all vertices in
-preorder and calling `vertexcoords`. The `edge_paths` are still constructed from
+preorder and calling `vertexcoords`. The `edge_shapes` are still constructed from
 the positions using the right-angle segment logic. Raise `ArgumentError` if
 `accessor.vertexcoords` is `nothing` when this mode is requested.
 

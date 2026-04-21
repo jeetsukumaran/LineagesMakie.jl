@@ -69,7 +69,7 @@ end
         geom = LineageGraphGeometry(vp, ep, lo, bb)
         @test geom isa LineageGraphGeometry
         @test geom.vertex_positions === vp
-        @test geom.edge_paths === ep
+        @test geom.edge_shapes === ep
         @test geom.leaf_order === lo
         @test geom.boundingbox === bb
         @test !ismutable(geom)

@@ -68,7 +68,7 @@ Observables by the framework; confirm this from `docs/src/explanations/recipes.m
 and from the `@recipe` macro internals. Use `map!` or `register_computation!`
 on the `rootvertex` Observable to derive `LineageGraphGeometry` reactively: whenever
 `rootvertex[]` changes, recompute the layout and update all derived Observables
-(positions, edge paths, bounding box).
+(positions, edge shapes, bounding box).
 
 The reactive chain must update `LineageAxis.reset_limits!` after recomputation
 if the axis is a `LineageAxis` (so the axis limits adjust to the new lineage graph). Use

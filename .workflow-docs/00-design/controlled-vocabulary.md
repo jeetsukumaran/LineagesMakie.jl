@@ -279,16 +279,19 @@ When `edgelength` is not supplied, layout defaults to
 
 ---
 
-### `edge_paths`
+### `edge_shapes`
 
 **Part of speech:** noun (geometry)
 
-**Definition:** The collection of geometric paths (polylines, arcs, or segments)
+**Definition:** The collection of geometric shapes (polylines, arcs, or segments)
 that represent the visual shape of edges in a rendered layout. A field of
 `LineageGraphGeometry`. Written with underscore (a multi-word field name, not a
 compound accessor name).
 
-**Proscribed alternates:** `branch_paths`, `segments`, `paths`, `edge_segments`.
+**Proscribed alternates:** `edge_paths` (proscribed project-wide for this
+concept; the former canonical name), `edge paths` (prose form, proscribed for
+this concept), `paths` (unqualified, proscribed for this concept),
+`branch_paths`, `segments`, `edge_segments`.
 
 ---
 
@@ -671,5 +674,5 @@ STYLE-julia.md §2.1, which permits omitting underscores when the name is not
 hard to read.
 
 Multi-word field names on structs retain underscores: `vertex_positions`,
-`edge_paths`, `leaf_order`, `leaf_spacing`, `axis_polarity`, `display_polarity`,
+`edge_shapes`, `leaf_order`, `leaf_spacing`, `axis_polarity`, `display_polarity`,
 `lineage_orientation`, `interval_schema`.

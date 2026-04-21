@@ -10,7 +10,7 @@ All tasks must comply with `STYLE-julia.md`, `STYLE-git.md`, `STYLE-docs.md`,
 Read-only git and shell commands may be used freely. Mutating git operations
 (commit, merge, push, branch) are the human project owner's responsibility.
 
-Canonical terms: `edge_paths`, `edgelayer!`, `lineageplot!`. Use
+Canonical terms: `edge_shapes`, `edgelayer!`, `lineageplot!`. Use
 `ComputeGraph` (`map!` / `register_computation!`) throughout; the `onany`-based
 fallback pattern must not appear anywhere in this codebase.
 
@@ -55,9 +55,9 @@ Attributes: `color` (default `:black`; may be a single color or a function
 `true`).
 
 In the `plot!` method, use `CoordTransform.register_pixel_projection!` so the
-layer is viewport-aware. Draw edges using the `edge_paths` from the
+layer is viewport-aware. Draw edges using the `edge_shapes` from the
 `LineageGraphGeometry` input via `lines!` or `linesegments!` — the choice must be
-consistent with the `edge_paths` representation decided in Issue 3 Task 1.
+consistent with the `edge_shapes` representation decided in Issue 3 Task 1.
 When `color` is a function, map it over edges at render time via ComputeGraph
 `map!` to produce a per-segment color array. Write a docstring on `EdgeLayer`.
 Export `EdgeLayer` and `edgelayer!`. Import from `CoordTransform` using the

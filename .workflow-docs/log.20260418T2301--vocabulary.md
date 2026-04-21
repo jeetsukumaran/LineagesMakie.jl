@@ -36,7 +36,7 @@ forbidden alternates, and usage notes, see
 | `height` | Max depth of the tree; per-vertex: length to farthest leaf | `max_depth` |
 | `boundingbox` | Smallest axis-aligned rectangle enclosing all vertex positions | `bounding_box`, `extent`, `limits` |
 | `vertex_positions` | Dict mapping each vertex to its 2D layout coordinate | `node_positions` |
-| `edge_paths` | Geometric paths for rendering edges | `branch_paths`, `segments` |
+| `edge_shapes` | Geometric shapes for rendering edges | `edge_paths`, `branch_paths`, `segments` |
 | `leaf_order` | Sequence of leaves along the transverse axis | `tip_order` |
 | `leaf_spacing` | Inter-leaf spacing parameter; default `:equal` | `tip_spacing`, `gap` |
 | `color` | Color of any rendered element (Makie convention) | `colour` |
@@ -180,7 +180,7 @@ throughout, matching Makie's API.
 | # | Concept | Proposed canonical | Alternative |
 |---|---|---|---|
 | F1 | Dict of 2D vertex positions | `vertex_positions` | `node_positions` |
-| F2 | Collection of edge geometry | `edge_paths` | `branch_paths` |
+| F2 | Collection of edge geometry | `edge_shapes` | `edge_paths`, `branch_paths` |
 | F3 | Leaf sequence for layout | `tip_order` | `leaf_order` |
 | F4 | Bounding rectangle | `bounding_box` | `boundingbox` |
 | F5 | Cladogram positioning mode | `:cladogram` | — |
@@ -189,7 +189,7 @@ throughout, matching Makie's API.
 **User responses:**
 
 > F1/ `vertex_positions`; update PRD
-> F2/ `edge_paths`
+> F2/ `edge_shapes`
 > F3/ `leaf_order` is canonical
 > F4/ `boundingbox` is canonical
 > F5/ see discussion below

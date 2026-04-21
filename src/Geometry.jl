@@ -1,6 +1,6 @@
 module Geometry
 
-# edge_paths representation research:
+# edge_shapes representation research:
 # Makie's lines! accepts a single Vector{Point2f} with Point2f(NaN, NaN)
 # separators between disconnected polylines. This is used throughout Makie:
 #   - Makie/src/stats/dendrogram.jl:80: push!(ret_points, Point2d(NaN))
@@ -30,8 +30,8 @@ coordinate is on the x-axis and the transverse coordinate is on the y-axis.
 
 Fields:
 - `vertex_positions::Dict{V,Point2f}`: maps each vertex to its `Point2f` position.
-- `edge_paths::Vector{Point2f}`: all edge right-angle polylines concatenated
-  into a single vector with `Point2f(NaN, NaN)` separators between paths.
+- `edge_shapes::Vector{Point2f}`: all edge right-angle polylines concatenated
+  into a single vector with `Point2f(NaN, NaN)` separators between shapes.
   Suitable for a single `lines!` call.
 - `leaf_order::Vector{V}`: leaves in the order they appear along the transverse
   axis (preorder depth-first traversal order).
@@ -40,7 +40,7 @@ Fields:
 """
 struct LineageGraphGeometry{V}
     vertex_positions::Dict{V,Point2f}
-    edge_paths::Vector{Point2f}
+    edge_shapes::Vector{Point2f}
     leaf_order::Vector{V}
     boundingbox::Rect2f
 end
@@ -119,10 +119,10 @@ function rectangular_layout(
     transverse_coords = _assign_transverse(leaf_list, accessor, all_vertices, step)
 
     vertex_positions = _build_vertex_positions(all_vertices, process_coords, transverse_coords)
-    edge_paths = _build_edge_paths(all_vertices, accessor, process_coords, transverse_coords)
+    edge_shapes = _build_edge_shapes(all_vertices, accessor, process_coords, transverse_coords)
     bb = _compute_boundingbox(vertex_positions)
 
-    return LineageGraphGeometry(vertex_positions, edge_paths, leaf_list, bb)
+    return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
 end
 
 # ── Internal: leaf spacing validation ─────────────────────────────────────────
@@ -246,26 +246,26 @@ function _build_vertex_positions(
     return pos
 end
 
-# Each edge produces three points forming a right-angle path, plus a NaN
+# Each edge produces three points forming a right-angle shape, plus a NaN
 # separator. For an edge fromvertex → tovertex with coordinates (xp, yp)
 # and (xc, yc):
 #   (xp, yp) → (xp, yc) → (xc, yc) → (NaN, NaN)
 # The first segment is parallel to the transverse axis (changes y at fixed x).
 # The second segment is parallel to the lineage axis (changes x at fixed y).
-function _build_edge_paths(
+function _build_edge_shapes(
     all_vertices::Vector,
     accessor::LineageGraphAccessor,
     process_coords::Dict{Any,Float64},
     transverse_coords::Dict{Any,Float64},
 )::Vector{Point2f}
-    paths = Point2f[]
+    shapes = Point2f[]
     for v in all_vertices
         xp = process_coords[v]
         yp = transverse_coords[v]
         for c in accessor.children(v)
             xc = process_coords[c]
             yc = transverse_coords[c]
-            push!(paths,
+            push!(shapes,
                 Point2f(xp, yp),
                 Point2f(xp, yc),
                 Point2f(xc, yc),
@@ -273,7 +273,7 @@ function _build_edge_paths(
             )
         end
     end
-    return paths
+    return shapes
 end
 
 function _compute_boundingbox(vertex_positions::Dict{Any,Point2f})::Rect2f

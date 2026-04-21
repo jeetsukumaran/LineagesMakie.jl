@@ -28,7 +28,7 @@ authoritative reference; this section provides a quick-reference summary.
 | `height` | Max branchingtime (tree-level); edge-count-to-farthest-leaf (per-vertex) | `max_depth`, `depth` |
 | `boundingbox` | Smallest axis-aligned enclosing rectangle | `bounding_box`, `extent` |
 | `vertex_positions` | Dict of 2D layout coordinates per vertex | `node_positions` |
-| `edge_paths` | Geometric paths for edge rendering | `branch_paths` |
+| `edge_shapes` | Geometric shapes for edge rendering | `edge_paths`, `branch_paths` |
 | `leaf_order` | Sequence of leaves along the transverse axis | `tip_order` |
 | `leaf_spacing` | Inter-leaf spacing parameter | `tip_spacing`, `gap` |
 | `color` | Color of any rendered element (Makie convention) | `colour` |
@@ -484,7 +484,7 @@ The three-view model is not just a design principle — it has direct
 implementation consequences that constrain module boundaries.
 
 **`Geometry` module** (lineage graph-centric): computes `LineageGraphGeometry`
-(process coordinates, edge paths, leaf order) from the lineage graph structure
+(process coordinates, edge shapes, leaf order) from the lineage graph structure
 and accessor callables. Has no knowledge of screen layout, axis direction, or
 biological semantics. It produces process coordinates in their natural direction:
 forward `lineageunits` values produce values increasing from root to leaf;
@@ -678,12 +678,12 @@ screen-direction transformation.
 **Interface:**
 
 - `LineageGraphGeometry{V}` struct (immutable, parametric): `vertex_positions::Dict{V,Point2f}`,
-  `edge_paths::Vector{Point2f}`, `leaf_order::Vector{V}`, `boundingbox::Rect2f`.
+  `edge_shapes::Vector{Point2f}`, `leaf_order::Vector{V}`, `boundingbox::Rect2f`.
   `V` is the vertex identity type; in generic use `V` is `Any` (yielding
   `LineageGraphGeometry{Any}` at runtime), since `leaves` and `preorder` both return
   `Vector{Any}`. Per STYLE-julia.md §1.12, all fields must be concrete or
   parameterized — bare `Dict` and `Vector` are not acceptable. The element type
-  of `edge_paths` (`Point2f`, with `NaN` separators) was determined by reading
+  of `edge_shapes` (`Point2f`, with `NaN` separators) was determined by reading
   Makie's `lines!` conventions in the local source codebase.
 - `rectangular_layout(rootvertex, accessor; leaf_spacing=:equal,
   lineageunits=:vertexheights) -> LineageGraphGeometry`
