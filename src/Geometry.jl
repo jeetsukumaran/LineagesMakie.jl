@@ -62,19 +62,44 @@ end
 """
     rectangular_layout(rootvertex, accessor::LineageGraphAccessor;
                        leaf_spacing=:equal,
-                       lineageunits::Symbol=:vertexheights) -> LineageGraphGeometry
+                       lineageunits::Union{Nothing,Symbol}=nothing,
+                       nonultrametric::Symbol=:error) -> LineageGraphGeometry
 
 Compute a rectangular (right-angle) layout for a rooted lineage graph.
 
-Process coordinates (first `Point2f` component) are determined by
-`lineageunits`:
+Process coordinates (first `Point2f` component) are determined by `lineageunits`:
+
+- `:edgelengths` — cumulative `edgelength(fromvertex, tovertex)` from
+  `rootvertex`; requires `edgelength` accessor; `rootvertex` = 0, increases
+  toward leaves. Missing edge lengths emit `@warn` and fall back to 1.0;
+  negative edge lengths raise `ArgumentError`.
+- `:branchingtime` — per-vertex branching time read directly from
+  `branchingtime(vertex)`; requires `branchingtime` accessor; `rootvertex` = 0.
+- `:coalescenceage` — per-vertex coalescence age read from
+  `coalescenceage(vertex)`; requires `coalescenceage` accessor; leaves = 0,
+  increases toward root. Non-ultrametric inputs are controlled by `nonultrametric`.
+- `:vertexdepths` — integer edge count from `rootvertex`; `rootvertex` = 0,
+  increases by 1 per edge. No accessor required.
 - `:vertexheights` — per-vertex height: edge count to the farthest descendant
-  leaf. Leaves = 0, root = maximum. Backward axis polarity.
-- `:vertexlevels` — edge count from rootvertex: root = 0, leaves = maximum.
-  Forward axis polarity.
+  leaf. Leaves = 0, root = maximum. No accessor required.
+- `:vertexlevels` — edge count from `rootvertex`: root = 0, leaves = maximum.
+  Equal inter-level spacing. No accessor required.
+- `:vertexcoords` — user-supplied `Point2f` data coordinates read from
+  `vertexcoords(vertex)`; requires `vertexcoords` accessor. Bypasses layout
+  computation entirely; both process and transverse coordinates come from the
+  accessor.
+- `:vertexpos` — user-supplied `Point2f` pixel coordinates read from
+  `vertexpos(vertex)`; requires `vertexpos` accessor. Same geometry-layer
+  behaviour as `:vertexcoords`; the semantic distinction (data vs pixel space)
+  is documented here but not enforced at the geometry layer.
+
+**Default detection:** if `lineageunits` is not supplied (or `nothing`), the
+default is `:edgelengths` when an `edgelength` accessor is present; otherwise
+`:vertexheights`.
 
 Transverse coordinates (second `Point2f` component) place leaves at equal
-intervals by default. The `leaf_order` field records the leaf sequence.
+intervals by default (`leaf_spacing = :equal`). The `leaf_order` field records
+the leaf sequence.
 
 Each edge `fromvertex → tovertex` contributes a right-angle polyline:
   `(x_from, y_from) → (x_from, y_to) → (x_to, y_to)`
@@ -82,12 +107,16 @@ followed by a `Point2f(NaN, NaN)` separator.
 
 # Arguments
 - `rootvertex`: root of the lineage graph; first positional argument.
-- `accessor::LineageGraphAccessor`: supplies the `children` callable and optional
-  accessor fields. Only `children` is required for this function.
+- `accessor::LineageGraphAccessor`: supplies the `children` callable and
+  optional accessor fields.
 - `leaf_spacing`: `:equal` (default) for unit inter-leaf spacing, or a
   positive real number for an explicit inter-leaf distance in layout units.
-- `lineageunits::Symbol`: selects how process coordinates are computed.
-  Supported values: `:vertexheights`, `:vertexlevels`.
+- `lineageunits::Union{Nothing,Symbol}`: selects how process coordinates are
+  computed. `nothing` triggers default detection (see above).
+- `nonultrametric::Symbol`: policy for non-ultrametric inputs when
+  `lineageunits = :coalescenceage`. `:error` (default) raises `ArgumentError`;
+  `:minimum` uses the minimum of the children's coalescenceage values;
+  `:maximum` uses the maximum.
 
 # Returns
 A `LineageGraphGeometry` with fully populated fields.
@@ -95,14 +124,20 @@ A `LineageGraphGeometry` with fully populated fields.
 # Throws
 - `ArgumentError` if the lineage graph has zero leaves.
 - `ArgumentError` if `leaf_spacing` is a non-positive real number.
-- `ArgumentError` if `lineageunits` is not a supported value for this function.
+- `ArgumentError` if a required accessor is `nothing` for the chosen `lineageunits`.
+- `ArgumentError` if `lineageunits` is not a supported value.
+- `ArgumentError` if `lineageunits = :edgelengths` and any edge length is negative.
+- `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
+  and `nonultrametric = :error`.
 """
 function rectangular_layout(
     rootvertex,
     accessor::LineageGraphAccessor;
     leaf_spacing = :equal,
-    lineageunits::Symbol = :vertexheights,
+    lineageunits::Union{Nothing,Symbol} = nothing,
+    nonultrametric::Symbol = :error,
 )::LineageGraphGeometry
+    lineageunits = _resolve_lineageunits(lineageunits, accessor)
     step = _validate_leaf_spacing(leaf_spacing)
 
     leaf_list = leaves(accessor, rootvertex)
@@ -115,7 +150,24 @@ function rectangular_layout(
 
     all_vertices = preorder(accessor, rootvertex)
 
-    process_coords = _process_coords(rootvertex, accessor, lineageunits, all_vertices)
+    # Bypass modes: both process and transverse coordinates come from the accessor.
+    if lineageunits === :vertexcoords || lineageunits === :vertexpos
+        accessor_fn = lineageunits === :vertexcoords ? accessor.vertexcoords : accessor.vertexpos
+        accessor_fn === nothing && throw(
+            ArgumentError(
+                "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
+                "but none was supplied",
+            ),
+        )
+        vertex_positions = Dict{Any,Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
+        pc = Dict{Any,Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
+        tc = Dict{Any,Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
+        edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
+        bb = _compute_boundingbox(vertex_positions)
+        return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+    end
+
+    process_coords = _process_coords(rootvertex, accessor, lineageunits, all_vertices, nonultrametric)
     transverse_coords = _assign_transverse(leaf_list, accessor, all_vertices, step)
 
     vertex_positions = _build_vertex_positions(all_vertices, process_coords, transverse_coords)
@@ -123,6 +175,25 @@ function rectangular_layout(
     bb = _compute_boundingbox(vertex_positions)
 
     return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+end
+
+# ── Internal: default lineageunits detection ───────────────────────────────────
+
+"""
+    _resolve_lineageunits(lineageunits, accessor) -> Symbol
+
+Resolve the `lineageunits` sentinel `nothing` to the appropriate default.
+
+If `lineageunits` is not `nothing`, it is returned unchanged. Otherwise:
+- `:edgelengths` if `accessor.edgelength` is not `nothing`.
+- `:vertexheights` otherwise.
+"""
+function _resolve_lineageunits(
+    lineageunits::Union{Nothing,Symbol},
+    accessor::LineageGraphAccessor,
+)::Symbol
+    lineageunits !== nothing && return lineageunits
+    return accessor.edgelength !== nothing ? :edgelengths : :vertexheights
 end
 
 # ── Internal: leaf spacing validation ─────────────────────────────────────────
@@ -154,23 +225,142 @@ function _process_coords(
     accessor::LineageGraphAccessor,
     lineageunits::Symbol,
     all_vertices::Vector,
+    nonultrametric::Symbol,
 )::Dict{Any,Float64}
     if lineageunits === :vertexheights
         return _vertexheights(all_vertices, accessor)
     elseif lineageunits === :vertexlevels
         return _vertexlevels(rootvertex, all_vertices, accessor)
+    elseif lineageunits === :edgelengths
+        accessor.edgelength === nothing && throw(
+            ArgumentError(
+                "lineageunits = :edgelengths requires an edgelength accessor " *
+                "but none was supplied",
+            ),
+        )
+        return _cumulative_preorder(
+            rootvertex,
+            all_vertices,
+            accessor,
+            (u, v) -> _safe_edgelength(accessor, u, v),
+        )
+    elseif lineageunits === :branchingtime
+        accessor.branchingtime === nothing && throw(
+            ArgumentError(
+                "lineageunits = :branchingtime requires a branchingtime accessor " *
+                "but none was supplied",
+            ),
+        )
+        bt = accessor.branchingtime
+        return _cumulative_preorder(
+            rootvertex,
+            all_vertices,
+            accessor,
+            (u, v) -> bt(v) - bt(u),
+        )
+    elseif lineageunits === :vertexdepths
+        return _vertex_depths(rootvertex, all_vertices, accessor)
+    elseif lineageunits === :coalescenceage
+        accessor.coalescenceage === nothing && throw(
+            ArgumentError(
+                "lineageunits = :coalescenceage requires a coalescenceage accessor " *
+                "but none was supplied",
+            ),
+        )
+        return _validate_ultrametric(accessor, all_vertices, nonultrametric)
     else
         throw(
             ArgumentError(
                 "unsupported lineageunits value: $(repr(lineageunits)); " *
-                "rectangular_layout currently supports " *
-                ":vertexheights and :vertexlevels",
+                "rectangular_layout supports :vertexheights, :vertexlevels, " *
+                ":edgelengths, :branchingtime, :vertexdepths, :coalescenceage, " *
+                ":vertexcoords, :vertexpos",
             ),
         )
     end
 end
 
-# :vertexheights — postorder: leaf = 0, internal = max(children) + 1
+# ── Internal: safe edge-length extraction ─────────────────────────────────────
+
+"""
+    _safe_edgelength(accessor, fromvertex, tovertex) -> Float64
+
+Extract a non-negative `Float64` edge length from `accessor.edgelength`.
+
+Handles all documented return forms of the `edgelength` accessor:
+
+1. `NamedTuple` with a `:value` field — extracts `raw.value`; ignores other
+   fields (e.g. `:units`). Unit conversion is not performed at the geometry layer.
+2. `nothing` or `missing` — emits `@warn` identifying the edge and returns the
+   fallback value `1.0`.
+3. Negative `Float64` — raises `ArgumentError` identifying the edge and value.
+4. Normal non-negative numeric — converts to `Float64` and returns.
+
+# Throws
+- `ArgumentError` if the resolved value is negative.
+"""
+function _safe_edgelength(
+    accessor::LineageGraphAccessor,
+    fromvertex,
+    tovertex,
+)::Float64
+    raw = accessor.edgelength(fromvertex, tovertex)
+    val = (raw isa NamedTuple && haskey(raw, :value)) ? raw.value : raw
+    if val === nothing || ismissing(val)
+        @warn "edgelength returned $(repr(val)) for edge $(repr(fromvertex)) → " *
+              "$(repr(tovertex)); using fallback of 1.0"
+        return 1.0
+    end
+    fval = Float64(val)
+    fval < 0.0 && throw(
+        ArgumentError(
+            "edgelength returned negative value $(fval) for edge " *
+            "$(repr(fromvertex)) → $(repr(tovertex)); edge lengths must be non-negative",
+        ),
+    )
+    return fval
+end
+
+# ── Internal: shared preorder cumulative-sum traversal ────────────────────────
+
+"""
+    _cumulative_preorder(rootvertex, all_vertices, accessor, edge_increment) -> Dict{Any,Float64}
+
+Preorder cumulative-sum traversal used by both `:edgelengths` and `:branchingtime`.
+
+Seeds `rootvertex` at 0.0. For each vertex `v` in preorder order, sets each child
+`c`'s coordinate to:
+
+    coords[c] = coords[v] + edge_increment(v, c)
+
+`edge_increment` is a callable `(fromvertex, tovertex) -> Float64` that returns
+the additive increment for each directed edge:
+- For `:edgelengths`: the edge length via `_safe_edgelength`.
+- For `:branchingtime`: `branchingtime(c) - branchingtime(v)`, which yields
+  `coords[c] = branchingtime(c)` — i.e., the accessor value is used directly.
+
+The caller is responsible for ensuring that `edge_increment` returns non-negative
+values where required.
+"""
+function _cumulative_preorder(
+    rootvertex,
+    all_vertices::Vector,
+    accessor::LineageGraphAccessor,
+    edge_increment,
+)::Dict{Any,Float64}
+    coords = Dict{Any,Float64}()
+    coords[rootvertex] = 0.0
+    for v in all_vertices
+        cv = coords[v]
+        for c in accessor.children(v)
+            coords[c] = cv + edge_increment(v, c)
+        end
+    end
+    return coords
+end
+
+# ── Internal: :vertexheights — postorder, leaf = 0, internal = max(children) + 1
+
 function _vertexheights(all_vertices::Vector, accessor::LineageGraphAccessor)::Dict{Any,Float64}
     heights = Dict{Any,Float64}()
     # Reversing a preorder traversal yields a valid postorder (children before
@@ -186,7 +376,8 @@ function _vertexheights(all_vertices::Vector, accessor::LineageGraphAccessor)::D
     return heights
 end
 
-# :vertexlevels — preorder: root = 0, each child = parent + 1
+# ── Internal: :vertexlevels — preorder, root = 0, each child = parent + 1
+
 function _vertexlevels(
     rootvertex,
     all_vertices::Vector,
@@ -201,6 +392,96 @@ function _vertexlevels(
         end
     end
     return levels
+end
+
+# ── Internal: :vertexdepths — preorder, root = 0, each child = parent + 1 ─────
+
+"""
+    _vertex_depths(rootvertex, all_vertices, accessor) -> Dict{Any,Float64}
+
+Compute per-vertex integer edge-count depths from `rootvertex` in a preorder pass.
+
+`rootvertex` is assigned depth 0. Each child's depth is its parent's depth plus 1.
+The result is always integer-valued (stored as `Float64`).
+
+This is distinct from `_vertexlevels` (which assigns equal inter-level spacing for
+display) in that `_vertex_depths` records the raw edge count along the path from
+`rootvertex` with no further transformation.
+"""
+function _vertex_depths(
+    rootvertex,
+    all_vertices::Vector,
+    accessor::LineageGraphAccessor,
+)::Dict{Any,Float64}
+    depths = Dict{Any,Float64}()
+    depths[rootvertex] = 0.0
+    for v in all_vertices
+        dv = depths[v]
+        for c in accessor.children(v)
+            depths[c] = dv + 1.0
+        end
+    end
+    return depths
+end
+
+# ── Internal: :coalescenceage — validation and postorder resolution ────────────
+
+"""
+    _validate_ultrametric(accessor, all_vertices, nonultrametric) -> Dict{Any,Float64}
+
+Validate the ultrametricity of accessor-supplied `coalescenceage` values and
+return a `Dict` mapping each vertex to its process coordinate.
+
+In a postorder traversal, for each internal vertex `v`, collects the
+`coalescenceage` values of all its children from `accessor.coalescenceage`. For a
+strictly ultrametric tree, all children of any given internal vertex share the
+same coalescence age (since the implied edge lengths sum to the same total
+distance from any child path to a leaf). If any two children of `v` disagree
+beyond a floating-point tolerance of `1e-9`, the `nonultrametric` policy is
+applied:
+
+- `:error` (default) — raises `ArgumentError` naming the vertex and the
+  conflicting minimum and maximum child values.
+- `:minimum` — suppresses the error and accepts the inconsistency.
+- `:maximum` — suppresses the error and accepts the inconsistency.
+
+All vertex coordinates in the returned dict are `accessor.coalescenceage(v)` as
+supplied. The `:minimum` and `:maximum` policies do not modify the accessor-supplied
+values; they only suppress the error, allowing the caller to accept a
+non-ultrametric set of coordinates.
+
+# Throws
+- `ArgumentError` if `nonultrametric = :error` and any internal vertex has
+  children with inconsistent coalescenceage values.
+"""
+function _validate_ultrametric(
+    accessor::LineageGraphAccessor,
+    all_vertices::Vector,
+    nonultrametric::Symbol,
+)::Dict{Any,Float64}
+    coords = Dict{Any,Float64}()
+    for v in Iterators.reverse(all_vertices)  # postorder: children before parents
+        coords[v] = accessor.coalescenceage(v)
+        ch = accessor.children(v)
+        isempty(ch) && continue
+        child_ages = [accessor.coalescenceage(c) for c in ch]
+        mn = minimum(child_ages)
+        mx = maximum(child_ages)
+        if mx - mn > 1e-9
+            if nonultrametric === :error
+                throw(
+                    ArgumentError(
+                        "non-ultrametric lineage graph: children of vertex $(repr(v)) " *
+                        "have inconsistent coalescenceage values " *
+                        "(min=$(mn), max=$(mx)); pass nonultrametric = :minimum or " *
+                        ":maximum to rectangular_layout to resolve",
+                    ),
+                )
+            end
+            # :minimum or :maximum: inconsistency silently accepted.
+        end
+    end
+    return coords
 end
 
 # ── Internal: transverse coordinate assignment ─────────────────────────────────
