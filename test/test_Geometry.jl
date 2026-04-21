@@ -646,4 +646,103 @@ end
         @test vp[GEO_BALANCED][1] > 0.0
     end
 
+    # ── circular_layout ─────────────────────────────────────────────────────────
+
+    @testset "circular_layout" begin
+
+        @testset "equal angular spacing — 4-leaf balanced, gaps of π/2" begin
+            acc  = _acc(GEO_BALANCED)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels)
+            ls   = leaves(acc, GEO_BALANCED)
+            @test length(ls) == 4
+            # Recover angles via atan(y, x); leaves at radius 2 (levels: root=0, ab/cd=1, leaves=2)
+            angles = sort([atan(geom.vertex_positions[v][2], geom.vertex_positions[v][1]) for v in ls])
+            gaps = diff(angles)
+            @test all(g -> isapprox(g, π / 2; atol = 1e-6), gaps)
+        end
+
+        @testset ":vertexheights — leaves at radial distance 0.0" begin
+            acc  = _acc(GEO_BALANCED)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexheights)
+            ls   = leaves(acc, GEO_BALANCED)
+            for leaf in ls
+                p = geom.vertex_positions[leaf]
+                @test hypot(p[1], p[2]) ≈ 0.0 atol = 1e-8
+            end
+        end
+
+        @testset ":vertexlevels — rootvertex at radial distance 0.0" begin
+            acc  = _acc(GEO_BALANCED)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels)
+            p    = geom.vertex_positions[GEO_BALANCED]
+            @test hypot(p[1], p[2]) ≈ 0.0 atol = 1e-8
+        end
+
+        @testset "boundingbox encloses all vertex_positions — balanced :vertexlevels" begin
+            acc  = _acc(GEO_BALANCED)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels)
+            bb   = geom.boundingbox
+            # Use a small tolerance because circular vertex positions involve
+            # trigonometric values (e.g. cos(π/2) ≈ 6e-17 in Float32) that can
+            # fall just outside the Float32-precision bounding box.
+            atol = 1.0f-6
+            for (_, p) in geom.vertex_positions
+                @test bb.origin[1] - atol <= p[1] <= bb.origin[1] + bb.widths[1] + atol
+                @test bb.origin[2] - atol <= p[2] <= bb.origin[2] + bb.widths[2] + atol
+            end
+        end
+
+        @testset "boundingbox encloses all vertex_positions — unbalanced :vertexheights" begin
+            acc  = _acc(GEO_UNBALANCED)
+            geom = circular_layout(GEO_UNBALANCED, acc; lineageunits = :vertexheights)
+            bb   = geom.boundingbox
+            atol = 1.0f-6
+            for (_, p) in geom.vertex_positions
+                @test bb.origin[1] - atol <= p[1] <= bb.origin[1] + bb.widths[1] + atol
+                @test bb.origin[2] - atol <= p[2] <= bb.origin[2] + bb.widths[2] + atol
+            end
+        end
+
+        @testset "chord edge shapes — all segment endpoints are finite Point2f" begin
+            acc  = _acc(GEO_BALANCED)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels,
+                circular_edge_style = :chord)
+            finite_pts = filter(p -> !isnan(p[1]) && !isnan(p[2]), geom.edge_shapes)
+            @test !isempty(finite_pts)
+            @test all(p -> isfinite(p[1]) && isfinite(p[2]), finite_pts)
+        end
+
+        @testset "single-leaf does not raise (boundary: 1 >= 1 leaf)" begin
+            acc = _acc(GEO_SINGLE)
+            @test circular_layout(GEO_SINGLE, acc) isa LineageGraphGeometry
+        end
+
+        @testset "polytomy (4 direct leaves) — root at radius 0 for :vertexlevels" begin
+            acc  = _acc(GEO_POLYTOMY)
+            geom = circular_layout(GEO_POLYTOMY, acc; lineageunits = :vertexlevels)
+            p    = geom.vertex_positions[GEO_POLYTOMY]
+            @test hypot(p[1], p[2]) ≈ 0.0 atol = 1e-8
+            ls = leaves(acc, GEO_POLYTOMY)
+            @test length(ls) == 4
+        end
+
+        @testset "unsupported circular_edge_style raises ArgumentError" begin
+            acc = _acc(GEO_BALANCED)
+            @test_throws ArgumentError circular_layout(
+                GEO_BALANCED, acc; circular_edge_style = :arc,
+            )
+        end
+
+        @testset "non-regression: rectangular_layout :vertexheights still correct" begin
+            acc  = _acc(GEO_BALANCED)
+            geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :vertexheights)
+            ls   = leaves(acc, GEO_BALANCED)
+            for leaf in ls
+                @test geom.vertex_positions[leaf][1] ≈ 0.0
+            end
+            @test geom.vertex_positions[GEO_BALANCED][1] > 0.0
+        end
+
+    end # @testset "circular_layout"
+
 end # @testset "Geometry"

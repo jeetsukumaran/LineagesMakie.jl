@@ -572,8 +572,255 @@ function _compute_boundingbox(vertex_positions::Dict{Any,Point2f})::Rect2f
     return Rect2f(xmin, ymin, xmax - xmin, ymax - ymin)
 end
 
+# ── circular_layout ────────────────────────────────────────────────────────────
+
+"""
+    circular_layout(rootvertex, accessor::LineageGraphAccessor;
+                    leaf_spacing=:equal,
+                    lineageunits::Union{Nothing,Symbol}=nothing,
+                    nonultrametric::Symbol=:error,
+                    circular_edge_style::Symbol=:chord,
+                    min_leaf_angle::Union{Nothing,Float64}=nothing) -> LineageGraphGeometry
+
+Compute a circular (radial) layout for a rooted lineage graph.
+
+Process coordinates (radial distances from the origin) are determined by `lineageunits`
+using the same rules as `rectangular_layout`. Leaves are placed at equal angular
+spacing by default; internal vertices are placed at the mean angle of their children.
+
+**Angular leaf placement:** with `leaf_spacing = :equal` the angular step is
+`2π / n_leaves`. A positive `Float64` `leaf_spacing` sets an explicit angular step
+in radians. The `min_leaf_angle` keyword sets a lower bound on the step: if the
+computed step is smaller, a warning is emitted and `min_leaf_angle` is used instead,
+causing the layout to span less than a full circle. The default (`nothing`) applies
+no floor.
+
+**Edge style:** only `:chord` is implemented for Tier 1. For each edge the path is a
+chord segment at the parent's radial distance spanning the child's angular position,
+followed by a radial segment from that connector point to the child's position. The
+`:arc` style (Tier 2) is not implemented.
+
+**Bypass modes:** `lineageunits = :vertexcoords` and `:vertexpos` use the accessor
+coordinates directly, bypassing angular computation (same as `rectangular_layout`).
+
+# Arguments
+- `rootvertex`: root of the lineage graph.
+- `accessor::LineageGraphAccessor`: supplies the `children` callable and optional
+  accessor fields.
+- `leaf_spacing`: `:equal` (default) or a positive `Float64` angular step in radians.
+- `lineageunits::Union{Nothing,Symbol}`: see `rectangular_layout` for all values.
+- `nonultrametric::Symbol`: policy for non-ultrametric inputs; see `rectangular_layout`.
+- `circular_edge_style::Symbol`: `:chord` (default, Tier 1 only).
+- `min_leaf_angle::Union{Nothing,Float64}`: minimum angular step; `nothing` means no
+  floor. Documented decision (PRD Open Q3): the default is `nothing` (no forced floor)
+  so that small trees use exactly equal spacing; users with very large trees may supply
+  a floor such as `2π/360` (one degree) to prevent illegibly dense layouts.
+
+# Returns
+A `LineageGraphGeometry` with `vertex_positions` storing Cartesian `(x, y)` from
+polar coordinates, `edge_shapes` using the chord representation, `leaf_order` in
+preorder traversal order, and `boundingbox` enclosing all vertex positions.
+
+# Throws
+- `ArgumentError` if the lineage graph has zero leaves.
+- `ArgumentError` if `leaf_spacing` is a non-positive real number.
+- `ArgumentError` if a required accessor is `nothing` for the chosen `lineageunits`.
+- `ArgumentError` if `lineageunits` is not a supported value.
+- `ArgumentError` if `circular_edge_style` is not `:chord`.
+- `ArgumentError` if `lineageunits = :edgelengths` and any edge length is negative.
+- `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
+  and `nonultrametric = :error`.
+"""
+function circular_layout(
+    rootvertex,
+    accessor::LineageGraphAccessor;
+    leaf_spacing = :equal,
+    lineageunits::Union{Nothing,Symbol} = nothing,
+    nonultrametric::Symbol = :error,
+    circular_edge_style::Symbol = :chord,
+    min_leaf_angle::Union{Nothing,Float64} = nothing,
+)::LineageGraphGeometry
+    circular_edge_style === :chord || throw(
+        ArgumentError(
+            "unsupported circular_edge_style: $(repr(circular_edge_style)); " *
+            "circular_layout supports :chord (Tier 1); :arc is Tier 2 and not yet implemented",
+        ),
+    )
+
+    lineageunits = _resolve_lineageunits(lineageunits, accessor)
+
+    leaf_list = leaves(accessor, rootvertex)
+    isempty(leaf_list) && throw(
+        ArgumentError(
+            "lineage graph rooted at $(repr(rootvertex)) has zero leaves; " *
+            "a layout requires at least one leaf",
+        ),
+    )
+
+    all_vertices = preorder(accessor, rootvertex)
+
+    # Bypass modes: both coordinates come from the accessor; no angular computation.
+    if lineageunits === :vertexcoords || lineageunits === :vertexpos
+        accessor_fn = lineageunits === :vertexcoords ? accessor.vertexcoords : accessor.vertexpos
+        accessor_fn === nothing && throw(
+            ArgumentError(
+                "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
+                "but none was supplied",
+            ),
+        )
+        vertex_positions = Dict{Any,Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
+        pc = Dict{Any,Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
+        tc = Dict{Any,Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
+        edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
+        bb = _compute_boundingbox(vertex_positions)
+        return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+    end
+
+    process_coords = _process_coords(rootvertex, accessor, lineageunits, all_vertices, nonultrametric)
+
+    θ_step = _angular_leaf_step(leaf_spacing, length(leaf_list), min_leaf_angle)
+    angles = _angular_positions(leaf_list, all_vertices, accessor, θ_step)
+
+    vertex_positions = Dict{Any,Point2f}()
+    for v in all_vertices
+        r = process_coords[v]
+        θ = angles[v]
+        vertex_positions[v] = Point2f(r * cos(θ), r * sin(θ))
+    end
+
+    edge_shapes = _build_circular_edge_shapes(all_vertices, accessor, process_coords, angles)
+    bb = _compute_boundingbox(vertex_positions)
+
+    return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
+end
+
+# ── Internal: angular leaf step computation ────────────────────────────────────
+
+"""
+    _angular_leaf_step(leaf_spacing, n_leaves, min_leaf_angle) -> Float64
+
+Compute the angular spacing in radians between adjacent leaves for a circular layout.
+
+For `leaf_spacing = :equal` the step is `2π / n_leaves` (a single leaf gets `2π`).
+For a positive `Float64` `leaf_spacing` the value is used directly as the angular step.
+When `min_leaf_angle` is not `nothing` and the computed step is smaller, a warning is
+emitted and `min_leaf_angle` is used, causing the layout to span less than a full circle.
+"""
+function _angular_leaf_step(
+    leaf_spacing,
+    n_leaves::Int,
+    min_leaf_angle::Union{Nothing,Float64},
+)::Float64
+    θ_step = if leaf_spacing === :equal
+        n_leaves > 1 ? 2π / n_leaves : 2π
+    elseif leaf_spacing isa Real
+        leaf_spacing > 0 || throw(
+            ArgumentError(
+                "leaf_spacing must be a positive real number; got $(leaf_spacing)",
+            ),
+        )
+        Float64(leaf_spacing)
+    else
+        throw(
+            ArgumentError(
+                "leaf_spacing must be :equal or a positive real number; " *
+                "got $(repr(leaf_spacing)) ($(typeof(leaf_spacing)))",
+            ),
+        )
+    end
+    if min_leaf_angle !== nothing && θ_step < min_leaf_angle
+        @warn "computed angular leaf spacing $(θ_step) rad is smaller than " *
+              "min_leaf_angle=$(min_leaf_angle) rad; using min_leaf_angle instead — " *
+              "the layout will span less than a full circle"
+        θ_step = min_leaf_angle
+    end
+    return θ_step
+end
+
+# ── Internal: angular position assignment ─────────────────────────────────────
+
+"""
+    _angular_positions(leaf_list, all_vertices, accessor, θ_step) -> Dict{Any,Float64}
+
+Assign an angular position (radians) to every vertex.
+
+Leaves receive evenly spaced angles starting at 0: `θ_i = (i-1) * θ_step` for the
+i-th leaf in `leaf_list` (1-indexed). Internal vertices receive the mean of their
+children's angles, computed in reverse-preorder so children are assigned before
+their parents.
+"""
+function _angular_positions(
+    leaf_list::Vector,
+    all_vertices::Vector,
+    accessor::LineageGraphAccessor,
+    θ_step::Float64,
+)::Dict{Any,Float64}
+    angles = Dict{Any,Float64}()
+    for (i, leaf) in enumerate(leaf_list)
+        angles[leaf] = (i - 1) * θ_step
+    end
+    for v in Iterators.reverse(all_vertices)
+        haskey(angles, v) && continue
+        n = 0
+        s = 0.0
+        for c in accessor.children(v)
+            n += 1
+            s += angles[c]
+        end
+        angles[v] = s / n
+    end
+    return angles
+end
+
+# ── Internal: circular chord edge shape construction ──────────────────────────
+
+"""
+    _build_circular_edge_shapes(all_vertices, accessor, process_coords, angles) -> Vector{Point2f}
+
+Build the chord-style edge shape vector for a circular layout.
+
+For each directed edge `fromvertex → tovertex` the path consists of three Cartesian
+points followed by a `Point2f(NaN, NaN)` separator (four points total per edge),
+matching the convention used by `_build_edge_shapes` for rectangular layouts:
+
+1. Parent Cartesian: `(r_from * cos(θ_from), r_from * sin(θ_from))`
+2. Chord connector: `(r_from * cos(θ_to), r_from * sin(θ_to))` — at parent radius,
+   child angle
+3. Child Cartesian: `(r_to * cos(θ_to), r_to * sin(θ_to))`
+4. `Point2f(NaN, NaN)` separator
+"""
+function _build_circular_edge_shapes(
+    all_vertices::Vector,
+    accessor::LineageGraphAccessor,
+    process_coords::Dict{Any,Float64},
+    angles::Dict{Any,Float64},
+)::Vector{Point2f}
+    shapes = Point2f[]
+    for v in all_vertices
+        r_v = process_coords[v]
+        θ_v = angles[v]
+        x_v = r_v * cos(θ_v)
+        y_v = r_v * sin(θ_v)
+        for c in accessor.children(v)
+            r_c = process_coords[c]
+            θ_c = angles[c]
+            x_conn = r_v * cos(θ_c)
+            y_conn = r_v * sin(θ_c)
+            x_c = r_c * cos(θ_c)
+            y_c = r_c * sin(θ_c)
+            push!(shapes,
+                Point2f(x_v, y_v),
+                Point2f(x_conn, y_conn),
+                Point2f(x_c, y_c),
+                Point2f(NaN, NaN),
+            )
+        end
+    end
+    return shapes
+end
+
 # ── Exports ────────────────────────────────────────────────────────────────────
 
-export LineageGraphGeometry, boundingbox, rectangular_layout
+export LineageGraphGeometry, boundingbox, rectangular_layout, circular_layout
 
 end # module Geometry
