@@ -5,9 +5,9 @@ module Layers
 #   GraphMakie.jl/src/recipes.jl:226–234 — register_pixel_projection! idiom
 
 import Makie
-using Makie: @recipe, parent_scene, Axis, lines!
+using Makie: @recipe, parent_scene, Axis, lines!, scatter!
 using LineagesMakie.CoordTransform: register_pixel_projection!
-using ..Accessors: LineageGraphAccessor
+using ..Accessors: LineageGraphAccessor, is_leaf
 using ..Geometry: LineageGraphGeometry, rectangular_layout
 
 # ── EdgeLayer ─────────────────────────────────────────────────────────────────
@@ -84,16 +84,140 @@ function Makie.plot!(p::EdgeLayer)
     return p
 end
 
+# ── VertexLayer ───────────────────────────────────────────────────────────────
+
+"""
+    vertexlayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> VertexLayer
+
+Render markers at internal (non-leaf) vertex positions on axis `ax`.
+
+Markers are drawn in pixel space (`markerspace = :pixel`) so they remain
+fixed-size regardless of axis scale or figure resize. The
+`CoordTransform.register_pixel_projection!` call ensures the data↔pixel
+mapping is reactive to viewport changes.
+
+Internal vertices are those for which `Accessors.is_leaf(accessor, vertex)`
+returns `false`. The derived attribute `:vertex_pos_data` holds the filtered
+`Vector{Point2f}` and is accessible as `plot_obj[:vertex_pos_data][]`.
+
+# Arguments
+- `geom::LineageGraphGeometry`: pre-computed layout geometry from
+  `rectangular_layout` or `circular_layout`.
+- `accessor::LineageGraphAccessor`: used to identify leaf versus internal
+  vertices via `Accessors.is_leaf`.
+
+# Keyword attributes
+- `marker`: Makie marker symbol. Default `:circle`.
+- `color`: marker fill color. Default `:black`.
+- `markersize`: marker diameter in pixels. Default `8`.
+- `strokecolor`: marker stroke color. Default `:black`.
+- `alpha`: transparency multiplier in `[0, 1]`. Default `1.0`.
+- `visible`: whether the layer is rendered. Default `true`.
+"""
+@recipe VertexLayer (geom, accessor) begin
+    marker = :circle
+    color = :black
+    markersize = 8
+    strokecolor = :black
+    alpha = 1.0
+    visible = true
+end
+
+function Makie.plot!(p::VertexLayer)
+    sc = parent_scene(p)
+    register_pixel_projection!(p.attributes, sc)
+
+    map!(p.attributes, [:geom, :accessor], :vertex_pos_data) do geom, accessor
+        return [pos for (v, pos) in geom.vertex_positions if !is_leaf(accessor, v)]
+    end
+
+    scatter!(
+        p,
+        p[:vertex_pos_data];
+        marker = p[:marker],
+        color = p[:color],
+        markersize = p[:markersize],
+        strokecolor = p[:strokecolor],
+        alpha = p[:alpha],
+        markerspace = :pixel,
+    )
+    return p
+end
+
+# ── LeafLayer ─────────────────────────────────────────────────────────────────
+
+"""
+    leaflayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> LeafLayer
+
+Render markers at leaf vertex positions on axis `ax`.
+
+Markers are drawn in pixel space (`markerspace = :pixel`) so they remain
+fixed-size regardless of axis scale or figure resize. The
+`CoordTransform.register_pixel_projection!` call ensures the data↔pixel
+mapping is reactive to viewport changes.
+
+Leaf vertices are those for which `Accessors.is_leaf(accessor, vertex)`
+returns `true`. The derived attribute `:leaf_pos_data` holds the filtered
+`Vector{Point2f}` and is accessible as `plot_obj[:leaf_pos_data][]`.
+
+This layer is independently composable from `VertexLayer`: setting
+`visible = false` on one does not affect the other.
+
+# Arguments
+- `geom::LineageGraphGeometry`: pre-computed layout geometry from
+  `rectangular_layout` or `circular_layout`.
+- `accessor::LineageGraphAccessor`: used to identify leaf versus internal
+  vertices via `Accessors.is_leaf`.
+
+# Keyword attributes
+- `marker`: Makie marker symbol. Default `:circle`.
+- `color`: marker fill color. Default `:black`.
+- `markersize`: marker diameter in pixels. Default `8`.
+- `strokecolor`: marker stroke color. Default `:black`.
+- `alpha`: transparency multiplier in `[0, 1]`. Default `1.0`.
+- `visible`: whether the layer is rendered. Default `true`.
+"""
+@recipe LeafLayer (geom, accessor) begin
+    marker = :circle
+    color = :black
+    markersize = 8
+    strokecolor = :black
+    alpha = 1.0
+    visible = true
+end
+
+function Makie.plot!(p::LeafLayer)
+    sc = parent_scene(p)
+    register_pixel_projection!(p.attributes, sc)
+
+    map!(p.attributes, [:geom, :accessor], :leaf_pos_data) do geom, accessor
+        return [pos for (v, pos) in geom.vertex_positions if is_leaf(accessor, v)]
+    end
+
+    scatter!(
+        p,
+        p[:leaf_pos_data];
+        marker = p[:marker],
+        color = p[:color],
+        markersize = p[:markersize],
+        strokecolor = p[:strokecolor],
+        alpha = p[:alpha],
+        markerspace = :pixel,
+    )
+    return p
+end
+
 # ── lineageplot! stub ─────────────────────────────────────────────────────────
 
 """
-    lineageplot!(ax::Axis, rootvertex, accessor::LineageGraphAccessor; kwargs...) -> EdgeLayer
+    lineageplot!(ax::Axis, rootvertex, accessor::LineageGraphAccessor; kwargs...) -> LeafLayer
 
 Tier-1 composite entry point (stub). Computes a rectangular layout from
-`rootvertex` and `accessor` and renders the `EdgeLayer` only.
+`rootvertex` and `accessor` and renders `EdgeLayer`, `VertexLayer`, and
+`LeafLayer`.
 
-The full composite recipe assembling all visual layers (`VertexLayer`,
-`LeafLayer`, `LeafLabelLayer`, etc.) is Issue 12.
+The full composite recipe assembling all visual layers (`LeafLabelLayer`,
+`VertexLabelLayer`, `CladeHighlightLayer`, etc.) is Issue 12.
 
 # Arguments
 - `ax::Axis`: the Makie axis to render into.
@@ -102,13 +226,20 @@ The full composite recipe assembling all visual layers (`VertexLayer`,
   and optional `edgelength`, `vertexvalue`, etc.
 
 # Returns
-The `EdgeLayer` plot object.
+The `LeafLayer` plot object.
 """
-function lineageplot!(ax::Axis, rootvertex, accessor::LineageGraphAccessor; kwargs...)
+function lineageplot!(
+        ax::Axis,
+        rootvertex,
+        accessor::LineageGraphAccessor;
+        kwargs...,
+    )::LeafLayer
     geom = rectangular_layout(rootvertex, accessor)
-    return edgelayer!(ax, geom; kwargs...)
+    edgelayer!(ax, geom; kwargs...)
+    vertexlayer!(ax, geom, accessor; kwargs...)
+    return leaflayer!(ax, geom, accessor; kwargs...)
 end
 
-export lineageplot!
+export lineageplot!, EdgeLayer, edgelayer!, VertexLayer, vertexlayer!, LeafLayer, leaflayer!
 
 end # module Layers
