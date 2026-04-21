@@ -8,7 +8,7 @@ subject: Controlled vocabulary — initial ratification
 
 This file records the full question table presented for ratification and the
 user's responses verbatim. The resulting canonical terms are codified in
-`VOCABULARY.md`, which is the authoritative
+`STYLE-vocabulary.md`, which is the authoritative
 reference. The PRD at `.workflow-docs/202604181600_tier1/01_prd.md` has been
 updated to reflect all ratified decisions.
 
@@ -18,7 +18,7 @@ updated to reflect all ratified decisions.
 
 The table below summarises the ratified vocabulary. For full definitions,
 forbidden alternates, and usage notes, see
-`VOCABULARY.md`.
+`STYLE-vocabulary.md`.
 
 | Canonical | Definition (brief) | Proscribed alternates |
 |---|---|---|

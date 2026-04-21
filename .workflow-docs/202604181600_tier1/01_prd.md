@@ -1,7 +1,7 @@
 ---
 date-created: 2026-04-18T16:00:00
 date-revised: 2026-04-19T00:00:00
-vocabulary: VOCABULARY.md
+vocabulary: STYLE-vocabulary.md
 ---
 
 # PRD: LineagesMakie.jl — Tier 1 MVP
@@ -10,7 +10,7 @@ vocabulary: VOCABULARY.md
 
 All identifiers, type names, keyword arguments, symbols, and documentation in
 this project use the terms defined in
-`VOCABULARY.md`. That file is the
+`STYLE-vocabulary.md`. That file is the
 authoritative reference; this section provides a quick-reference summary.
 
 | Canonical | Brief definition | Proscribed alternates |
@@ -924,7 +924,7 @@ All implementation must follow:
 - `STYLE-docs.md` — Sentence case headings, punctuation, prose style. Applies
   to all documentation files. Mandatory.
 - `CONTRIBUTING.md` — Community and PR process. Applies to all contributions.
-- `VOCABULARY.md` — Authoritative term
+- `STYLE-vocabulary.md` — Authoritative term
   list. All identifiers, types, symbols, and prose must use canonical terms.
   New terms may be proposed and added only after explicit discussion with and
   approval from the project owner. No unilateral additions.

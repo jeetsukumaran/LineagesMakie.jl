@@ -6,7 +6,7 @@ Parent PRD: `.workflow-docs/202604181600_tier1/01_prd.md`
 ## Governance
 
 All tasks must comply with `STYLE-julia.md`, `STYLE-git.md`, `STYLE-docs.md`,
-`CONTRIBUTING.md`, and `VOCABULARY.md`.
+`CONTRIBUTING.md`, and `STYLE-vocabulary.md`.
 Read-only git and shell commands may be used freely. Mutating git operations
 (commit, merge, push, branch) are the human project owner's responsibility.
 

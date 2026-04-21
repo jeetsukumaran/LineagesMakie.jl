@@ -26,7 +26,7 @@ Every issue must comply with:
 - `STYLE-docs.md` — sentence case, punctuation, prose style for all
   documentation text.
 - `CONTRIBUTING.md` — PR process and community standards.
-- `VOCABULARY.md` — all identifiers, type
+- `STYLE-vocabulary.md` — all identifiers, type
   names, keyword arguments, symbols, and documentation must use canonical terms.
   No proscribed alternates anywhere. New terms may be proposed and added only
   after explicit discussion with and approval from the project owner.
