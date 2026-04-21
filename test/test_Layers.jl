@@ -5,7 +5,7 @@
 import CairoMakie
 using CairoMakie: Figure, Axis
 using CairoMakie: colorbuffer
-using CairoMakie: Rect2i
+using CairoMakie: Rect2i, Vec2f
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -151,6 +151,125 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
             ll = leaflayer!(ax, geom, acc)
             ll.visible[] = false
             @test vl.visible[] == true
+        end
+
+    end
+
+    @testset "LeafLabelLayer" begin
+
+        @testset "renders without error" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = leaflabellayer!(ax, geom, acc; text_func = v -> "label")
+            @test plot_obj isa LeafLabelLayer
+        end
+
+        @testset "label positions: 4 entries for 4-leaf tree" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = leaflabellayer!(ax, geom, acc; text_func = v -> "x")
+            colorbuffer(fig)
+            @test length(plot_obj[:leaf_label_positions][]) == 4
+        end
+
+        @testset "italic = true encodes italic font in resolved_font" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = leaflabellayer!(ax, geom, acc; italic = true)
+            @test plot_obj[:resolved_font][] == :italic
+        end
+
+        @testset "visible = false" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = leaflabellayer!(ax, geom, acc; visible = false)
+            @test plot_obj.visible[] == false
+        end
+
+        @testset "pixel offset: positions update reactively after viewport change" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = leaflabellayer!(ax, geom, acc; offset = Vec2f(10, 0))
+            colorbuffer(fig)
+            ax.scene.viewport[] = Rect2i(0, 0, 1200, 900)
+            positions_after = plot_obj[:leaf_label_positions][]
+            # Positions Observable must still hold exactly 4 entries after resize.
+            @test length(positions_after) == 4
+        end
+
+    end
+
+    @testset "VertexLabelLayer" begin
+
+        @testset "renders without error" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = vertexlabellayer!(ax, geom, acc)
+            @test plot_obj isa VertexLabelLayer
+        end
+
+        @testset "threshold = v -> false: zero labels" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = vertexlabellayer!(ax, geom, acc; threshold = v -> false)
+            colorbuffer(fig)
+            @test length(plot_obj[:vertex_label_strings][]) == 0
+        end
+
+        @testset "threshold = v -> true: all 7 vertices labelled" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            # 4-leaf balanced tree has 3 internal + 4 leaf = 7 vertices total.
+            plot_obj = vertexlabellayer!(
+                ax,
+                geom,
+                acc;
+                value_func = v -> "x",
+                threshold = v -> true,
+            )
+            colorbuffer(fig)
+            @test length(plot_obj[:vertex_label_strings][]) == 7
+        end
+
+        @testset "value_func returning non-renderable type raises error at plot time" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            # Makie's ComputeGraph wraps map! errors in ResolveException, so we
+            # match by message content. The cause is an ArgumentError naming
+            # the vertex and the non-renderable type.
+            @test_throws r"cannot be rendered as text" vertexlabellayer!(
+                ax,
+                geom,
+                acc;
+                value_func = v -> Dict(),
+            )
+        end
+
+        @testset "visible = false" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = vertexlabellayer!(ax, geom, acc; visible = false)
+            @test plot_obj.visible[] == false
         end
 
     end
