@@ -5,7 +5,7 @@
 
 using CairoMakie: Point2f, Rect2f
 
-# ── Tree fixtures ──────────────────────────────────────────────────────────────
+# ── Lineage graph fixtures ────────────────────────────────────────────────────
 
 # TestNode is defined in test_Accessors.jl, which runtests.jl includes before
 # this file. The GEO_* constants below use unique names to avoid conflicts.
@@ -52,22 +52,22 @@ const GEO_POLYTOMY = TestNode("root", [
 # Single vertex: rootvertex is also the only leaf
 const GEO_SINGLE = TestNode("root", TestNode[])
 
-# Helper: build a TreeAccessor with only children
+# Helper: build a LineageGraphAccessor with only children
 function _acc(rootvertex)
-    return tree_accessor(rootvertex; children = n -> n.children)
+    return lineagegraph_accessor(rootvertex; children = n -> n.children)
 end
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
 @testset "Geometry" begin
 
-    @testset "TreeGeometry — struct fields and immutability" begin
+    @testset "LineageGraphGeometry — struct fields and immutability" begin
         vp   = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
         ep   = Point2f[]
         lo   = Any[GEO_SINGLE]
         bb   = Rect2f(0, 0, 0, 0)
-        geom = TreeGeometry(vp, ep, lo, bb)
-        @test geom isa TreeGeometry
+        geom = LineageGraphGeometry(vp, ep, lo, bb)
+        @test geom isa LineageGraphGeometry
         @test geom.vertex_positions === vp
         @test geom.edge_paths === ep
         @test geom.leaf_order === lo
@@ -78,7 +78,7 @@ end
     @testset "boundingbox — delegates to stored field" begin
         vp   = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
         bb   = Rect2f(0, 0, 5, 3)
-        geom = TreeGeometry(vp, Point2f[], Any[GEO_SINGLE], bb)
+        geom = LineageGraphGeometry(vp, Point2f[], Any[GEO_SINGLE], bb)
         @test boundingbox(geom) === bb
     end
 
@@ -297,9 +297,9 @@ end
     # children iterable is empty is by definition a leaf). The boundary case —
     # exactly one leaf — exercises the guard correctly; it must not raise.
 
-    @testset "single-leaf tree does not raise (boundary: 1 >= 1 leaf)" begin
+    @testset "single-leaf lineage graph does not raise (boundary: 1 >= 1 leaf)" begin
         acc = _acc(GEO_SINGLE)
-        @test rectangular_layout(GEO_SINGLE, acc) isa TreeGeometry
+        @test rectangular_layout(GEO_SINGLE, acc) isa LineageGraphGeometry
     end
 
     @testset "unsupported lineageunits raises ArgumentError" begin

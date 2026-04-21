@@ -92,7 +92,7 @@ PhyloNetworks `HybridNetwork`, a Phylo.jl tree — has no path to a
 publication-quality, interactive, Makie-native visualization without first
 converting to a package-specific type and accepting the limitations above.
 
-There is no path from a generic Julia tree to a Makie figure.
+There is no path from a generic Julia lineage graph to a Makie figure.
 
 A second, deeper problem: every existing tool conflates three independently
 variable concerns — the tree's intrinsic process coordinate, the researcher's
@@ -106,7 +106,7 @@ the three concerns explicitly separable.
 
 When the Tier 1 MVP is complete, any Julia value that exposes a `children`
 function (or any object satisfying the AbstractTrees.jl interface) can be
-passed to `lineageplot` and rendered as a phylogenetic tree in a Makie figure,
+passed to `lineageplot` and rendered as a lineage graph in a Makie figure,
 with no internet access, no R, no package-specific conversion, and no
 constraint on which Makie backend is used (CairoMakie, GLMakie, WGLMakie).
 
@@ -133,8 +133,8 @@ Every design decision in this PRD is governed by a three-view model of any
 tree plot. The three views are independent and must remain separately
 addressable throughout the implementation.
 
-**Tree-centric view** — What is the structure? What scalar positions each
-vertex along the primary dimension? This is determined by the data and the
+**Lineage graph-centric view** — What is the structure? What scalar positions
+each vertex along the primary dimension? This is determined by the data and the
 `lineageunits` value. The result is a set of `process_coordinate` values for
 each vertex.
 
@@ -145,14 +145,14 @@ of the active `lineageunits` value (`:forward` for root-relative values,
 `:backward` for leaf-relative values) but imposes no further biological
 interpretation.
 
-**Plotting-centric view** — How does the tree appear on screen? Which physical
+**Plotting-centric view** — How does the lineage graph appear on screen? Which physical
 axis carries the process coordinate (`lineage_orientation`)? Does increasing
 process-coordinate value map to rightward or leftward (`display_polarity`)?
 
-These three views are independent. A tree with leaf-relative process
+These three views are independent. A lineage graph with leaf-relative process
 coordinates (`:backward` axis polarity) can be displayed in either screen
-direction. A forward-time tree can be displayed root-at-right (common in
-paleontology) by setting `display_polarity = :reversed`. The combination of
+direction. A forward-time lineage graph can be displayed root-at-right (common
+in paleontology) by setting `display_polarity = :reversed`. The combination of
 `axis_polarity` and `display_polarity` unambiguously records what the user
 will see, with no implicit conventions.
 
@@ -480,13 +480,12 @@ uses a postorder traversal. `:vertexdepths`, `:vertexheights`, and
 The three-view model is not just a design principle — it has direct
 implementation consequences that constrain module boundaries.
 
-**`Geometry` module** (tree-centric): computes `TreeGeometry` (process
-coordinates, edge paths, leaf order) from the tree structure and accessor
-callables. Has no knowledge of screen layout, axis direction, or biological
-semantics. It produces process coordinates in their natural direction: forward
-`lineageunits` values produce values increasing from root to leaf; backward
-`lineageunits` values produce
-values increasing from leaf to root.
+**`Geometry` module** (lineage graph-centric): computes `LineageGraphGeometry`
+(process coordinates, edge paths, leaf order) from the lineage graph structure
+and accessor callables. Has no knowledge of screen layout, axis direction, or
+biological semantics. It produces process coordinates in their natural direction:
+forward `lineageunits` values produce values increasing from root to leaf;
+backward `lineageunits` values produce values increasing from leaf to root.
 
 **`CoordTransform` module** (plotting-centric): handles pixel↔data conversions
 for non-isotropic axes. Has no knowledge of which process coordinate type is in
@@ -506,8 +505,9 @@ coordinates. `LineageAxis` must not re-derive process coordinates.
 ### Layout algorithms
 
 Layout is computed by pure functions in the `Geometry` module. Each function
-takes a `rootvertex`, accessor functions, and options; returns a `TreeGeometry`
-value (immutable struct). No Makie dependency in this module.
+takes a `rootvertex`, accessor functions, and options; returns a
+`LineageGraphGeometry` value (immutable struct). No Makie dependency in this
+module.
 
 Three layout geometries for Tier 1:
 
@@ -643,16 +643,17 @@ AbstractTrees.jl adapter.
 
 **Interface:**
 
-- `TreeAccessor` struct: holds `children`, `edgelength`, `vertexvalue`,
+- `LineageGraphAccessor` struct: holds `children`, `edgelength`, `vertexvalue`,
   `branchingtime`, `coalescenceage`, `vertexcoords`, `vertexpos` callables (all
   except `children` optional, defaulting to `nothing`)
-- `tree_accessor(rootvertex; children, edgelength=nothing, vertexvalue=nothing,
+- `lineagegraph_accessor(rootvertex; children, edgelength=nothing, vertexvalue=nothing,
   branchingtime=nothing, coalescenceage=nothing, vertexcoords=nothing,
-  vertexpos=nothing)`: constructs a `TreeAccessor` from explicit keyword
+  vertexpos=nothing)`: constructs a `LineageGraphAccessor` from explicit keyword
   functions; validates that `children` is callable
 - `abstracttrees_accessor(rootvertex; edgelength=nothing, vertexvalue=nothing,
-  branchingtime=nothing, coalescenceage=nothing)`: constructs a `TreeAccessor`
-  by wrapping `AbstractTrees.children`; requires AbstractTrees.jl to be loaded
+  branchingtime=nothing, coalescenceage=nothing)`: constructs a
+  `LineageGraphAccessor` by wrapping `AbstractTrees.children`; requires
+  AbstractTrees.jl to be loaded
 - Predicate utilities: `is_leaf(accessor, vertex) -> Bool`,
   `leaves(accessor, rootvertex) -> iterator`,
   `preorder(accessor, rootvertex) -> iterator`

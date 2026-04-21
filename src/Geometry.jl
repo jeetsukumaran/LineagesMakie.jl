@@ -10,14 +10,14 @@ module Geometry
 
 using Makie: Point2f, Rect2f
 
-using ..Accessors: TreeAccessor, is_leaf, leaves, preorder
+using ..Accessors: LineageGraphAccessor, is_leaf, leaves, preorder
 
-# ── TreeGeometry ───────────────────────────────────────────────────────────────
+# ── LineageGraphGeometry ────────────────────────────────────────────────────────
 
 """
-    TreeGeometry{V}
+    LineageGraphGeometry{V}
 
-Immutable struct holding the computed 2D layout of a tree.
+Immutable struct holding the computed 2D layout of a lineage graph.
 
 `V` is the vertex identity type. In generic use `V` is `Any`; callers that
 work with a uniform vertex type may instantiate a more specific `V` for
@@ -38,7 +38,7 @@ Fields:
 - `boundingbox::Rect2f`: smallest axis-aligned rectangle enclosing all entries
   in `vertex_positions`.
 """
-struct TreeGeometry{V}
+struct LineageGraphGeometry{V}
     vertex_positions::Dict{V,Point2f}
     edge_paths::Vector{Point2f}
     leaf_order::Vector{V}
@@ -48,23 +48,23 @@ end
 # ── boundingbox ────────────────────────────────────────────────────────────────
 
 """
-    boundingbox(geom::TreeGeometry) -> Rect2f
+    boundingbox(geom::LineageGraphGeometry) -> Rect2f
 
 Return the smallest axis-aligned rectangle enclosing all `vertex_positions`
 in `geom`. The value is computed at layout time and returned directly.
 """
-function boundingbox(geom::TreeGeometry)::Rect2f
+function boundingbox(geom::LineageGraphGeometry)::Rect2f
     return geom.boundingbox
 end
 
 # ── rectangular_layout ─────────────────────────────────────────────────────────
 
 """
-    rectangular_layout(rootvertex, accessor::TreeAccessor;
+    rectangular_layout(rootvertex, accessor::LineageGraphAccessor;
                        leaf_spacing=:equal,
-                       lineageunits::Symbol=:vertexheights) -> TreeGeometry
+                       lineageunits::Symbol=:vertexheights) -> LineageGraphGeometry
 
-Compute a rectangular (right-angle) layout for a rooted tree.
+Compute a rectangular (right-angle) layout for a rooted lineage graph.
 
 Process coordinates (first `Point2f` component) are determined by
 `lineageunits`:
@@ -81,8 +81,8 @@ Each edge `fromvertex → tovertex` contributes a right-angle polyline:
 followed by a `Point2f(NaN, NaN)` separator.
 
 # Arguments
-- `rootvertex`: root of the tree; first positional argument.
-- `accessor::TreeAccessor`: supplies the `children` callable and optional
+- `rootvertex`: root of the lineage graph; first positional argument.
+- `accessor::LineageGraphAccessor`: supplies the `children` callable and optional
   accessor fields. Only `children` is required for this function.
 - `leaf_spacing`: `:equal` (default) for unit inter-leaf spacing, or a
   positive real number for an explicit inter-leaf distance in layout units.
@@ -90,25 +90,25 @@ followed by a `Point2f(NaN, NaN)` separator.
   Supported values: `:vertexheights`, `:vertexlevels`.
 
 # Returns
-A `TreeGeometry` with fully populated fields.
+A `LineageGraphGeometry` with fully populated fields.
 
 # Throws
-- `ArgumentError` if the tree has zero leaves.
+- `ArgumentError` if the lineage graph has zero leaves.
 - `ArgumentError` if `leaf_spacing` is a non-positive real number.
 - `ArgumentError` if `lineageunits` is not a supported value for this function.
 """
 function rectangular_layout(
     rootvertex,
-    accessor::TreeAccessor;
+    accessor::LineageGraphAccessor;
     leaf_spacing = :equal,
     lineageunits::Symbol = :vertexheights,
-)::TreeGeometry
+)::LineageGraphGeometry
     step = _validate_leaf_spacing(leaf_spacing)
 
     leaf_list = leaves(accessor, rootvertex)
     isempty(leaf_list) && throw(
         ArgumentError(
-            "tree rooted at $(repr(rootvertex)) has zero leaves; " *
+            "lineage graph rooted at $(repr(rootvertex)) has zero leaves; " *
             "a layout requires at least one leaf",
         ),
     )
@@ -122,7 +122,7 @@ function rectangular_layout(
     edge_paths = _build_edge_paths(all_vertices, accessor, process_coords, transverse_coords)
     bb = _compute_boundingbox(vertex_positions)
 
-    return TreeGeometry(vertex_positions, edge_paths, leaf_list, bb)
+    return LineageGraphGeometry(vertex_positions, edge_paths, leaf_list, bb)
 end
 
 # ── Internal: leaf spacing validation ─────────────────────────────────────────
@@ -151,7 +151,7 @@ end
 
 function _process_coords(
     rootvertex,
-    accessor::TreeAccessor,
+    accessor::LineageGraphAccessor,
     lineageunits::Symbol,
     all_vertices::Vector,
 )::Dict{Any,Float64}
@@ -171,7 +171,7 @@ function _process_coords(
 end
 
 # :vertexheights — postorder: leaf = 0, internal = max(children) + 1
-function _vertexheights(all_vertices::Vector, accessor::TreeAccessor)::Dict{Any,Float64}
+function _vertexheights(all_vertices::Vector, accessor::LineageGraphAccessor)::Dict{Any,Float64}
     heights = Dict{Any,Float64}()
     # Reversing a preorder traversal yields a valid postorder (children before
     # parents), because in preorder every parent precedes all its descendants.
@@ -190,7 +190,7 @@ end
 function _vertexlevels(
     rootvertex,
     all_vertices::Vector,
-    accessor::TreeAccessor,
+    accessor::LineageGraphAccessor,
 )::Dict{Any,Float64}
     levels = Dict{Any,Float64}()
     levels[rootvertex] = 0.0
@@ -211,7 +211,7 @@ end
 # before their parents.
 function _assign_transverse(
     leaf_list::Vector,
-    accessor::TreeAccessor,
+    accessor::LineageGraphAccessor,
     all_vertices::Vector,
     step::Float64,
 )::Dict{Any,Float64}
@@ -254,7 +254,7 @@ end
 # The second segment is parallel to the lineage axis (changes x at fixed y).
 function _build_edge_paths(
     all_vertices::Vector,
-    accessor::TreeAccessor,
+    accessor::LineageGraphAccessor,
     process_coords::Dict{Any,Float64},
     transverse_coords::Dict{Any,Float64},
 )::Vector{Point2f}
@@ -293,6 +293,6 @@ end
 
 # ── Exports ────────────────────────────────────────────────────────────────────
 
-export TreeGeometry, boundingbox, rectangular_layout
+export LineageGraphGeometry, boundingbox, rectangular_layout
 
 end # module Geometry

@@ -13,21 +13,21 @@ biological data in the Makie ecosystem.
 
 The package accepts any Julia value that exposes a `children` function — or any
 object satisfying the AbstractTrees.jl interface — and renders it as a
-phylogenetic tree in a Makie figure. No internet access, no R installation, no
+lineage graph in a Makie figure. No internet access, no R installation, no
 package-specific conversion, and no constraint on the Makie backend (CairoMakie,
 GLMakie, WGLMakie) are required.
 
 ## Conceptual architecture
 
-Three perspectives on the same tree object must be cleanly separated throughout
+Three perspectives on the same lineage graph must be cleanly separated throughout
 the design.
 
-### Tree-centric view
+### Lineage graph-centric view
 
-The tree-centric view concerns the combinatorial and geometric structure of the
-tree itself. It answers: which direction is root-to-leaf? What scalar is
-attached to each vertex along its primary dimension? What branching structure
-(clade graph) connects the vertices?
+The lineage graph-centric view concerns the combinatorial and geometric structure
+of the lineage graph itself. It answers: which direction is root-to-leaf? What
+scalar is attached to each vertex along its primary dimension? What branching
+structure (clade graph) connects the vertices?
 
 This view is captured by the **`lineageunits`** selection and **accessor callables**:
 `edgelength`, `branchingtime`, `coalescenceage`, `children`. The resulting
@@ -56,15 +56,17 @@ biological meaning is imposed.
 
 ### Plotting-centric view
 
-The plotting-centric view concerns how the tree appears on screen. It answers:
-which physical screen axis carries the process coordinate (`lineage_orientation`)?
-Does increasing process-coordinate value map to rightward or leftward on screen
-(`display_polarity`)? Are tick marks shown? What is the axis label?
+The plotting-centric view concerns how the lineage graph appears on screen. It
+answers: which physical screen axis carries the process coordinate
+(`lineage_orientation`)? Does increasing process-coordinate value map to
+rightward or leftward on screen (`display_polarity`)? Are tick marks shown?
+What is the axis label?
 
 This view is governed by `LineageAxis` attributes and is **independent of the
-tree-centric and user-centric views**. A researcher may have a forward-time
-tree but prefer a root-at-right layout (common in paleontology). A coalescent
-tree with leaf-relative process coordinates can be displayed either way.
+lineage graph-centric and user-centric views**. A researcher may have a
+forward-time lineage graph but prefer a root-at-right layout (common in
+paleontology). A coalescent lineage graph with leaf-relative process coordinates
+can be displayed either way.
 
 The separation of these three views is a design invariant. No module may assume
 that any one view implies another.
@@ -79,22 +81,23 @@ The geometry and rendering modules depend only on the callables, never on the
 source type.
 
 This is dependency inversion applied at the input boundary: the package's core
-does not depend on any external tree type.
+does not depend on any external lineage graph type.
 
 ## Minimum working examples
 
 ### Clade graph layout (default)
 
 When no edge-length data is available, the default `lineageunits`
-(`:vertexheights`) produces a **clade graph layout** — the tree rendered as a
-graph up to label-preserving isomorphism (the phylogenetic "topology"), with all
+(`:vertexheights`) produces a **clade graph layout** — the lineage graph
+rendered as a graph up to label-preserving isomorphism (the phylogenetic
+"topology"), with all
 leaves at x = 0 and internal vertices spaced by path distance (unweighted path
 distance from root; number of edges). This requires only a `children` function.
 
 ```julia
 using LineagesMakie, CairoMakie
 
-# Any tree-like struct with a children field
+# Any struct with a children field
 struct MyNode
     name::String
     children::Vector{MyNode}
@@ -156,15 +159,15 @@ fig, ax, plt = lineageplot(
 The resulting x-coordinates are read directly from `divergence_times` with no
 per-edge summation.
 
-### Coalescent tree (backward time)
+### Coalescent lineage graph (backward time)
 
-A coalescent tree has process coordinates measured from the leaves backward
-to the root. Supply `coalescenceage` and set `lineageunits = :coalescenceage`.
-The tree must be ultrametric (all root-to-leaf path lengths equal) or a
-`nonultrametric` policy must be specified.
+A coalescent lineage graph has process coordinates measured from the leaves
+backward to the root. Supply `coalescenceage` and set
+`lineageunits = :coalescenceage`. The lineage graph must be ultrametric (all
+root-to-leaf path lengths equal) or a `nonultrametric` policy must be specified.
 
 ```julia
-# Ultrametric coalescent tree
+# Ultrametric coalescent lineage graph
 fig, ax, plt = lineageplot(
     root;
     children       = v -> v.children,
@@ -205,7 +208,7 @@ AbstractTrees.children(t::NewickTree) = t.children
 AbstractTrees.nodevalue(t::NewickTree) = (name = t.label, brlen = t.branch_length)
 
 fig, ax, plt = lineageplot(
-    tree_root;
+    lineagegraph_root;
     edgelength  = (u, v) -> AbstractTrees.nodevalue(v).brlen,
     vertexvalue = v -> AbstractTrees.nodevalue(v).name,
 )
@@ -214,7 +217,8 @@ fig, ax, plt = lineageplot(
 ### Polarity and orientation control via LineageAxis
 
 The three-view model is fully expressed through `LineageAxis` attributes. The
-tree-centric polarity (which `lineageunits` was chosen) is inferred automatically,
+lineage graph-centric polarity (which `lineageunits` was chosen) is inferred
+automatically,
 but the screen polarity and orientation are independently controllable.
 
 ```julia
@@ -222,7 +226,7 @@ using GLMakie
 
 fig = Figure()
 
-# Forward-time tree, displayed left-to-right (standard)
+# Forward-time lineage graph, displayed left-to-right (standard)
 ax1 = LineageAxis(fig[1, 1];
     lineage_orientation = :left_to_right,
     display_polarity    = :standard,
@@ -231,7 +235,7 @@ ax1 = LineageAxis(fig[1, 1];
 )
 lineageplot!(ax1, root; edgelength = (u, v) -> v.branch_length)
 
-# Same tree, displayed right-to-left (paleontological convention: root at right)
+# Same lineage graph, displayed right-to-left (paleontological convention: root at right)
 ax2 = LineageAxis(fig[1, 2];
     lineage_orientation = :left_to_right,
     display_polarity    = :reversed,
@@ -240,7 +244,7 @@ ax2 = LineageAxis(fig[1, 2];
 )
 lineageplot!(ax2, root; edgelength = (u, v) -> v.branch_length)
 
-# Coalescent tree: axis_polarity = :backward; leaves appear at left by default
+# Coalescent lineage graph: axis_polarity = :backward; leaves appear at left by default
 ax3 = LineageAxis(fig[2, 1];
     lineage_orientation = :left_to_right,
     show_x_axis         = true,
@@ -251,7 +255,7 @@ lineageplot!(ax3, root;
     lineageunits   = :coalescenceage,
 )
 
-# Coalescent tree, displayed reversed: root at left, leaves at right
+# Coalescent lineage graph, displayed reversed: root at left, leaves at right
 # (non-standard but user-requested)
 ax4 = LineageAxis(fig[2, 2];
     lineage_orientation = :left_to_right,
@@ -364,14 +368,14 @@ idioms.
 ```julia
 using GLMakie
 
-tree_obs    = Observable(initial_tree)
-scale_obs   = Observable(1.0)
-highlight_obs = Observable(Set{Any}())
+lineagegraph_obs = Observable(initial_lineagegraph)
+scale_obs        = Observable(1.0)
+highlight_obs    = Observable(Set{Any}())
 
 fig = Figure()
 ax  = LineageAxis(fig[1, 1]; show_x_axis = true)
 
-lineageplot!(ax, tree_obs;
+lineageplot!(ax, lineagegraph_obs;
     edgelength = (u, v) -> v.branch_length,
     edge_color = lift(highlight_obs) do hs
         (u, v) -> v ∈ hs ? :red : :gray40
@@ -393,7 +397,7 @@ end
 
 # Swapping the tree triggers full re-layout
 on(button_next.clicks) do _
-    tree_obs[] = load_next_tree()
+    lineagegraph_obs[] = load_next_lineagegraph()
 end
 
 fig

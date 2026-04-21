@@ -57,7 +57,7 @@ semantic documentation.
 **Part of speech:** noun (geometry concept); identifier
 
 **Definition:** The smallest axis-aligned rectangle that encloses all
-`vertex_positions` in a layout. Returned by `boundingbox(::TreeGeometry)`.
+`vertex_positions` in a layout. Returned by `boundingbox(::LineageGraphGeometry)`.
 Written as one word without underscore.
 
 **Proscribed alternates:** `bounding_box`, `extent`, `limits`, `bounds`.
@@ -285,7 +285,7 @@ When `edgelength` is not supplied, layout defaults to
 
 **Definition:** The collection of geometric paths (polylines, arcs, or segments)
 that represent the visual shape of edges in a rendered layout. A field of
-`TreeGeometry`. Written with underscore (a multi-word field name, not a
+`LineageGraphGeometry`. Written with underscore (a multi-word field name, not a
 compound accessor name).
 
 **Proscribed alternates:** `branch_paths`, `segments`, `paths`, `edge_segments`.
@@ -371,7 +371,7 @@ identifiers, comments, and documentation), `terminal`, `taxa` (plural),
 
 **Definition:** The ordered sequence of leaves as they appear along the
 transverse axis of a layout (y-axis in rectangular layouts; angular position
-in circular layouts). A field of `TreeGeometry`.
+in circular layouts). A field of `LineageGraphGeometry`.
 
 **Proscribed alternates:** `tip_order`, `leaf_sequence`, `leaf_rank`.
 
@@ -388,6 +388,40 @@ layout units.
 
 **Proscribed alternates:** `tip_spacing`, `gap`, `interval`, `spacing`
 (unqualified).
+
+---
+
+### `lineage graph` / `LineageGraph` / `lineagegraph`
+
+**Part of speech:** noun phrase (core concept); `LineageGraph` in PascalCase type
+names; `lineagegraph` (no underscore) in compound code identifiers.
+
+**Definition:** The primary conceptual object that LineagesMakie.jl visualizes.
+A lineage graph is a graph representing evolutionary relationships.
+
+In Tier 1 the lineage graph is always a tree (each vertex has exactly one parent);
+future tiers will extend to DAGs with shared ancestry (reticulation) and
+eventually to general networks.
+
+**Usage:**
+- In prose: "lineage graph" (two words).
+- In PascalCase type names: `LineageGraphAccessor`, `LineageGraphGeometry`.
+- In compound identifiers: `lineagegraph_accessor` (underscore before a
+  multi-word suffix, consistent with the pattern established by `tree_accessor`).
+- Code examples that explicitly load a Newick file or interface with
+  `AbstractTrees` may use "tree" when referring to the external object type;
+  once that object is passed to LineagesMakie it is a "lineage graph".
+
+**Proscribed alternates (in identifiers and internal prose):**
+`tree` (as a generic name for the LineagesMakie input object), `phylotree`,
+`phylogenetic tree` (acceptable in biological prose when describing the domain,
+but not as a code identifier or type name). "Graph" alone is too generic and
+does not capture lineage semantics; always use the full phrase "lineage graph"
+in prose and `LineageGraph` / `lineagegraph` in code.
+
+**Relationship to other terms:** A lineage graph is traversed via a
+`LineageGraphAccessor`. Its computed 2D layout is stored in a
+`LineageGraphGeometry`. The core plotting function is `lineageplot!`.
 
 ---
 
@@ -564,7 +598,7 @@ type name, or symbol.
 **Part of speech:** noun (geometry)
 
 **Definition:** A `Dict` (or equivalent) mapping each vertex to its 2D
-coordinate `Point2f` in layout space. A field of `TreeGeometry`. Written with
+coordinate `Point2f` in layout space. A field of `LineageGraphGeometry`. Written with
 underscore (multi-word field name).
 
 **Proscribed alternates:** `node_positions`, `positions` (unqualified),

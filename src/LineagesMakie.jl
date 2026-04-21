@@ -1,12 +1,12 @@
 module LineagesMakie
 
 include("Accessors.jl")
-using .Accessors: TreeAccessor, tree_accessor, abstracttrees_accessor, is_leaf, leaves, preorder
-export TreeAccessor, tree_accessor, abstracttrees_accessor, is_leaf, leaves, preorder
+using .Accessors: LineageGraphAccessor, lineagegraph_accessor, abstracttrees_accessor, is_leaf, leaves, preorder
+export LineageGraphAccessor, lineagegraph_accessor, abstracttrees_accessor, is_leaf, leaves, preorder
 
 include("Geometry.jl")
-using .Geometry: TreeGeometry, boundingbox, rectangular_layout
-export TreeGeometry, boundingbox, rectangular_layout
+using .Geometry: LineageGraphGeometry, boundingbox, rectangular_layout
+export LineageGraphGeometry, boundingbox, rectangular_layout
 
 include("CoordTransform.jl")
 include("Layers.jl")

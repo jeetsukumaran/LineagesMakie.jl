@@ -2,7 +2,7 @@
 
 using AbstractTrees
 
-# ── Tree fixtures ──────────────────────────────────────────────────────────────
+# ── Lineage graph fixtures ─────────────────────────────────────────────────────
 
 struct TestNode
     name::String
@@ -63,9 +63,9 @@ end
 
 @testset "Accessors" begin
 
-    @testset "tree_accessor — construction" begin
-        acc = tree_accessor(BALANCED_ROOT; children = n -> n.children)
-        @test acc isa TreeAccessor
+    @testset "lineagegraph_accessor — construction" begin
+        acc = lineagegraph_accessor(BALANCED_ROOT; children = n -> n.children)
+        @test acc isa LineageGraphAccessor
         @test acc.children isa Function
         @test acc.children(BALANCED_ROOT) == BALANCED_ROOT.children
         @test acc.edgelength    === nothing
@@ -76,14 +76,14 @@ end
         @test acc.vertexpos     === nothing
     end
 
-    @testset "tree_accessor — all keyword combinations" begin
+    @testset "lineagegraph_accessor — all keyword combinations" begin
         el  = (u, v) -> 1.0
         vv  = n -> n.name
         bt  = n -> 0.0
         ca  = n -> 0.0
         vc  = n -> (0.0, 0.0)
         vp  = n -> (0.0, 0.0)
-        acc = tree_accessor(BALANCED_ROOT;
+        acc = lineagegraph_accessor(BALANCED_ROOT;
             children       = n -> n.children,
             edgelength     = el,
             vertexvalue    = vv,
@@ -92,7 +92,7 @@ end
             vertexcoords   = vc,
             vertexpos      = vp,
         )
-        @test acc isa TreeAccessor
+        @test acc isa LineageGraphAccessor
         @test acc.edgelength     === el
         @test acc.vertexvalue    === vv
         @test acc.branchingtime  === bt
@@ -101,16 +101,16 @@ end
         @test acc.vertexpos      === vp
     end
 
-    @testset "tree_accessor — non-callable children raises ArgumentError" begin
-        @test_throws ArgumentError tree_accessor(BALANCED_ROOT; children = 42)
-        @test_throws ArgumentError tree_accessor(BALANCED_ROOT; children = "notfn")
-        @test_throws ArgumentError tree_accessor(BALANCED_ROOT; children = nothing)
-        @test_throws ArgumentError tree_accessor(BALANCED_ROOT; children = [1, 2, 3])
+    @testset "lineagegraph_accessor — non-callable children raises ArgumentError" begin
+        @test_throws ArgumentError lineagegraph_accessor(BALANCED_ROOT; children = 42)
+        @test_throws ArgumentError lineagegraph_accessor(BALANCED_ROOT; children = "notfn")
+        @test_throws ArgumentError lineagegraph_accessor(BALANCED_ROOT; children = nothing)
+        @test_throws ArgumentError lineagegraph_accessor(BALANCED_ROOT; children = [1, 2, 3])
     end
 
     @testset "abstracttrees_accessor — compliant type" begin
         acc = abstracttrees_accessor(BALANCED_ROOT)
-        @test acc isa TreeAccessor
+        @test acc isa LineageGraphAccessor
         # children field must be AbstractTrees.children
         @test acc.children === AbstractTrees.children
         @test acc.edgelength    === nothing
@@ -124,12 +124,12 @@ end
         # Such a value is treated as a single leaf.
         struct NoExplicitChildren end
         acc = abstracttrees_accessor(NoExplicitChildren())
-        @test acc isa TreeAccessor
+        @test acc isa LineageGraphAccessor
         @test is_leaf(acc, NoExplicitChildren())
     end
 
     @testset "is_leaf" begin
-        acc = tree_accessor(BALANCED_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(BALANCED_ROOT; children = n -> n.children)
         # leaves return true
         @test is_leaf(acc, TestNode("x", TestNode[]))
         @test is_leaf(acc, SINGLE_ROOT)
@@ -139,7 +139,7 @@ end
     end
 
     @testset "leaves — balanced (4 leaves)" begin
-        acc = tree_accessor(BALANCED_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(BALANCED_ROOT; children = n -> n.children)
         ls  = leaves(acc, BALANCED_ROOT)
         @test length(ls) == 4
         @test all(is_leaf(acc, v) for v in ls)
@@ -148,24 +148,24 @@ end
     end
 
     @testset "leaves — unbalanced (6 leaves)" begin
-        acc = tree_accessor(UNBALANCED_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(UNBALANCED_ROOT; children = n -> n.children)
         @test length(leaves(acc, UNBALANCED_ROOT)) == 6
     end
 
     @testset "leaves — polytomy (4 leaves)" begin
-        acc = tree_accessor(POLYTOMY_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(POLYTOMY_ROOT; children = n -> n.children)
         @test length(leaves(acc, POLYTOMY_ROOT)) == 4
     end
 
     @testset "leaves — single vertex is its own leaf" begin
-        acc = tree_accessor(SINGLE_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(SINGLE_ROOT; children = n -> n.children)
         ls  = leaves(acc, SINGLE_ROOT)
         @test length(ls) == 1
         @test ls[1] === SINGLE_ROOT
     end
 
     @testset "preorder — balanced (7 vertices, rootvertex first)" begin
-        acc = tree_accessor(BALANCED_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(BALANCED_ROOT; children = n -> n.children)
         po  = preorder(acc, BALANCED_ROOT)
         @test length(po) == 7
         @test po[1] === BALANCED_ROOT
@@ -178,7 +178,7 @@ end
     end
 
     @testset "preorder — single vertex" begin
-        acc = tree_accessor(SINGLE_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(SINGLE_ROOT; children = n -> n.children)
         po  = preorder(acc, SINGLE_ROOT)
         @test length(po) == 1
         @test po[1] === SINGLE_ROOT
@@ -188,7 +188,7 @@ end
         a = CyclicNode("a", CyclicNode[])
         b = CyclicNode("b", [a])
         push!(a.ch, b)  # a → b → a
-        acc = tree_accessor(a; children = n -> n.ch)
+        acc = lineagegraph_accessor(a; children = n -> n.ch)
         @test_throws ArgumentError leaves(acc, a)
     end
 
@@ -196,7 +196,7 @@ end
         a = CyclicNode("a", CyclicNode[])
         b = CyclicNode("b", [a])
         push!(a.ch, b)
-        acc = tree_accessor(a; children = n -> n.ch)
+        acc = lineagegraph_accessor(a; children = n -> n.ch)
         @test_throws ArgumentError preorder(acc, a)
     end
 
