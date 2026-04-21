@@ -39,7 +39,7 @@ Fields:
   in `vertex_positions`.
 """
 struct LineageGraphGeometry{V}
-    vertex_positions::Dict{V,Point2f}
+    vertex_positions::Dict{V, Point2f}
     edge_shapes::Vector{Point2f}
     leaf_order::Vector{V}
     boundingbox::Rect2f
@@ -131,12 +131,12 @@ A `LineageGraphGeometry` with fully populated fields.
   and `nonultrametric = :error`.
 """
 function rectangular_layout(
-    rootvertex,
-    accessor::LineageGraphAccessor;
-    leaf_spacing = :equal,
-    lineageunits::Union{Nothing,Symbol} = nothing,
-    nonultrametric::Symbol = :error,
-)::LineageGraphGeometry
+        rootvertex,
+        accessor::LineageGraphAccessor;
+        leaf_spacing = :equal,
+        lineageunits::Union{Nothing, Symbol} = nothing,
+        nonultrametric::Symbol = :error,
+    )::LineageGraphGeometry
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
     step = _validate_leaf_spacing(leaf_spacing)
 
@@ -144,7 +144,7 @@ function rectangular_layout(
     isempty(leaf_list) && throw(
         ArgumentError(
             "lineage graph rooted at $(repr(rootvertex)) has zero leaves; " *
-            "a layout requires at least one leaf",
+                "a layout requires at least one leaf",
         ),
     )
 
@@ -156,12 +156,12 @@ function rectangular_layout(
         accessor_fn === nothing && throw(
             ArgumentError(
                 "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
-                "but none was supplied",
+                    "but none was supplied",
             ),
         )
-        vertex_positions = Dict{Any,Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
-        pc = Dict{Any,Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
-        tc = Dict{Any,Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
+        vertex_positions = Dict{Any, Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
+        pc = Dict{Any, Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
+        tc = Dict{Any, Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
         edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
         bb = _compute_boundingbox(vertex_positions)
         return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
@@ -189,9 +189,9 @@ If `lineageunits` is not `nothing`, it is returned unchanged. Otherwise:
 - `:vertexheights` otherwise.
 """
 function _resolve_lineageunits(
-    lineageunits::Union{Nothing,Symbol},
-    accessor::LineageGraphAccessor,
-)::Symbol
+        lineageunits::Union{Nothing, Symbol},
+        accessor::LineageGraphAccessor,
+    )::Symbol
     lineageunits !== nothing && return lineageunits
     return accessor.edgelength !== nothing ? :edgelengths : :vertexheights
 end
@@ -212,7 +212,7 @@ function _validate_leaf_spacing(leaf_spacing)::Float64
         throw(
             ArgumentError(
                 "leaf_spacing must be :equal or a positive real number; " *
-                "got $(repr(leaf_spacing)) ($(typeof(leaf_spacing)))",
+                    "got $(repr(leaf_spacing)) ($(typeof(leaf_spacing)))",
             ),
         )
     end
@@ -221,12 +221,12 @@ end
 # ── Internal: process coordinate computation ───────────────────────────────────
 
 function _process_coords(
-    rootvertex,
-    accessor::LineageGraphAccessor,
-    lineageunits::Symbol,
-    all_vertices::Vector,
-    nonultrametric::Symbol,
-)::Dict{Any,Float64}
+        rootvertex,
+        accessor::LineageGraphAccessor,
+        lineageunits::Symbol,
+        all_vertices::Vector,
+        nonultrametric::Symbol,
+    )::Dict{Any, Float64}
     if lineageunits === :vertexheights
         return _vertexheights(all_vertices, accessor)
     elseif lineageunits === :vertexlevels
@@ -235,7 +235,7 @@ function _process_coords(
         accessor.edgelength === nothing && throw(
             ArgumentError(
                 "lineageunits = :edgelengths requires an edgelength accessor " *
-                "but none was supplied",
+                    "but none was supplied",
             ),
         )
         return _cumulative_preorder(
@@ -248,7 +248,7 @@ function _process_coords(
         accessor.branchingtime === nothing && throw(
             ArgumentError(
                 "lineageunits = :branchingtime requires a branchingtime accessor " *
-                "but none was supplied",
+                    "but none was supplied",
             ),
         )
         bt = accessor.branchingtime
@@ -264,7 +264,7 @@ function _process_coords(
         accessor.coalescenceage === nothing && throw(
             ArgumentError(
                 "lineageunits = :coalescenceage requires a coalescenceage accessor " *
-                "but none was supplied",
+                    "but none was supplied",
             ),
         )
         return _validate_ultrametric(accessor, all_vertices, nonultrametric)
@@ -272,9 +272,9 @@ function _process_coords(
         throw(
             ArgumentError(
                 "unsupported lineageunits value: $(repr(lineageunits)); " *
-                "rectangular_layout supports :vertexheights, :vertexlevels, " *
-                ":edgelengths, :branchingtime, :vertexdepths, :coalescenceage, " *
-                ":vertexcoords, :vertexpos",
+                    "rectangular_layout supports :vertexheights, :vertexlevels, " *
+                    ":edgelengths, :branchingtime, :vertexdepths, :coalescenceage, " *
+                    ":vertexcoords, :vertexpos",
             ),
         )
     end
@@ -300,22 +300,22 @@ Handles all documented return forms of the `edgelength` accessor:
 - `ArgumentError` if the resolved value is negative.
 """
 function _safe_edgelength(
-    accessor::LineageGraphAccessor,
-    fromvertex,
-    tovertex,
-)::Float64
+        accessor::LineageGraphAccessor,
+        fromvertex,
+        tovertex,
+    )::Float64
     raw = accessor.edgelength(fromvertex, tovertex)
     val = (raw isa NamedTuple && haskey(raw, :value)) ? raw.value : raw
     if val === nothing || ismissing(val)
         @warn "edgelength returned $(repr(val)) for edge $(repr(fromvertex)) → " *
-              "$(repr(tovertex)); using fallback of 1.0"
+            "$(repr(tovertex)); using fallback of 1.0"
         return 1.0
     end
     fval = Float64(val)
     fval < 0.0 && throw(
         ArgumentError(
             "edgelength returned negative value $(fval) for edge " *
-            "$(repr(fromvertex)) → $(repr(tovertex)); edge lengths must be non-negative",
+                "$(repr(fromvertex)) → $(repr(tovertex)); edge lengths must be non-negative",
         ),
     )
     return fval
@@ -343,12 +343,12 @@ The caller is responsible for ensuring that `edge_increment` returns non-negativ
 values where required.
 """
 function _cumulative_preorder(
-    rootvertex,
-    all_vertices::Vector,
-    accessor::LineageGraphAccessor,
-    edge_increment,
-)::Dict{Any,Float64}
-    coords = Dict{Any,Float64}()
+        rootvertex,
+        all_vertices::Vector,
+        accessor::LineageGraphAccessor,
+        edge_increment,
+    )::Dict{Any, Float64}
+    coords = Dict{Any, Float64}()
     coords[rootvertex] = 0.0
     for v in all_vertices
         cv = coords[v]
@@ -361,8 +361,8 @@ end
 
 # ── Internal: :vertexheights — postorder, leaf = 0, internal = max(children) + 1
 
-function _vertexheights(all_vertices::Vector, accessor::LineageGraphAccessor)::Dict{Any,Float64}
-    heights = Dict{Any,Float64}()
+function _vertexheights(all_vertices::Vector, accessor::LineageGraphAccessor)::Dict{Any, Float64}
+    heights = Dict{Any, Float64}()
     # Reversing a preorder traversal yields a valid postorder (children before
     # parents), because in preorder every parent precedes all its descendants.
     for v in Iterators.reverse(all_vertices)
@@ -379,11 +379,11 @@ end
 # ── Internal: :vertexlevels — preorder, root = 0, each child = parent + 1
 
 function _vertexlevels(
-    rootvertex,
-    all_vertices::Vector,
-    accessor::LineageGraphAccessor,
-)::Dict{Any,Float64}
-    levels = Dict{Any,Float64}()
+        rootvertex,
+        all_vertices::Vector,
+        accessor::LineageGraphAccessor,
+    )::Dict{Any, Float64}
+    levels = Dict{Any, Float64}()
     levels[rootvertex] = 0.0
     for v in all_vertices
         lv = levels[v]
@@ -409,11 +409,11 @@ display) in that `_vertex_depths` records the raw edge count along the path from
 `rootvertex` with no further transformation.
 """
 function _vertex_depths(
-    rootvertex,
-    all_vertices::Vector,
-    accessor::LineageGraphAccessor,
-)::Dict{Any,Float64}
-    depths = Dict{Any,Float64}()
+        rootvertex,
+        all_vertices::Vector,
+        accessor::LineageGraphAccessor,
+    )::Dict{Any, Float64}
+    depths = Dict{Any, Float64}()
     depths[rootvertex] = 0.0
     for v in all_vertices
         dv = depths[v]
@@ -455,11 +455,11 @@ non-ultrametric set of coordinates.
   children with inconsistent coalescenceage values.
 """
 function _validate_ultrametric(
-    accessor::LineageGraphAccessor,
-    all_vertices::Vector,
-    nonultrametric::Symbol,
-)::Dict{Any,Float64}
-    coords = Dict{Any,Float64}()
+        accessor::LineageGraphAccessor,
+        all_vertices::Vector,
+        nonultrametric::Symbol,
+    )::Dict{Any, Float64}
+    coords = Dict{Any, Float64}()
     for v in Iterators.reverse(all_vertices)  # postorder: children before parents
         coords[v] = accessor.coalescenceage(v)
         ch = accessor.children(v)
@@ -467,14 +467,14 @@ function _validate_ultrametric(
         child_ages = [accessor.coalescenceage(c) for c in ch]
         mn = minimum(child_ages)
         mx = maximum(child_ages)
-        if mx - mn > 1e-9
+        if mx - mn > 1.0e-9
             if nonultrametric === :error
                 throw(
                     ArgumentError(
                         "non-ultrametric lineage graph: children of vertex $(repr(v)) " *
-                        "have inconsistent coalescenceage values " *
-                        "(min=$(mn), max=$(mx)); pass nonultrametric = :minimum or " *
-                        ":maximum to rectangular_layout to resolve",
+                            "have inconsistent coalescenceage values " *
+                            "(min=$(mn), max=$(mx)); pass nonultrametric = :minimum or " *
+                            ":maximum to rectangular_layout to resolve",
                     ),
                 )
             end
@@ -491,12 +491,12 @@ end
 # positions. Reverse preorder (≈ postorder) ensures children are assigned
 # before their parents.
 function _assign_transverse(
-    leaf_list::Vector,
-    accessor::LineageGraphAccessor,
-    all_vertices::Vector,
-    step::Float64,
-)::Dict{Any,Float64}
-    transverse = Dict{Any,Float64}()
+        leaf_list::Vector,
+        accessor::LineageGraphAccessor,
+        all_vertices::Vector,
+        step::Float64,
+    )::Dict{Any, Float64}
+    transverse = Dict{Any, Float64}()
     for (i, leaf) in enumerate(leaf_list)
         transverse[leaf] = i * step
     end
@@ -516,11 +516,11 @@ end
 # ── Internal: geometry assembly ────────────────────────────────────────────────
 
 function _build_vertex_positions(
-    all_vertices::Vector,
-    process_coords::Dict{Any,Float64},
-    transverse_coords::Dict{Any,Float64},
-)::Dict{Any,Point2f}
-    pos = Dict{Any,Point2f}()
+        all_vertices::Vector,
+        process_coords::Dict{Any, Float64},
+        transverse_coords::Dict{Any, Float64},
+    )::Dict{Any, Point2f}
+    pos = Dict{Any, Point2f}()
     for v in all_vertices
         pos[v] = Point2f(process_coords[v], transverse_coords[v])
     end
@@ -534,11 +534,11 @@ end
 # The first segment is parallel to the transverse axis (changes y at fixed x).
 # The second segment is parallel to the lineage axis (changes x at fixed y).
 function _build_edge_shapes(
-    all_vertices::Vector,
-    accessor::LineageGraphAccessor,
-    process_coords::Dict{Any,Float64},
-    transverse_coords::Dict{Any,Float64},
-)::Vector{Point2f}
+        all_vertices::Vector,
+        accessor::LineageGraphAccessor,
+        process_coords::Dict{Any, Float64},
+        transverse_coords::Dict{Any, Float64},
+    )::Vector{Point2f}
     shapes = Point2f[]
     for v in all_vertices
         xp = process_coords[v]
@@ -546,7 +546,8 @@ function _build_edge_shapes(
         for c in accessor.children(v)
             xc = process_coords[c]
             yc = transverse_coords[c]
-            push!(shapes,
+            push!(
+                shapes,
                 Point2f(xp, yp),
                 Point2f(xp, yc),
                 Point2f(xc, yc),
@@ -557,7 +558,7 @@ function _build_edge_shapes(
     return shapes
 end
 
-function _compute_boundingbox(vertex_positions::Dict{Any,Point2f})::Rect2f
+function _compute_boundingbox(vertex_positions::Dict{Any, Point2f})::Rect2f
     isempty(vertex_positions) && return Rect2f(0.0f0, 0.0f0, 0.0f0, 0.0f0)
     first_p = first(values(vertex_positions))
     xmin = xmax = first_p[1]
@@ -632,18 +633,18 @@ preorder traversal order, and `boundingbox` enclosing all vertex positions.
   and `nonultrametric = :error`.
 """
 function circular_layout(
-    rootvertex,
-    accessor::LineageGraphAccessor;
-    leaf_spacing = :equal,
-    lineageunits::Union{Nothing,Symbol} = nothing,
-    nonultrametric::Symbol = :error,
-    circular_edge_style::Symbol = :chord,
-    min_leaf_angle::Union{Nothing,Float64} = nothing,
-)::LineageGraphGeometry
+        rootvertex,
+        accessor::LineageGraphAccessor;
+        leaf_spacing = :equal,
+        lineageunits::Union{Nothing, Symbol} = nothing,
+        nonultrametric::Symbol = :error,
+        circular_edge_style::Symbol = :chord,
+        min_leaf_angle::Union{Nothing, Float64} = nothing,
+    )::LineageGraphGeometry
     circular_edge_style === :chord || throw(
         ArgumentError(
             "unsupported circular_edge_style: $(repr(circular_edge_style)); " *
-            "circular_layout supports :chord (Tier 1); :arc is Tier 2 and not yet implemented",
+                "circular_layout supports :chord (Tier 1); :arc is Tier 2 and not yet implemented",
         ),
     )
 
@@ -653,7 +654,7 @@ function circular_layout(
     isempty(leaf_list) && throw(
         ArgumentError(
             "lineage graph rooted at $(repr(rootvertex)) has zero leaves; " *
-            "a layout requires at least one leaf",
+                "a layout requires at least one leaf",
         ),
     )
 
@@ -665,12 +666,12 @@ function circular_layout(
         accessor_fn === nothing && throw(
             ArgumentError(
                 "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
-                "but none was supplied",
+                    "but none was supplied",
             ),
         )
-        vertex_positions = Dict{Any,Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
-        pc = Dict{Any,Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
-        tc = Dict{Any,Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
+        vertex_positions = Dict{Any, Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
+        pc = Dict{Any, Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
+        tc = Dict{Any, Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
         edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
         bb = _compute_boundingbox(vertex_positions)
         return LineageGraphGeometry(vertex_positions, edge_shapes, leaf_list, bb)
@@ -681,7 +682,7 @@ function circular_layout(
     θ_step = _angular_leaf_step(leaf_spacing, length(leaf_list), min_leaf_angle)
     angles = _angular_positions(leaf_list, all_vertices, accessor, θ_step)
 
-    vertex_positions = Dict{Any,Point2f}()
+    vertex_positions = Dict{Any, Point2f}()
     for v in all_vertices
         r = process_coords[v]
         θ = angles[v]
@@ -707,10 +708,10 @@ When `min_leaf_angle` is not `nothing` and the computed step is smaller, a warni
 emitted and `min_leaf_angle` is used, causing the layout to span less than a full circle.
 """
 function _angular_leaf_step(
-    leaf_spacing,
-    n_leaves::Int,
-    min_leaf_angle::Union{Nothing,Float64},
-)::Float64
+        leaf_spacing,
+        n_leaves::Int,
+        min_leaf_angle::Union{Nothing, Float64},
+    )::Float64
     θ_step = if leaf_spacing === :equal
         n_leaves > 1 ? 2π / n_leaves : 2π
     elseif leaf_spacing isa Real
@@ -724,14 +725,14 @@ function _angular_leaf_step(
         throw(
             ArgumentError(
                 "leaf_spacing must be :equal or a positive real number; " *
-                "got $(repr(leaf_spacing)) ($(typeof(leaf_spacing)))",
+                    "got $(repr(leaf_spacing)) ($(typeof(leaf_spacing)))",
             ),
         )
     end
     if min_leaf_angle !== nothing && θ_step < min_leaf_angle
         @warn "computed angular leaf spacing $(θ_step) rad is smaller than " *
-              "min_leaf_angle=$(min_leaf_angle) rad; using min_leaf_angle instead — " *
-              "the layout will span less than a full circle"
+            "min_leaf_angle=$(min_leaf_angle) rad; using min_leaf_angle instead — " *
+            "the layout will span less than a full circle"
         θ_step = min_leaf_angle
     end
     return θ_step
@@ -750,12 +751,12 @@ children's angles, computed in reverse-preorder so children are assigned before
 their parents.
 """
 function _angular_positions(
-    leaf_list::Vector,
-    all_vertices::Vector,
-    accessor::LineageGraphAccessor,
-    θ_step::Float64,
-)::Dict{Any,Float64}
-    angles = Dict{Any,Float64}()
+        leaf_list::Vector,
+        all_vertices::Vector,
+        accessor::LineageGraphAccessor,
+        θ_step::Float64,
+    )::Dict{Any, Float64}
+    angles = Dict{Any, Float64}()
     for (i, leaf) in enumerate(leaf_list)
         angles[leaf] = (i - 1) * θ_step
     end
@@ -790,11 +791,11 @@ matching the convention used by `_build_edge_shapes` for rectangular layouts:
 4. `Point2f(NaN, NaN)` separator
 """
 function _build_circular_edge_shapes(
-    all_vertices::Vector,
-    accessor::LineageGraphAccessor,
-    process_coords::Dict{Any,Float64},
-    angles::Dict{Any,Float64},
-)::Vector{Point2f}
+        all_vertices::Vector,
+        accessor::LineageGraphAccessor,
+        process_coords::Dict{Any, Float64},
+        angles::Dict{Any, Float64},
+    )::Vector{Point2f}
     shapes = Point2f[]
     for v in all_vertices
         r_v = process_coords[v]
@@ -808,7 +809,8 @@ function _build_circular_edge_shapes(
             y_conn = r_v * sin(θ_c)
             x_c = r_c * cos(θ_c)
             y_c = r_c * sin(θ_c)
-            push!(shapes,
+            push!(
+                shapes,
                 Point2f(x_v, y_v),
                 Point2f(x_conn, y_conn),
                 Point2f(x_c, y_c),

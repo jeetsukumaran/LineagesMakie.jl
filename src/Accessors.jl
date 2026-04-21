@@ -73,19 +73,19 @@ omitted optionals).
 - `ArgumentError` if `children` is not callable.
 """
 function lineagegraph_accessor(
-    rootvertex;
-    children,
-    edgelength     = nothing,
-    vertexvalue    = nothing,
-    branchingtime  = nothing,
-    coalescenceage = nothing,
-    vertexcoords   = nothing,
-    vertexpos      = nothing,
-)::LineageGraphAccessor
+        rootvertex;
+        children,
+        edgelength = nothing,
+        vertexvalue = nothing,
+        branchingtime = nothing,
+        coalescenceage = nothing,
+        vertexcoords = nothing,
+        vertexpos = nothing,
+    )::LineageGraphAccessor
     isa(children, Base.Callable) || throw(
         ArgumentError(
             "children must be callable for a lineage graph rooted at $(typeof(rootvertex)); " *
-            "got $(typeof(children)): $(repr(children))",
+                "got $(typeof(children)): $(repr(children))",
         ),
     )
     return LineageGraphAccessor(
@@ -124,12 +124,12 @@ will produce a single-leaf lineage graph.
 A `LineageGraphAccessor` whose `children` field is `AbstractTrees.children`.
 """
 function abstracttrees_accessor(
-    rootvertex;
-    edgelength     = nothing,
-    vertexvalue    = nothing,
-    branchingtime  = nothing,
-    coalescenceage = nothing,
-)::LineageGraphAccessor
+        rootvertex;
+        edgelength = nothing,
+        vertexvalue = nothing,
+        branchingtime = nothing,
+        coalescenceage = nothing,
+    )::LineageGraphAccessor
     return LineageGraphAccessor(
         abstracttrees_children,
         edgelength,
@@ -169,7 +169,7 @@ returned.
 - `ArgumentError` if a cycle is detected in the lineage graph.
 """
 function leaves(accessor::LineageGraphAccessor, rootvertex)::Vector{Any}
-    result  = Vector{Any}()
+    result = Vector{Any}()
     visited = Set{Any}()
     _collect_leaves!(result, visited, accessor, rootvertex)
     return result
@@ -189,7 +189,7 @@ returned.
 - `ArgumentError` if a cycle is detected in the lineage graph.
 """
 function preorder(accessor::LineageGraphAccessor, rootvertex)::Vector{Any}
-    result  = Vector{Any}()
+    result = Vector{Any}()
     visited = Set{Any}()
     _collect_preorder!(result, visited, accessor, rootvertex)
     return result
@@ -202,7 +202,7 @@ function _check_cycle!(visited::Set, vertex)::Nothing
     vertex ∈ visited && throw(
         ArgumentError(
             "cycle detected in lineage graph: vertex $(repr(vertex)) was encountered " *
-            "more than once during traversal; the lineage graph must be acyclic",
+                "more than once during traversal; the lineage graph must be acyclic",
         ),
     )
     push!(visited, vertex)
