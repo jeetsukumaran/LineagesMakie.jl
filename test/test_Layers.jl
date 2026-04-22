@@ -387,6 +387,34 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
             @test plot_obj.visible[] == false
         end
 
+        @testset "bracket renders in decoration scene (not clipped)" begin
+            fig = Figure(; size = (400, 300))
+            ax  = Axis(fig[1, 1])
+            lp  = lineageplot!(ax, _LT_BALANCED_ROOT, _LT_ACC;
+                               clade_vertices = [_LT_BALANCED_ROOT],
+                               clade_label_func = v -> "root")
+            colorbuffer(fig)   # force layout resolution so viewport is non-zero
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+            # bracket_pixel_shapes must be non-empty after layout.
+            @test !isempty(cll[:bracket_pixel_shapes][])
+            # All non-NaN pixel positions must be finite.
+            for pt in cll[:bracket_pixel_shapes][]
+                isnan(pt[1]) && continue
+                @test isfinite(pt[1]) && isfinite(pt[2])
+            end
+        end
+
+        @testset "bracket label pixel positions non-empty after layout" begin
+            fig = Figure(; size = (400, 300))
+            ax  = Axis(fig[1, 1])
+            lp  = lineageplot!(ax, _LT_BALANCED_ROOT, _LT_ACC;
+                               clade_vertices = [_LT_BALANCED_ROOT],
+                               clade_label_func = v -> "root")
+            colorbuffer(fig)
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+            @test !isempty(cll[:bracket_label_pixel_positions][])
+        end
+
     end
 
     @testset "ScaleBarLayer" begin

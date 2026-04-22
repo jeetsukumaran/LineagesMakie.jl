@@ -327,4 +327,19 @@ end
         @test any(p -> p.visible[], scatter_plots)
     end
 
+    @testset "clade bracket pixel shapes non-empty after lineageplot! on LineageAxis" begin
+        fig2 = Figure(; size = (400, 300))
+        lax2 = LineageAxis(fig2[1, 1])
+        lp2  = lineageplot!(lax2, _LA_BALANCED_ROOT, _LA_ACC;
+                            clade_vertices = [_LA_BALANCED_ROOT],
+                            clade_label_func = v -> "root")
+        colorbuffer(fig2)
+        cll2 = only(filter(p -> p isa CladeLabelLayer, lp2.plots))
+        @test !isempty(cll2[:bracket_pixel_shapes][])
+        for pt in cll2[:bracket_pixel_shapes][]
+            isnan(pt[1]) && continue
+            @test isfinite(pt[1]) && isfinite(pt[2])
+        end
+    end
+
 end

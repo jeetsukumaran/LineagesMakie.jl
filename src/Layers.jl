@@ -6,7 +6,7 @@ module Layers
 
 import Makie
 using Makie: @recipe, parent_scene, Axis, lines!, scatter!, text!, poly!, Point2f, Vec2f, Rect2f
-using LineagesMakie.CoordTransform: register_pixel_projection!, pixel_offset_to_data_delta
+using LineagesMakie.CoordTransform: register_pixel_projection!, pixel_offset_to_data_delta, data_to_pixel
 using ..Accessors: LineageGraphAccessor, is_leaf, leaves
 using ..Geometry: LineageGraphGeometry, rectangular_layout, circular_layout
 
@@ -610,6 +610,14 @@ Bracket geometry is computed as a NaN-separated `Vector{Point2f}` rendered with
 a single `lines!` call. Label positions are kept in a companion derived
 attribute `bracket_label_data` from which positions and strings are split.
 
+Bracket lines and labels are rendered in `Makie.parent(parent_scene(p))` (the
+blockscene / decoration layer) rather than the data-clipped axis scene. This
+ensures that brackets placed beyond the data extent (outside `[bb_x0, bb_x1]`)
+are not clipped by the axis camera. The derived attributes
+`:bracket_pixel_shapes` and `:bracket_label_pixel_positions` hold the
+corresponding blockscene pixel coordinates and are updated reactively whenever
+the scene viewport or camera changes.
+
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry.
 - `accessor::LineageGraphAccessor`: supplies the `children` callable used to
@@ -739,20 +747,70 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
         return Tuple{Symbol, Symbol}[(h, :center) for h in haligns]
     end
 
+    # Convert NaN-separated bracket line points to blockscene pixel coordinates.
+    # Depends on :pixel_projection so this reruns whenever viewport or camera changes.
+    map!(
+        p.attributes,
+        [:bracket_shapes, :pixel_projection],
+        :bracket_pixel_shapes,
+    ) do shapes, _
+        sc_vp = Makie.viewport(sc)[]
+        result = Point2f[]
+        for pt in shapes
+            if isnan(pt[1]) || isnan(pt[2])
+                push!(result, Point2f(NaN, NaN))
+            else
+                px = data_to_pixel(sc, pt)
+                push!(result, Point2f(
+                    Float32(sc_vp.origin[1]) + px[1],
+                    Float32(sc_vp.origin[2]) + px[2],
+                ))
+            end
+        end
+        return result
+    end
+
+    # Convert label anchor positions to blockscene pixel coordinates.
+    # Depends on :pixel_projection so this reruns whenever viewport or camera changes.
+    map!(
+        p.attributes,
+        [:bracket_label_positions, :pixel_projection],
+        :bracket_label_pixel_positions,
+    ) do positions, _
+        sc_vp = Makie.viewport(sc)[]
+        return Point2f[
+            Point2f(
+                Float32(sc_vp.origin[1]) + data_to_pixel(sc, pos)[1],
+                Float32(sc_vp.origin[2]) + data_to_pixel(sc, pos)[2],
+            )
+            for pos in positions
+        ]
+    end
+
+    # Dummy invisible Lines child in p keeps p.plots non-empty so that Makie's
+    # autolimits/boundingbox machinery can find a child plot with :clip_planes.
+    # An empty vector contributes no data to autolimit computation.
+    lines!(p, Point2f[]; visible = false)
+
+    # Render into the decoration scene (blockscene = Makie.parent(sc)) so that
+    # bracket geometry placed beyond the axis data extent is not clipped by the
+    # ax.scene orthographic camera. These sub-plots do NOT appear in p.plots.
+    decoration_sc = Makie.parent(sc)
+
     lines!(
-        p,
-        p[:bracket_shapes];
-        color = p[:color],
+        decoration_sc,
+        p[:bracket_pixel_shapes];
+        color   = p[:color],
         visible = p[:visible],
     )
     text!(
-        p,
-        p[:bracket_label_positions];
-        text = p[:bracket_label_strings],
+        decoration_sc,
+        p[:bracket_label_pixel_positions];
+        text     = p[:bracket_label_strings],
         fontsize = p[:fontsize],
-        color = p[:color],
-        align = p[:bracket_label_aligns],
-        visible = p[:visible],
+        color    = p[:color],
+        align    = p[:bracket_label_aligns],
+        visible  = p[:visible],
     )
     return p
 end
