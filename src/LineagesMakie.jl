@@ -50,6 +50,11 @@ export EdgeLayer,
     scalebarlayer!,
     lineageplot!
 
+# LineageAxis.jl is a plain include (not a submodule): Makie.@Block generates
+# esc(q) that references Makie internals by unqualified name, so everything must
+# be in the including module's scope. LineageAxis (type) is auto-exported by
+# the @Block macro; reset_limits! is exported manually below.
 include("LineageAxis.jl")
+export reset_limits!
 
 end

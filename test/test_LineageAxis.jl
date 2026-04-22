@@ -1,2 +1,257 @@
+# Tests for LineageAxis
+#
+# All tests use real CairoMakie scenes. CairoMakie re-exports all Makie types.
+
+import CairoMakie
+# Makie is a transitive dependency via CairoMakie; access it through CairoMakie.Makie
+# rather than declaring it as a direct test dependency.
+const Makie = CairoMakie.Makie
+using CairoMakie: Figure, Axis
+using CairoMakie: colorbuffer
+
+# ── Fixtures ──────────────────────────────────────────────────────────────────
+
+struct LATestNode
+    name::String
+    children::Vector{LATestNode}
+end
+
+#   root
+#   ├── ab
+#   │   ├── a
+#   │   └── b
+#   └── cd
+#       ├── c
+#       └── d
+const _LA_BALANCED_ROOT = LATestNode("root", [
+    LATestNode("ab", [
+        LATestNode("a", LATestNode[]),
+        LATestNode("b", LATestNode[]),
+    ]),
+    LATestNode("cd", [
+        LATestNode("c", LATestNode[]),
+        LATestNode("d", LATestNode[]),
+    ]),
+])
+
+const _LA_ACC = lineagegraph_accessor(_LA_BALANCED_ROOT; children = n -> n.children)
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _fresh_lax(; kwargs...)
+    fig = Figure(; size = (400, 300))
+    lax = LineageAxis(fig[1, 1]; kwargs...)
+    return fig, lax
+end
+
+function _plotted_lax(; lineageunits = nothing, lax_kwargs...)
+    fig, lax = _fresh_lax(; lax_kwargs...)
+    leaflayer = lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = lineageunits)
+    return fig, lax, leaflayer
+end
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
 @testset "LineageAxis" begin
+
+    @testset "construction and default attributes" begin
+        fig, lax = _fresh_lax()
+        @test lax isa LineageAxis
+        @test lax.display_polarity[] === :standard
+        @test lax.lineage_orientation[] === :left_to_right
+        @test lax.axis_polarity[] === :forward
+        @test lax.show_x_axis[] === false
+        @test lax.show_y_axis[] === false
+        @test lax.show_grid[] === false
+        @test lax.title[] == ""
+        @test lax.xlabel[] == ""
+        @test lax.ylabel[] == ""
+    end
+
+    @testset "lineageplot! on LineageAxis renders without error" begin
+        fig, lax, ll = _plotted_lax()
+        @test ll isa LeafLayer
+        @test lax.last_geom[] !== nothing
+        @test_nowarn colorbuffer(fig)
+    end
+
+    @testset "lineageplot! on plain Axis (no regression)" begin
+        fig = Figure(; size = (400, 300))
+        ax = Axis(fig[1, 1])
+        acc = lineagegraph_accessor(_LA_BALANCED_ROOT; children = n -> n.children)
+        ll = lineageplot!(ax, _LA_BALANCED_ROOT, acc)
+        @test ll isa LeafLayer
+        @test_nowarn colorbuffer(fig)
+    end
+
+    @testset "reset_limits! with :standard display_polarity" begin
+        fig, lax, _ = _plotted_lax(; display_polarity = :standard)
+        proj = Makie.camera(lax.scene).projection[]
+        # orthographic x-scale > 0: left < right (standard direction)
+        @test proj[1, 1] > 0
+    end
+
+    @testset "reset_limits! with :reversed display_polarity" begin
+        fig, lax, _ = _plotted_lax(; display_polarity = :reversed)
+        proj = Makie.camera(lax.scene).projection[]
+        # orthographic x-scale < 0: left > right (reversed direction)
+        @test proj[1, 1] < 0
+    end
+
+    @testset "lineage_orientation :right_to_left matches :reversed on :left_to_right" begin
+        fig_rtl, lax_rtl, _ = _plotted_lax(; lineage_orientation = :right_to_left)
+        fig_rev, lax_rev, _ = _plotted_lax(; display_polarity = :reversed)
+        proj_rtl = Makie.camera(lax_rtl.scene).projection[]
+        proj_rev = Makie.camera(lax_rev.scene).projection[]
+        # Both should have x-scale < 0; exact values match because the same
+        # geometry is used and the same effective_reversed=true path is taken.
+        @test proj_rtl[1, 1] < 0
+        @test proj_rev[1, 1] < 0
+        @test proj_rtl[1, 1] ≈ proj_rev[1, 1]
+    end
+
+    @testset "lineage_orientation :radial produces equal x and y extents" begin
+        fig, lax, _ = _plotted_lax(; lineage_orientation = :radial)
+        proj = Makie.camera(lax.scene).projection[]
+        # For a square viewport, x-scale == y-scale in the projection.
+        # Both are 1/half = 2/(right-left) = 2/(top-bottom).
+        @test proj[1, 1] ≈ proj[2, 2] atol = 1f-5
+    end
+
+    @testset "axis_polarity inferred from lineageunits when unlocked" begin
+        # :vertexheights and the default (which resolves to :vertexheights for a
+        # children-only accessor) should produce :backward.
+        fig1, lax1, _ = _plotted_lax(; lineageunits = :vertexheights)
+        @test lax1.axis_polarity[] === :backward
+
+        # Default (nothing) resolves to :vertexheights → :backward.
+        fig2, lax2, _ = _plotted_lax()
+        @test lax2.axis_polarity[] === :backward
+
+        # :vertexlevels and :vertexdepths are forward and require no special accessor.
+        fig3, lax3, _ = _plotted_lax(; lineageunits = :vertexlevels)
+        @test lax3.axis_polarity[] === :forward
+
+        fig4, lax4, _ = _plotted_lax(; lineageunits = :vertexdepths)
+        @test lax4.axis_polarity[] === :forward
+    end
+
+    @testset "axis_polarity not overwritten after manual override" begin
+        fig, lax = _fresh_lax()
+        # Setting to :backward (different from default :forward) fires the lock observer.
+        lax.axis_polarity[] = :backward
+        @test lax._polarity_locked[]
+        # lineageplot! with :vertexlevels would infer :forward, but lock prevents it.
+        # :vertexlevels works with a children-only accessor.
+        lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = :vertexlevels)
+        @test lax.axis_polarity[] === :backward
+    end
+
+    @testset "_polarity_locked fires on user change, not on default init" begin
+        fig, lax = _fresh_lax()
+        # Default attribute assignment (:forward) must NOT trigger the lock.
+        @test !lax._polarity_locked[]
+        # Explicit user assignment triggers the lock.
+        lax.axis_polarity[] = :backward
+        @test lax._polarity_locked[]
+    end
+
+    @testset "show_x_axis = false (default) — no visible tick marks" begin
+        fig, lax, _ = _plotted_lax()
+        @test lax.show_x_axis[] === false
+        # colorbuffer should succeed without tick-related errors.
+        @test_nowarn colorbuffer(fig)
+    end
+
+    @testset "show_x_axis = true — tick elements become visible" begin
+        fig, lax, _ = _plotted_lax()
+        lax.show_x_axis[] = true
+        # Render confirms no error when ticks are active.
+        @test_nowarn colorbuffer(fig)
+        # blockscene should contain at least one scatter plot that is now visible
+        # (the tick-mark scatter! added by _wire_x_axis!).
+        scatter_plots = filter(p -> p isa Makie.Scatter, lax.blockscene.plots)
+        @test !isempty(scatter_plots)
+        @test any(p -> p.visible[], scatter_plots)
+    end
+
+    @testset "show_x_axis reactive toggle" begin
+        fig, lax, _ = _plotted_lax()
+        lax.show_x_axis[] = true
+        scatter_plots = filter(p -> p isa Makie.Scatter, lax.blockscene.plots)
+        @test any(p -> p.visible[], scatter_plots)
+        # Toggling back to false hides the ticks.
+        lax.show_x_axis[] = false
+        @test !any(p -> p.visible[], scatter_plots)
+    end
+
+    @testset "autolimits! re-applies limits from stored geometry" begin
+        fig, lax, _ = _plotted_lax()
+        proj_before = Makie.camera(lax.scene).projection[]
+        Makie.autolimits!(lax)
+        proj_after = Makie.camera(lax.scene).projection[]
+        @test proj_before ≈ proj_after
+    end
+
+    @testset "tightlimits! is a no-op" begin
+        fig, lax, _ = _plotted_lax()
+        proj_before = Makie.camera(lax.scene).projection[]
+        Makie.tightlimits!(lax)
+        proj_after = Makie.camera(lax.scene).projection[]
+        @test proj_before ≈ proj_after
+    end
+
+    @testset "reset_limits! one-arg no-ops before lineageplot!" begin
+        fig, lax = _fresh_lax()
+        @test_nowarn Makie.reset_limits!(lax)
+        @test lax.last_geom[] === nothing
+    end
+
+    @testset "data_to_pixel consistent with projection after lineageplot!" begin
+        fig, lax, _ = _plotted_lax()
+        colorbuffer(fig)   # force scene layout / viewport computation
+        scene = lax.scene
+        vp = Makie.viewport(scene)[]
+        # Only test if viewport is non-degenerate (CairoMakie assigns real pixels).
+        if !iszero(Makie.widths(vp)[1]) && !iszero(Makie.widths(vp)[2])
+            geom = lax.last_geom[]
+            bb = geom.boundingbox
+            left_pt  = Makie.Point2f(Makie.minimum(bb)[1], (Makie.minimum(bb)[2] + Makie.maximum(bb)[2]) / 2)
+            right_pt = Makie.Point2f(Makie.maximum(bb)[1], (Makie.minimum(bb)[2] + Makie.maximum(bb)[2]) / 2)
+            px_left  = data_to_pixel(scene, left_pt)
+            px_right = data_to_pixel(scene, right_pt)
+            # For :standard, leftward data maps to smaller pixel x.
+            @test px_left[1] < px_right[1]
+        end
+    end
+
+    @testset "display_polarity :reversed flips data_to_pixel ordering" begin
+        fig, lax, _ = _plotted_lax(; display_polarity = :reversed)
+        colorbuffer(fig)
+        scene = lax.scene
+        vp = Makie.viewport(scene)[]
+        if !iszero(Makie.widths(vp)[1]) && !iszero(Makie.widths(vp)[2])
+            geom = lax.last_geom[]
+            bb = geom.boundingbox
+            left_pt  = Makie.Point2f(Makie.minimum(bb)[1], (Makie.minimum(bb)[2] + Makie.maximum(bb)[2]) / 2)
+            right_pt = Makie.Point2f(Makie.maximum(bb)[1], (Makie.minimum(bb)[2] + Makie.maximum(bb)[2]) / 2)
+            px_left  = data_to_pixel(scene, left_pt)
+            px_right = data_to_pixel(scene, right_pt)
+            # For :reversed, leftward data maps to larger pixel x.
+            @test px_left[1] > px_right[1]
+        end
+    end
+
+    @testset "multiple lineageplot! calls do not error" begin
+        fig, lax = _fresh_lax()
+        acc = lineagegraph_accessor(_LA_BALANCED_ROOT; children = n -> n.children)
+        @test_nowarn lineageplot!(lax, _LA_BALANCED_ROOT, acc)
+        @test_nowarn lineageplot!(lax, _LA_BALANCED_ROOT, acc)
+    end
+
+    @testset "get_scene returns the plotting scene" begin
+        fig, lax = _fresh_lax()
+        @test Makie.get_scene(lax) === lax.scene
+    end
+
 end
