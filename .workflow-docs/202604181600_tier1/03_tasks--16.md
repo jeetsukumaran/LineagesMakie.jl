@@ -1,7 +1,7 @@
 # Tasks for Issue 16: LineageAxis decoration layout and annotation placement
 
-Parent issue: Issue 16 (visual correctness; follows Issue 15 and addresses the
-remaining defects visible in `examples/lineageplot_ex2.png`)
+Parent issue: Issue 16 (visual correctness; follows completed Issue 15 and
+addresses the remaining defects visible in `examples/lineageplot_ex2.png`)
 Parent PRD: `.workflow-docs/202604181600_tier1/01_prd.md`
 
 ## Governance
@@ -65,12 +65,13 @@ but no title text is rendered anywhere in the figure.
 The top-left and top-right panels were constructed with `xlabel = ...`, but no
 xlabel text is rendered.
 
-### Defect C — x-axis tick labels are not placed in a stable dedicated axis band
+### Defect C — x-axis ticks are not panel-owned, and visible tick marks are missing
 
 The bottom-left panel has `show_x_axis = true`, but its tick labels appear on
 the row divider above the panel rather than in a dedicated x-axis band below the
-plot area. More generally, `_wire_x_axis!` currently draws ticks directly into
-`blockscene` without any reserved band for them.
+plot area. More generally, `_wire_x_axis!` currently draws tick labels directly
+into `blockscene` without any reserved band for them, and its current tick-mark
+primitive is effectively invisible (`markersize = 0`).
 
 ### Defect D — leaf labels are clipped at the plot boundary / figure boundary
 
@@ -86,14 +87,14 @@ leaf labels at outer panel edges are truncated or pressed against the panel seam
 inner plotting scene and reserves no external left/right gutter for annotations.
 As a result, clade labels and leaf labels compete for the same inter-panel seam.
 
-### Defect F — radial leaf-label placement is still rectangular-only
+### Defect F — radial leaf labels still use rectangular scene and offset logic
 
 In the radial panel, `LeafLabelLayer` still uses the rectangular default logic:
-a constant `Vec2f(4, 0)` offset and a fixed alignment. That is wrong for radial
-layouts. Labels on the left half of the circle should move outward to the left,
-labels on the right half should move outward to the right, and labels near the
-top/bottom should be offset along their outward radial direction rather than by
-a global +x shift.
+a constant `Vec2f(4, 0)` offset, a fixed alignment, and the data-clipped text
+target. That is wrong for radial layouts. Labels on the left half of the circle
+should move outward to the left, labels on the right half should move outward
+to the right, and labels near the top/bottom should be offset along their
+outward radial direction rather than by a global +x shift.
 
 ---
 
@@ -122,7 +123,8 @@ Current placement is inconsistent:
 
 - `LeafLabelLayer` renders text into the data scene (`p`).
 - `CladeLabelLayer` renders into the decoration scene (`Makie.parent(sc)`).
-- `_wire_x_axis!` renders tick labels directly into `blockscene`.
+- `_wire_x_axis!` renders tick labels directly into `blockscene`, but without a
+  dedicated axis-band contract and without visible tick marks.
 - `title` and `xlabel` attributes exist on `LineageAxis` but are never rendered.
 
 This is why some annotations clip against the data viewport while others escape
@@ -145,12 +147,16 @@ The Issue 16 fix must satisfy all of the following:
 1. Every `LineageAxis` must reserve its own decoration space inside the grid
    cell: title band, plot area, x-axis band, xlabel band, and left/right outer
    annotation gutters.
-2. Titles, x-axis tick labels, and xlabels must render in those reserved bands,
-   not by ad hoc placement against the raw scene viewport.
-3. Rectangular leaf labels must no longer be clipped by the data viewport.
+2. Titles, x-axis tick marks, x-axis tick labels, and xlabels must render in
+   those reserved bands, not by ad hoc placement against the raw scene
+   viewport.
+3. Leaf labels in both rectangular and radial layouts must no longer be clipped
+   by the data viewport.
 4. Clade brackets and clade labels must remain outside the data extent but
    inside the owning panel's reserved gutter.
-5. Radial leaf labels must be placed outward from the circular layout.
+5. Radial leaf labels must be placed outward from the circular layout and must
+   use the same panel-owned decoration-scene rendering model as rectangular
+   leaf labels.
 6. The fix must preserve the correct orientation-aware semantics already added
    in Issue 14 and the clade-bracket blockscene rendering added in Issue 15.
 
@@ -208,8 +214,8 @@ labels in `lineageplot_ex2.jl` do not collide across the center seam.
 ### 2. Render title, x-axis ticks, and xlabel from `LineageAxis` using the reserved bands
 
 **Type**: WRITE
-**Output**: `title`, x-axis tick labels, and `xlabel` render in the correct
-panel-owned bands.
+**Output**: `title`, x-axis tick marks and labels, and `xlabel` render in the
+correct panel-owned bands.
 **Depends on**: Task 1
 
 #### Step A — title and xlabel rendering
@@ -232,8 +238,14 @@ Do not place ticks by "10 px below the raw scene viewport" anymore.
 Instead:
 
 - compute tick x positions from data coordinates exactly as now via `data_to_pixel`
-- place their y coordinate in the center or lower portion of `xaxis_band_rect`
-- ensure the tick-label text is owned by the current panel, not by the inter-row seam
+- place a short visible tick mark and its label in the center or lower portion
+  of `xaxis_band_rect`
+- ensure both the tick-mark primitive and the tick-label text are owned by the
+  current panel, not by the inter-row seam
+
+Do **not** preserve the current zero-size scatter placeholder.
+Replace it with a visible primitive or a non-zero-sized marker arrangement that
+actually renders tick marks.
 
 The x-axis wiring must remain decoration-scene based (`blockscene`), because it
 must not be clipped by the data viewport.
@@ -242,7 +254,7 @@ must not be clipped by the data viewport.
 
 - `title = ""` should hide the title text
 - `xlabel = ""` should hide the xlabel text
-- `show_x_axis = false` should hide the x-axis tick labels
+- `show_x_axis = false` should hide the x-axis tick marks and tick labels
 
 Do not introduce new public attributes unless they are truly required.
 
@@ -270,6 +282,9 @@ For non-radial layouts:
 
 This task must **not** push labels farther out by changing data limits. The fix
 must be a rendering-target and coordinate-space correction, not a geometry hack.
+Implement this in a way that Task 4 can reuse the same blockscene
+pixel-position pipeline for radial labels; do not leave decoration-scene
+rendering as a rectangular-only special case.
 
 #### Alignment behavior
 
@@ -305,11 +320,16 @@ this from ad hoc coordinate heuristics if the relevant orientation value can be
 threaded explicitly; if you need the orientation, add it as a proper attribute
 from `LineagePlot` down to `LeafLabelLayer`.
 
+This task extends Task 3's decoration-scene rendering path.
+Radial labels must **not** continue to render via `text!(p, ...)` in the
+data-clipped plot scene.
+
 For each radial leaf label:
 
 1. Compute the outward direction from the layout center to the leaf position.
 2. Normalize it.
-3. Apply the label offset in **pixel space** along that outward direction.
+3. Convert the leaf anchor to blockscene pixel coordinates and apply the label
+   offset in **pixel space** along that outward direction.
 4. Choose horizontal alignment so labels on the left half of the circle align
    rightward and labels on the right half align leftward.
 5. Keep labels horizontal in Tier 1 unless the codebase already has an approved
@@ -350,8 +370,9 @@ Add new testsets covering at least:
      smaller than `lax.layoutobservables.computedbbox[]` in at least the
 directions where title/x-axis/xlabel/gutters are active.
 
-4. **X-axis ticks live in the panel-owned x-axis band**
+4. **X-axis tick marks and labels live in the panel-owned x-axis band**
    - Construct a lower-row panel figure analogous to `lineageplot_ex2.jl`.
+   - Assert that the tick-mark geometry is visible or non-empty.
    - Assert that the tick-label positions belong to the same blockscene as the
      owning panel and lie outside the plot viewport but inside the panel bbox.
 
@@ -363,8 +384,9 @@ Add new testsets covering at least:
    - Force layout with `colorbuffer(fig)`.
    - Assert that the derived pixel-position vector is non-empty and finite.
 
-2. **Radial leaf labels use mixed left/right alignments**
+2. **Radial leaf labels use blockscene pixel positions and mixed left/right alignments**
    - Build a radial layout with leaves on both halves of the circle.
+   - Assert that the derived pixel-position vector is non-empty and finite.
    - Assert that the resolved alignments are not all identical and reflect
      outward placement.
 
@@ -410,10 +432,10 @@ julia --project=examples examples/lineageplot_ex2.jl
 
 | Panel | Expected |
 |-------|----------|
-| Panel 1 (forward, `:edgelengths`) | Title visible. X-axis tick labels below the plot in its own x-axis band. Xlabel visible. Leaf labels on the right remain fully readable. Clade brackets/labels occupy the panel's right gutter and do not collide with panel 2. |
-| Panel 2 (backward, `:vertexheights`) | Title visible. X-axis tick labels below the plot in its own x-axis band. Xlabel visible. Leaf labels and clade brackets/labels occupy the panel's left gutter and do not collide with panel 1. |
-| Panel 3 (`:right_to_left`, forward) | Title visible. X-axis tick labels below the plot, not on the row divider. Leaf labels and clade brackets/labels occupy the left gutter and remain fully readable. |
-| Panel 4 (radial) | Title visible. Radial leaf labels are offset outward from the circle; left-half labels do not use the same +x shift as right-half labels. No clade brackets are shown. |
+| Panel 1 (forward, `:edgelengths`) | Title visible. Visible x-axis tick marks and tick labels sit below the plot in the panel's own x-axis band. Xlabel visible. Leaf labels on the right remain fully readable. Clade brackets/labels occupy the panel's right gutter and do not collide with panel 2. |
+| Panel 2 (backward, `:vertexheights`) | Title visible. Visible x-axis tick marks and tick labels sit below the plot in the panel's own x-axis band. Xlabel visible. Leaf labels and clade brackets/labels occupy the panel's left gutter and do not collide with panel 1. |
+| Panel 3 (`:right_to_left`, forward) | Title visible. Visible x-axis tick marks and tick labels render below the plot, not on the row divider. Leaf labels and clade brackets/labels occupy the left gutter and remain fully readable. |
+| Panel 4 (radial) | Title visible. Radial leaf labels are offset outward from the circle, rendered in the panel-owned decoration scene, and left-half labels do not use the same +x shift as right-half labels. No clade brackets are shown. |
 
 `lineageplot_ex1.png` should remain visually unchanged except for any newly
 implemented title/xlabel/x-axis decoration behavior that is already implied by
@@ -434,18 +456,20 @@ its example code.
 [ ] lax.scene now uses an inset plot rect, not the full block bbox
 [ ] Title text renders from LineageAxis when title != ""
 [ ] Xlabel text renders from LineageAxis when xlabel != ""
-[ ] _wire_x_axis! now places ticks in a dedicated x-axis band
+[ ] _wire_x_axis! now places visible tick marks and labels in a dedicated x-axis band
 [ ] Rectangular leaf labels render in blockscene pixel coordinates
 [ ] Rectangular leaf labels no longer depend on the data-clipped text! target
+[ ] Radial leaf labels render in blockscene pixel coordinates
+[ ] Radial leaf labels no longer depend on the data-clipped text! target
 [ ] Radial leaf labels use outward placement logic
 [ ] New testsets added to test/test_LineageAxis.jl
 [ ] New testsets added to test/test_Layers.jl
 [ ] New integration regression test added to test/test_Integration.jl
 [ ] julia --project=test test/runtests.jl passes
 [ ] examples/lineageplot_ex2.jl regenerated successfully
-[ ] Titles, xlabels, leaf labels, and clade labels are readable and panel-owned
+[ ] Titles, xlabels, leaf labels, clade labels, and x-axis ticks are readable and panel-owned
 [ ] No visual overlap remains across the top-panel center seam
-[ ] Bottom-left x-axis tick labels render below the panel, not on the row divider
+[ ] Bottom-left x-axis tick marks and labels render below the panel, not on the row divider
 ```
 
 ---

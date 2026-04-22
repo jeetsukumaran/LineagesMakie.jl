@@ -1,6 +1,7 @@
 # Tasks for Issue 18: Clade highlight rects must remain clade-local after real viewport resolution
 
-Parent issue: Issue 18 (visual correctness; supplements Tier 1 and follows Issues 15–17)
+Parent issue: Issue 18 (visual correctness; supplements Tier 1, follows
+Issues 15–16, and replaces the superseded Issue 17 tasking)
 Parent PRD: `.workflow-docs/202604181600_tier1/01_prd.md`
 
 ## Governance
@@ -18,6 +19,14 @@ intended geometry for non-root clade highlights.
 No architectural rewrite is required.
 The work is confined to the current highlight-rectangle computation path and
 its tests.
+
+---
+
+## Status
+
+This is the active replacement for the superseded highlight tasking archived at
+`.workflow-docs/202604181600_tier1/superseded-tasks/03_tasks--17.md`.
+Do **not** implement the superseded Issue 17 tasking.
 
 ---
 
@@ -45,7 +54,7 @@ The fix must be derived from those exact details.
 
 | File | Sections to read |
 |------|------------------|
-| `.workflow-docs/202604181600_tier1/03_tasks--15.md` | Read in full for the expected task-file structure and level of specificity. |
+| `.workflow-docs/202604181600_tier1/completed-tasks/03_tasks--15.md` | Read in full for the expected task-file structure and level of specificity. |
 | `src/Layers.jl` | `LeafLabelLayer` and `CladeLabelLayer` — contrast cases for viewport-reactive geometry. Read them fully, but do **not** assume the same rendering target is correct for highlights. |
 | `.workflow-docs/202604181600_tier1/01_prd.md` | Read once for Tier-1 scope and terminology. |
 

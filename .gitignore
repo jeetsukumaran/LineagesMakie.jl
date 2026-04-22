@@ -4,6 +4,7 @@
 # =====================================
 
 .vscode/*
+.codex
 .workflow-docs/LineagesMakie.jl.code-workspace
 
 # =====================================
