@@ -981,7 +981,7 @@ This applies to all five modules. Violation is a correctness bug.
 
 ### Target reference capacities document status
 
-`.workflow-docs/00-design/target-reference-capacities.md` is the comprehensive
+`.design/target-reference-capacities.md` is the comprehensive
 vision document describing the desired capability space, feature vocabulary,
 and tier classifications. It also contains the full authoritative description
 of `LineageAxis` as a semantic axis abstraction in section 0. All API decisions
