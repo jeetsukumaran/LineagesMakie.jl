@@ -47,7 +47,8 @@ using Makie:
 using Makie: make_block_docstring
 
 # _resolve_lineageunits_stub is private (unexported) but needed by lineageplot!.
-using .Layers: _resolve_lineageunits_stub
+# LineagePlot is the return type of the updated lineageplot! method.
+using .Layers: _resolve_lineageunits_stub, LineagePlot
 # import (not using) to extend lineageplot! with a LineageAxis-specific method.
 import .Layers: lineageplot!
 
@@ -367,19 +368,21 @@ end
 
 """
     lineageplot!(ax::LineageAxis, rootvertex, accessor::LineageGraphAccessor;
-                 lineageunits=nothing, kwargs...) -> LeafLayer
+                 lineageunits=nothing, kwargs...) -> LineagePlot
 
 Render a lineage graph on `ax`.
 
 When `ax` is a `LineageAxis`, this method additionally:
 1. Infers `ax.axis_polarity` from `lineageunits` unless the user has explicitly
    set it (detected by the `_polarity_locked` flag wired in `initialize_block!`).
-2. Calls `reset_limits!(ax, geom)` after computing the layout so that axis
-   limits fit the lineage graph bounding box with `display_polarity` and
-   `lineage_orientation` applied.
+2. Calls `reset_limits!(ax, geom)` after the recipe sets `lp[:computed_geom]`
+   so that axis limits fit the lineage graph bounding box with `display_polarity`
+   and `lineage_orientation` applied.
+3. Registers a reactive `on` callback so that if `rootvertex` or `lineageunits`
+   changes later, `reset_limits!` is reapplied automatically.
 
-All keyword arguments are forwarded to the individual layer recipes.
-See `lineageplot!(ax::Makie.Axis, ...)` for the full list.
+All keyword arguments are forwarded to the `LineagePlot` composite recipe.
+See `lineageplot!` for the full attribute list.
 """
 function lineageplot!(
         ax::LineageAxis,
@@ -387,24 +390,32 @@ function lineageplot!(
         accessor::LineageGraphAccessor;
         lineageunits = nothing,
         kwargs...,
-    )::LeafLayer
+    )::LineagePlot
     resolved_lu = _resolve_lineageunits_stub(lineageunits, accessor)
 
     if !ax._polarity_locked[]
         ax.axis_polarity[] = _infer_axis_polarity(resolved_lu)
     end
 
-    geom = rectangular_layout(rootvertex, accessor; lineageunits = resolved_lu)
-    reset_limits!(ax, geom)
+    # Route to ax.scene (not ax) to avoid recursive dispatch through the
+    # @recipe-generated lineageplot! which also accepts AbstractAxis.
+    # plot!(ax::AbstractAxis, ...) at figureplotting.jl:436 would call
+    # reset_limits!(ax) after every sub-layer plot! — wasteful and premature
+    # before computed_geom is populated. Going directly to ax.scene bypasses
+    # the AbstractAxis protocol; we call reset_limits! manually below.
+    lp = lineageplot!(ax.scene, rootvertex, accessor; lineageunits = lineageunits, kwargs...)
 
-    edgelayer!(ax, geom; kwargs...)
-    vertexlayer!(ax, geom, accessor; kwargs...)
-    leaflabellayer!(ax, geom, accessor)
-    vertexlabellayer!(ax, geom, accessor)
-    cladehighlightlayer!(ax, geom, accessor)
-    cladelabellayer!(ax, geom, accessor)
-    scalebarlayer!(ax, geom, accessor, resolved_lu)
-    return leaflayer!(ax, geom, accessor; kwargs...)
+    # Apply initial limits. lp[:computed_geom][] is already populated because
+    # map! nodes run synchronously during plot! construction (Makie 0.24).
+    reset_limits!(ax, lp[:computed_geom][])
+
+    # Register reactive limit updates: whenever rootvertex, accessor, or
+    # lineageunits changes, computed_geom fires and we re-apply limits.
+    on(ax.scene, lp[:computed_geom]) do geom
+        reset_limits!(ax, geom)
+    end
+
+    return lp
 end
 
 # LineageAxis is auto-exported by the @Block macro.

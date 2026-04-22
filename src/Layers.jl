@@ -8,7 +8,7 @@ import Makie
 using Makie: @recipe, parent_scene, Axis, lines!, scatter!, text!, poly!, Point2f, Vec2f, Rect2f
 using LineagesMakie.CoordTransform: register_pixel_projection!, pixel_offset_to_data_delta
 using ..Accessors: LineageGraphAccessor, is_leaf, leaves
-using ..Geometry: LineageGraphGeometry, rectangular_layout
+using ..Geometry: LineageGraphGeometry, rectangular_layout, circular_layout
 
 # ── EdgeLayer ─────────────────────────────────────────────────────────────────
 
@@ -809,62 +809,314 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
     return p
 end
 
-# ── lineageplot! stub ─────────────────────────────────────────────────────────
+# ── LineagePlot composite recipe ──────────────────────────────────────────────
 
 """
-    lineageplot!(ax::Axis, rootvertex, accessor::LineageGraphAccessor;
-                 lineageunits = nothing, kwargs...) -> LeafLayer
+    lineageplot!(ax, rootvertex, accessor::LineageGraphAccessor; kwargs...) -> LineagePlot
 
-Tier-1 composite entry point. Computes a rectangular layout from `rootvertex`
-and `accessor` and renders all visual layers: `EdgeLayer`, `VertexLayer`,
-`LeafLayer`, `LeafLabelLayer`, `VertexLabelLayer`, `CladeHighlightLayer`,
-`CladeLabelLayer`, and `ScaleBarLayer`.
+Composite entry point. Computes a rectangular or circular layout from
+`rootvertex` and `accessor` and renders all visual layers: `EdgeLayer`,
+`VertexLayer`, `LeafLayer`, `LeafLabelLayer`, `VertexLabelLayer`,
+`CladeHighlightLayer`, `CladeLabelLayer`, and `ScaleBarLayer`.
 
 `lineageunits` selects how process coordinates are computed (see
 `Geometry.rectangular_layout` for all values). `nothing` (default) detects
 the appropriate value automatically: `:edgelengths` when an `edgelength`
 accessor is present, `:vertexheights` otherwise.
 
-`CladeHighlightLayer` and `CladeLabelLayer` are rendered with empty
-`clade_vertices` by default (no highlights or brackets). Call
-`cladehighlightlayer!` and `cladelabellayer!` directly to activate them with
-specific MRCA vertices.
+`lineage_orientation = :radial` selects `Geometry.circular_layout`; all other
+values use `Geometry.rectangular_layout`.
 
-`ScaleBarLayer` visibility defaults to `true` for `:edgelengths`,
-`:branchingtime`, and `:coalescenceage`, and `false` for topological values.
-
-The full compositing of all layers via a true `@recipe LineagePlot` is Issue 12.
+All layer attributes are exposed as namespaced keyword arguments (e.g.,
+`edge_color`, `leaf_label_func`, `vertex_label_threshold`). All are Observable-
+native: updating `lp.edge_color = :red` changes the rendered edge color without
+re-calling `lineageplot!`. The `rootvertex` argument may be a plain value or an
+`Observable`; Makie wraps plain values in Observables automatically.
 
 # Arguments
-- `ax::Axis`: the Makie axis to render into.
+- `ax`: any Makie axis or scene.
 - `rootvertex`: the root vertex of the lineage graph.
 - `accessor::LineageGraphAccessor`: accessor callables supplying `children`
   and optional `edgelength`, `vertexvalue`, etc.
+
+# Keyword attributes
 - `lineageunits`: `nothing` or a `Symbol`; see `Geometry.rectangular_layout`.
+- `lineage_orientation`: `:left_to_right` (default), `:right_to_left`, or
+  `:radial`. `:radial` triggers `circular_layout`.
+- `edge_color`, `edge_linewidth`, `edge_linestyle`, `edge_alpha`,
+  `edge_visible`: forwarded to `EdgeLayer`.
+- `vertex_marker`, `vertex_color`, `vertex_markersize`, `vertex_strokecolor`,
+  `vertex_alpha`, `vertex_visible`: forwarded to `VertexLayer`.
+- `leaf_marker`, `leaf_color`, `leaf_markersize`, `leaf_strokecolor`,
+  `leaf_alpha`, `leaf_visible`: forwarded to `LeafLayer`.
+- `leaf_label_func`, `leaf_label_font`, `leaf_label_fontsize`,
+  `leaf_label_color`, `leaf_label_offset`, `leaf_label_italic`,
+  `leaf_label_align`, `leaf_label_visible`: forwarded to `LeafLabelLayer`.
+- `vertex_label_func`, `vertex_label_threshold`, `vertex_label_position`,
+  `vertex_label_font`, `vertex_label_fontsize`, `vertex_label_color`,
+  `vertex_label_visible`: forwarded to `VertexLabelLayer`.
+- `clade_vertices`: vector of MRCA vertices shared by `CladeHighlightLayer`
+  and `CladeLabelLayer`. Default `Any[]`.
+- `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`,
+  `clade_highlight_visible`: forwarded to `CladeHighlightLayer`.
+- `clade_label_func`, `clade_label_color`, `clade_label_fontsize`,
+  `clade_label_offset`, `clade_label_visible`: forwarded to `CladeLabelLayer`.
+- `scalebar_position`, `scalebar_length`, `scalebar_label`, `scalebar_color`,
+  `scalebar_linewidth`, `scalebar_auto_visible`: forwarded to `ScaleBarLayer`.
 
 # Returns
-The `LeafLayer` plot object.
+The `LineagePlot` plot object. Sub-layer recipes are accessible as children via
+`lp.plots` (e.g. `filter(p -> p isa EdgeLayer, lp.plots)`).
+
+# Derived ComputeGraph attributes
+- `lp[:computed_geom][]` — current `LineageGraphGeometry`.
+- `lp[:resolved_lineageunits][]` — resolved `lineageunits` `Symbol`.
 """
-function lineageplot!(
-        ax::Axis,
-        rootvertex,
-        accessor::LineageGraphAccessor;
-        lineageunits = nothing,
-        kwargs...,
-    )::LeafLayer
-    resolved_lu = _resolve_lineageunits_stub(lineageunits, accessor)
-    geom = rectangular_layout(rootvertex, accessor; lineageunits = resolved_lu)
-    edgelayer!(ax, geom; kwargs...)
-    vertexlayer!(ax, geom, accessor; kwargs...)
-    leaflabellayer!(ax, geom, accessor)
-    vertexlabellayer!(ax, geom, accessor)
-    cladehighlightlayer!(ax, geom, accessor)
-    cladelabellayer!(ax, geom, accessor)
-    scalebarlayer!(ax, geom, accessor, resolved_lu)
-    return leaflayer!(ax, geom, accessor; kwargs...)
+@recipe LineagePlot (rootvertex, accessor) begin
+    "How the lineage axis is embedded in the 2D scene: :left_to_right, :right_to_left, or :radial."
+    lineage_orientation = :left_to_right
+    "Selects how process coordinates are computed. nothing triggers auto-detection."
+    lineageunits = nothing
+
+    # ── EdgeLayer ─────────────────────────────────────────────────────────────
+    "Edge color; uniform Makie color or (fromvertex, tovertex) -> color function."
+    edge_color = :black
+    edge_linewidth = 1.0
+    edge_linestyle = :solid
+    edge_alpha = 1.0
+    edge_visible = true
+
+    # ── VertexLayer ───────────────────────────────────────────────────────────
+    vertex_marker = :circle
+    vertex_color = :black
+    vertex_markersize = 8
+    vertex_strokecolor = :black
+    vertex_alpha = 1.0
+    vertex_visible = true
+
+    # ── LeafLayer ─────────────────────────────────────────────────────────────
+    leaf_marker = :circle
+    leaf_color = :black
+    leaf_markersize = 8
+    leaf_strokecolor = :black
+    leaf_alpha = 1.0
+    leaf_visible = true
+
+    # ── LeafLabelLayer ────────────────────────────────────────────────────────
+    "Callable vertex -> String for leaf labels; nothing uses vertexvalue or string(v)."
+    leaf_label_func = nothing
+    leaf_label_font = :regular
+    leaf_label_fontsize = 12
+    leaf_label_color = :black
+    "Pixel-space offset from leaf position. Default: 4 px rightward."
+    leaf_label_offset = Makie.Vec2f(4, 0)
+    leaf_label_italic = false
+    leaf_label_align = (:left, :center)
+    leaf_label_visible = true
+
+    # ── VertexLabelLayer ──────────────────────────────────────────────────────
+    "Callable vertex -> Any supplying vertex label values."
+    vertex_label_func = (v -> "")
+    "Predicate vertex -> Bool; only vertices returning true are labelled."
+    vertex_label_threshold = (v -> true)
+    "Label position: :vertex or :toward_parent."
+    vertex_label_position = :vertex
+    vertex_label_font = :regular
+    vertex_label_fontsize = 10
+    vertex_label_color = :gray50
+    vertex_label_visible = true
+
+    # ── CladeHighlightLayer (shares clade_vertices with CladeLabelLayer) ──────
+    "Vector of MRCA vertices whose subtrees are highlighted and labelled."
+    clade_vertices = Any[]
+    clade_highlight_color = Makie.RGBAf(0.2f0, 0.6f0, 1.0f0, 0.15f0)
+    clade_highlight_alpha = 0.15
+    "Pixel-space expansion of clade bounding box on each side."
+    clade_highlight_padding = Makie.Vec2f(4, 4)
+    clade_highlight_visible = true
+
+    # ── CladeLabelLayer ───────────────────────────────────────────────────────
+    "Callable mrca -> String producing the bracket label."
+    clade_label_func = (v -> "")
+    clade_label_color = :black
+    clade_label_fontsize = 11
+    "Pixel-space offset from the rightmost leaf position to the bracket bar."
+    clade_label_offset = Makie.Vec2f(6, 0)
+    clade_label_visible = true
+
+    # ── ScaleBarLayer ─────────────────────────────────────────────────────────
+    scalebar_position = (:left, :bottom)
+    "Bar length in data units; nothing → 10% of process-coordinate span."
+    scalebar_length = nothing
+    scalebar_label = ""
+    scalebar_color = :black
+    scalebar_linewidth = 1.5f0
+    "nothing → derived from lineageunits; Bool overrides auto-visibility."
+    scalebar_auto_visible = nothing
 end
 
-export lineageplot!,
+function Makie.plot!(lp::LineagePlot)::LineagePlot
+    # Step 1: Resolve lineageunits Symbol reactively.
+    # This derived node feeds both the layout computation and the ScaleBar
+    # visibility resolution, ensuring both update when lineageunits changes.
+    # _initial_lu captures the first run's value for use as ScaleBarLayer's
+    # non-reactive third positional arg. Ref{Symbol} gives JET a concrete type,
+    # avoiding the union-typed `lp.lineageunits[]` / `lp.accessor[]` pattern.
+    _initial_lu = Ref{Symbol}(:vertexheights)
+    map!(lp.attributes, [:lineageunits, :accessor], :resolved_lineageunits) do lu, acc
+        sym = _resolve_lineageunits_stub(lu, acc)::Symbol
+        _initial_lu[] = sym
+        return sym
+    end
+
+    # Step 2: Compute the full layout geometry reactively.
+    # The ComputeGraph fires this closure whenever any of the four inputs
+    # changes, recomputing the geometry and notifying all downstream nodes.
+    #
+    # accessor is stored as Ref{Any} inside the ComputeGraph (per Makie
+    # compute-plots.jl:394: `attr[sym].value = RefValue{Any}(arg)`). The
+    # type assertion `acc::LineageGraphAccessor` narrows the type for dispatch.
+    # This is a justified exception to STYLE-julia.md §1.12 (existential
+    # parametricity): the accessor type parameters C,E,V,B,CA,VC,VP are
+    # determined at call time and cannot be known at recipe definition time.
+    # Same pattern as LineageAxis.last_geom::Observable{Any}.
+    map!(
+        lp.attributes,
+        [:rootvertex, :accessor, :resolved_lineageunits, :lineage_orientation],
+        :computed_geom,
+    ) do rv, acc, lu, lo
+        resolved_acc = acc::LineageGraphAccessor
+        return if lo === :radial
+            circular_layout(rv, resolved_acc; lineageunits = lu)
+        else
+            rectangular_layout(rv, resolved_acc; lineageunits = lu)
+        end
+    end
+
+    # Step 3: Resolve ScaleBar visibility at the composite level.
+    # ScaleBarLayer's third positional arg (lineageunits_val::Symbol) is used
+    # inside its plot! only when scalebar_auto_visible === nothing. By resolving
+    # visibility here and passing a Bool as scalebar_auto_visible, the sub-layer
+    # always takes the Bool path and ignores its own lineageunits_val inference.
+    # This avoids passing a ComputeGraph Computed node as a positional arg to
+    # scalebarlayer! (unsupported pattern in Makie 0.24).
+    map!(
+        lp.attributes,
+        [:resolved_lineageunits, :scalebar_auto_visible],
+        :resolved_scalebar_visible,
+    ) do lu, av
+        return av === nothing ? _scalebar_visible(lu) : av::Bool
+    end
+
+    # Step 4: Call all 8 sub-layer recipes, passing ComputeGraph node handles
+    # as positional arguments where possible.
+    #
+    # Reactive chain:
+    #   rootvertex changes
+    #     → :computed_geom recomputes
+    #       → each sub-layer's map! on [:geom, ...] reruns
+    #         → render updates
+    #
+    # Sub-layers are called on `lp` (the parent LineagePlot plot object), not
+    # on the axis. This is the composite recipe pattern (see GraphMakie
+    # recipes.jl:254–260): sub-plots become children of lp.plots. Calling
+    # parent_scene(lp) inside each sub-layer's plot! correctly walks the plot
+    # parent chain to find the containing scene.
+
+    cladehighlightlayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        clade_vertices = lp[:clade_vertices],
+        color = lp[:clade_highlight_color],
+        alpha = lp[:clade_highlight_alpha],
+        padding = lp[:clade_highlight_padding],
+        visible = lp[:clade_highlight_visible],
+    )
+
+    edgelayer!(
+        lp, lp[:computed_geom];
+        color = lp[:edge_color],
+        linewidth = lp[:edge_linewidth],
+        linestyle = lp[:edge_linestyle],
+        alpha = lp[:edge_alpha],
+        visible = lp[:edge_visible],
+    )
+
+    vertexlayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        marker = lp[:vertex_marker],
+        color = lp[:vertex_color],
+        markersize = lp[:vertex_markersize],
+        strokecolor = lp[:vertex_strokecolor],
+        alpha = lp[:vertex_alpha],
+        visible = lp[:vertex_visible],
+    )
+
+    leaflayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        marker = lp[:leaf_marker],
+        color = lp[:leaf_color],
+        markersize = lp[:leaf_markersize],
+        strokecolor = lp[:leaf_strokecolor],
+        alpha = lp[:leaf_alpha],
+        visible = lp[:leaf_visible],
+    )
+
+    leaflabellayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        text_func = lp[:leaf_label_func],
+        font = lp[:leaf_label_font],
+        fontsize = lp[:leaf_label_fontsize],
+        color = lp[:leaf_label_color],
+        offset = lp[:leaf_label_offset],
+        italic = lp[:leaf_label_italic],
+        align = lp[:leaf_label_align],
+        visible = lp[:leaf_label_visible],
+    )
+
+    vertexlabellayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        value_func = lp[:vertex_label_func],
+        threshold = lp[:vertex_label_threshold],
+        position = lp[:vertex_label_position],
+        font = lp[:vertex_label_font],
+        fontsize = lp[:vertex_label_fontsize],
+        color = lp[:vertex_label_color],
+        visible = lp[:vertex_label_visible],
+    )
+
+    cladelabellayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        clade_vertices = lp[:clade_vertices],
+        label_func = lp[:clade_label_func],
+        color = lp[:clade_label_color],
+        fontsize = lp[:clade_label_fontsize],
+        offset = lp[:clade_label_offset],
+        visible = lp[:clade_label_visible],
+    )
+
+    # ScaleBarLayer takes (geom, accessor, lineageunits_val) as positional args.
+    # The third arg is read at construction time (not reactive) because Makie
+    # does not support passing ComputeGraph Computed nodes as positional args.
+    # Visibility reactivity is preserved via :resolved_scalebar_visible (Bool)
+    # passed as scalebar_auto_visible: ScaleBarLayer.plot! takes the Bool path
+    # and never consults lineageunits_val for auto-visibility.
+    # _initial_lu[] was set synchronously by the :resolved_lineageunits map! node
+    # above (map! nodes run synchronously during plot! construction in Makie 0.24).
+    scalebarlayer!(
+        lp, lp[:computed_geom], lp[:accessor], _initial_lu[];
+        position = lp[:scalebar_position],
+        length = lp[:scalebar_length],
+        label = lp[:scalebar_label],
+        color = lp[:scalebar_color],
+        linewidth = lp[:scalebar_linewidth],
+        scalebar_auto_visible = lp[:resolved_scalebar_visible],
+    )
+
+    return lp
+end
+
+export LineagePlot,
+    lineageplot!,
     EdgeLayer,
     edgelayer!,
     VertexLayer,

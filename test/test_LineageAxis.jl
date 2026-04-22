@@ -46,8 +46,8 @@ end
 
 function _plotted_lax(; lineageunits = nothing, lax_kwargs...)
     fig, lax = _fresh_lax(; lax_kwargs...)
-    leaflayer = lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = lineageunits)
-    return fig, lax, leaflayer
+    lp = lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = lineageunits)
+    return fig, lax, lp
 end
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -69,8 +69,8 @@ end
     end
 
     @testset "lineageplot! on LineageAxis renders without error" begin
-        fig, lax, ll = _plotted_lax()
-        @test ll isa LeafLayer
+        fig, lax, lp = _plotted_lax()
+        @test lp isa LineagePlot
         @test lax.last_geom[] !== nothing
         @test_nowarn colorbuffer(fig)
     end
@@ -79,8 +79,8 @@ end
         fig = Figure(; size = (400, 300))
         ax = Axis(fig[1, 1])
         acc = lineagegraph_accessor(_LA_BALANCED_ROOT; children = n -> n.children)
-        ll = lineageplot!(ax, _LA_BALANCED_ROOT, acc)
-        @test ll isa LeafLayer
+        lp = lineageplot!(ax, _LA_BALANCED_ROOT, acc)
+        @test lp isa LineagePlot
         @test_nowarn colorbuffer(fig)
     end
 

@@ -440,4 +440,184 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
 
     end
 
+    # ── LineagePlot composite recipe ──────────────────────────────────────────
+
+    @testset "LineagePlot" begin
+
+        @testset "returns LineagePlot on plain Axis" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
+            @test lp isa LineagePlot
+        end
+
+        @testset "computed_geom is a LineageGraphGeometry after construction" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
+            @test lp[:computed_geom][] isa LineageGraphGeometry
+        end
+
+        @testset "computed_geom has correct leaf count" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
+            @test length(lp[:computed_geom][].leaf_order) == 4
+        end
+
+        @testset "renders without error and produces non-empty colorbuffer" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            @test_nowarn begin
+                lineageplot!(ax, _LT_BALANCED_ROOT, acc)
+                colorbuffer(fig)
+            end
+        end
+
+        @testset "lineageunits = :vertexlevels accepted" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            @test_nowarn lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :vertexlevels)
+        end
+
+        @testset "resolved_lineageunits is :vertexheights for children-only accessor" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
+            @test lp[:resolved_lineageunits][] === :vertexheights
+        end
+
+        @testset "lineage_orientation = :radial triggers circular_layout" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineage_orientation = :radial)
+            colorbuffer(fig)
+            geom = lp[:computed_geom][]
+            # All 4 leaves are at equal radius in a circular layout.
+            leaf_radii = [
+                sqrt(geom.vertex_positions[v][1]^2 + geom.vertex_positions[v][2]^2)
+                for v in geom.leaf_order
+            ]
+            @test all(r -> isapprox(r, leaf_radii[1]; atol = 1.0f-3), leaf_radii)
+        end
+
+        @testset "edge_color kwarg forwarded to EdgeLayer child" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; edge_color = :red)
+            edge_children = filter(p -> p isa EdgeLayer, lp.plots)
+            @test !isempty(edge_children)
+            @test edge_children[1][:color][] === :red
+        end
+
+        @testset "edge_visible = false forwarded to EdgeLayer child" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; edge_visible = false)
+            edge_children = filter(p -> p isa EdgeLayer, lp.plots)
+            @test !isempty(edge_children)
+            @test edge_children[1][:visible][] == false
+        end
+
+        @testset "leaf_label_func kwarg forwarded to LeafLabelLayer child" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            custom_tf = v -> "TEST"
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; leaf_label_func = custom_tf)
+            colorbuffer(fig)
+            label_children = filter(p -> p isa LeafLabelLayer, lp.plots)
+            @test !isempty(label_children)
+            @test all(s -> s == "TEST", label_children[1][:leaf_label_strings][])
+        end
+
+        @testset "clade_vertices shared by CladeHighlightLayer and CladeLabelLayer" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            colorbuffer(fig)
+            hl_children = filter(p -> p isa CladeHighlightLayer, lp.plots)
+            cl_children = filter(p -> p isa CladeLabelLayer, lp.plots)
+            @test !isempty(hl_children)
+            @test !isempty(cl_children)
+            # Both sub-layers received the single MRCA vertex.
+            @test length(hl_children[1][:highlight_rects][]) == 1
+        end
+
+        @testset "scalebar_auto_visible = true overrides default for :vertexheights" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(
+                ax, _LT_BALANCED_ROOT, acc;
+                lineageunits = :vertexheights, scalebar_auto_visible = true,
+            )
+            scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
+            @test !isempty(scalebar_children)
+            @test scalebar_children[1][:resolved_visible][] == true
+        end
+
+        @testset "scalebar is auto-hidden for :vertexheights by default" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :vertexheights)
+            scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
+            @test !isempty(scalebar_children)
+            @test scalebar_children[1][:resolved_visible][] == false
+        end
+
+        @testset "computed_geom updates reactively when lineageunits attribute changes" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :vertexheights)
+            geom_before = lp[:computed_geom][]
+            lp.lineageunits = :vertexlevels
+            geom_after = lp[:computed_geom][]
+            # Both are valid geometries; bounding boxes differ because
+            # :vertexheights and :vertexlevels assign different x coordinates.
+            @test geom_before !== geom_after
+            @test geom_after isa LineageGraphGeometry
+        end
+
+        @testset "edge_color updates reactively when attribute Observable changes" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            color_obs = CairoMakie.Makie.Observable(:blue)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; edge_color = color_obs)
+            edge_children = filter(p -> p isa EdgeLayer, lp.plots)
+            @test !isempty(edge_children)
+            @test edge_children[1][:color][] === :blue
+            color_obs[] = :red
+            @test edge_children[1][:color][] === :red
+        end
+
+        @testset "lift on edge_color attribute tracks source Observable" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            c = CairoMakie.Makie.Observable(:black)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc;
+                edge_color = CairoMakie.Makie.lift(x -> x, c))
+            edge_children = filter(p -> p isa EdgeLayer, lp.plots)
+            @test !isempty(edge_children)
+            @test edge_children[1][:color][] === :black
+            c[] = :green
+            @test edge_children[1][:color][] === :green
+        end
+
+    end
+
 end

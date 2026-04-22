@@ -15,6 +15,8 @@ export data_to_pixel, pixel_to_data, pixel_offset_to_data_delta, register_pixel_
 
 include("Layers.jl")
 using .Layers:
+    LineagePlot,
+    lineageplot!,
     EdgeLayer,
     edgelayer!,
     VertexLayer,
@@ -30,9 +32,10 @@ using .Layers:
     CladeLabelLayer,
     cladelabellayer!,
     ScaleBarLayer,
-    scalebarlayer!,
-    lineageplot!
-export EdgeLayer,
+    scalebarlayer!
+export LineagePlot,
+    lineageplot!,
+    EdgeLayer,
     edgelayer!,
     VertexLayer,
     vertexlayer!,
@@ -47,8 +50,7 @@ export EdgeLayer,
     CladeLabelLayer,
     cladelabellayer!,
     ScaleBarLayer,
-    scalebarlayer!,
-    lineageplot!
+    scalebarlayer!
 
 # LineageAxis.jl is a plain include (not a submodule): Makie.@Block generates
 # esc(q) that references Makie internals by unqualified name, so everything must
