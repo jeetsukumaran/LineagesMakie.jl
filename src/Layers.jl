@@ -570,11 +570,13 @@ For each MRCA vertex in `clade_vertices`, the layer collects the positions of
 all descendant leaves (via `Accessors.leaves`) plus the MRCA vertex itself,
 computes the axis-aligned bounding box of those positions, expands the box by
 `padding` (pixel space, converted to data units via
-`CoordTransform.pixel_offset_to_data_delta`), clamps the expanded rect to the
-layout bounding box (preventing rects from spanning the full data range when the
-viewport is zero-size at construction time), and renders the result as a filled
-rectangle using `poly!`. The padding conversion is viewport-reactive: it reruns
-whenever the scene is resized.
+`CoordTransform.pixel_offset_to_data_delta`) only when the owning plot scene's
+viewport is valid, clamps the expanded rect to the layout bounding box as a
+final geometric safety bound, and renders the result as a filled rectangle
+using `poly!`. When the viewport is degenerate, the layer falls back to the raw
+unpadded clade bounds for that evaluation rather than interpreting raw pixel
+offsets as data-space padding. The padding conversion is viewport-reactive: it
+reruns whenever the scene is resized.
 
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry.
@@ -631,22 +633,31 @@ function Makie.plot!(p::CladeHighlightLayer)::CladeHighlightLayer
             ymin = minimum(q[2] for q in all_pts)
             ymax = maximum(q[2] for q in all_pts)
 
-            centre = Point2f((xmin + xmax) / 2, (ymin + ymax) / 2)
-            dx = pixel_offset_to_data_delta(sc, centre, Vec2f(padding[1], 0))[1]
-            dy = pixel_offset_to_data_delta(sc, centre, Vec2f(0, padding[2]))[2]
-            # Use abs: on reversed axes the projection gives negative dx/dy, but
-            # padding always expands outward from the clade data extent.
-            adx = abs(dx)
-            ady = abs(dy)
+            vp = Makie.viewport(sc)[]
+            vp_w, vp_h = Makie.widths(vp)
+            adx, ady = if iszero(vp_w) || iszero(vp_h)
+                # A degenerate viewport means pixel_offset_to_data_delta would
+                # hand raw pixel offsets back as data units. For highlights that
+                # would create incorrect full-span rectangles, so use the raw
+                # clade bounds with zero padding until the viewport resolves.
+                (0.0f0, 0.0f0)
+            else
+                centre = Point2f((xmin + xmax) / 2, (ymin + ymax) / 2)
+                dx = pixel_offset_to_data_delta(sc, centre, Vec2f(padding[1], 0))[1]
+                dy = pixel_offset_to_data_delta(sc, centre, Vec2f(0, padding[2]))[2]
+                # Use abs: on reversed axes the projection gives negative dx/dy,
+                # but highlight padding always expands outward symmetrically.
+                (abs(dx), abs(dy))
+            end
 
             bb          = geom.boundingbox
             bb_x0       = Float32(Makie.minimum(bb)[1])
             bb_x1       = Float32(Makie.maximum(bb)[1])
             bb_y0       = Float32(Makie.minimum(bb)[2])
             bb_y1       = Float32(Makie.maximum(bb)[2])
-            # Clamp to the layout bounding box so that when pixel_offset_to_data_delta
-            # returns the raw pixel_offset as data units (zero-viewport fallback),
-            # the rect does not span the full data range.
+            # Clamp as a final safety bound; the degenerate-viewport case is
+            # handled above by suppressing padding rather than by relying on
+            # clamping to repair fallback-expanded geometry.
             padded_xmin = max(xmin - adx, bb_x0)
             padded_xmax = min(xmax + adx, bb_x1)
             padded_ymin = max(ymin - ady, bb_y0)

@@ -3,6 +3,7 @@
 # All tests use real CairoMakie scenes. CairoMakie re-exports all Makie types.
 
 import CairoMakie
+const Makie = CairoMakie.Makie
 using CairoMakie: Figure, Axis
 using CairoMakie: colorbuffer
 using CairoMakie: Rect2i, Vec2f
@@ -45,6 +46,33 @@ _LT_ACC_UNIT = lineagegraph_accessor(
     edgelength = (u, v) -> 1.0,
 )
 _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
+_LT_NONROOT_CLADE = _LT_BALANCED_ROOT.children[1]
+
+function _lt_clade_points(geom::LineageGraphGeometry, acc, mrca)
+    pts = [geom.vertex_positions[v] for v in leaves(acc, mrca)]
+    push!(pts, geom.vertex_positions[mrca])
+    return pts
+end
+
+function _lt_clade_xspan(geom::LineageGraphGeometry, acc, mrca)::Float32
+    pts = _lt_clade_points(geom, acc, mrca)
+    xmin = minimum(pt[1] for pt in pts)
+    xmax = maximum(pt[1] for pt in pts)
+    return Float32(xmax - xmin)
+end
+
+function _lt_rect_xmax(rect::Rect2f)::Float32
+    return Float32(rect.origin[1] + rect.widths[1])
+end
+
+function _lt_rect_ymax(rect::Rect2f)::Float32
+    return Float32(rect.origin[2] + rect.widths[2])
+end
+
+function _lt_rect_contains(rect::Rect2f, pt)::Bool
+    return rect.origin[1] <= pt[1] <= _lt_rect_xmax(rect) &&
+        rect.origin[2] <= pt[2] <= _lt_rect_ymax(rect)
+end
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -385,6 +413,65 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
             @test plot_obj.visible[] == false
         end
 
+        @testset "non-root clade highlight remains local after layout" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(
+                _LT_BALANCED_ROOT;
+                children = n -> n.children,
+                edgelength = (u, v) -> 1.0,
+            )
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_NONROOT_CLADE])
+            colorbuffer(fig)
+
+            rect = only(plot_obj[:highlight_rects][])
+            raw_span = _lt_clade_xspan(geom, acc, _LT_NONROOT_CLADE)
+            full_span = Float32(geom.boundingbox.widths[1])
+
+            @test rect.widths[1] >= raw_span
+            @test rect.widths[1] < full_span
+
+            for pt in _lt_clade_points(geom, acc, _LT_NONROOT_CLADE)
+                @test _lt_rect_contains(rect, pt)
+            end
+
+            outside_leaves = [
+                geom.vertex_positions[v] for v in geom.leaf_order
+                if !(v in collect(leaves(acc, _LT_NONROOT_CLADE)))
+            ]
+            @test any(pt -> !_lt_rect_contains(rect, pt), outside_leaves)
+        end
+
+        @testset "highlight geometry remains local across initial viewport resolution" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(
+                _LT_BALANCED_ROOT;
+                children = n -> n.children,
+                edgelength = (u, v) -> 1.0,
+            )
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_NONROOT_CLADE])
+            raw_span = _lt_clade_xspan(geom, acc, _LT_NONROOT_CLADE)
+            full_span = Float32(geom.boundingbox.widths[1])
+            initial_viewport = ax.scene.viewport[]
+            initial_degenerate = any(iszero, Makie.widths(initial_viewport))
+            rect_initial = only(plot_obj[:highlight_rects][])
+            initial_width = Float32(rect_initial.widths[1])
+            @test initial_width >= raw_span
+            @test initial_width < full_span
+
+            colorbuffer(fig)
+            rect_resolved = only(plot_obj[:highlight_rects][])
+            resolved_width = Float32(rect_resolved.widths[1])
+            @test resolved_width >= raw_span
+            @test resolved_width < full_span
+            if initial_degenerate
+                @test resolved_width != initial_width
+            end
+        end
+
     end
 
     @testset "CladeLabelLayer" begin
@@ -702,25 +789,31 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
 
     end
 
-    @testset "CladeHighlightLayer rects clamped to bounding box" begin
+    @testset "CladeHighlightLayer rects stay within the bounding box and remain clade-local" begin
         fig = Figure(; size = (400, 300))
         ax  = Axis(fig[1, 1])
         acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
         lp  = lineageplot!(ax, _LT_BALANCED_ROOT, acc;
-                           clade_vertices = [_LT_BALANCED_ROOT])
+                           clade_vertices = [_LT_NONROOT_CLADE])
+        colorbuffer(fig)
         chl = only(filter(p -> p isa CladeHighlightLayer, lp.plots))
-        bb  = lp[:computed_geom][].boundingbox
+        geom = lp[:computed_geom][]
+        bb  = geom.boundingbox
         # Use Rect2f field access: origin is the bottom-left, widths is the extent.
         bb_x0 = Float32(bb.origin[1])
         bb_y0 = Float32(bb.origin[2])
         bb_x1 = Float32(bb.origin[1] + bb.widths[1])
         bb_y1 = Float32(bb.origin[2] + bb.widths[2])
+        full_span = Float32(bb.widths[1])
+        raw_span = _lt_clade_xspan(geom, acc, _LT_NONROOT_CLADE)
         # Strict clamping: rects must not extend beyond the bounding box.
         for r in chl[:highlight_rects][]
             @test r.origin[1] >= bb_x0
             @test r.origin[1] + r.widths[1] <= bb_x1
             @test r.origin[2] >= bb_y0
             @test r.origin[2] + r.widths[2] <= bb_y1
+            @test r.widths[1] >= raw_span
+            @test r.widths[1] < full_span
         end
     end
 

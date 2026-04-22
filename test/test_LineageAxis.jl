@@ -35,6 +35,7 @@ const _LA_BALANCED_ROOT = LATestNode("root", [
 ])
 
 const _LA_ACC = lineagegraph_accessor(_LA_BALANCED_ROOT; children = n -> n.children)
+const _LA_NONROOT_CLADE = _LA_BALANCED_ROOT.children[1]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -438,6 +439,36 @@ end
             @test pt[2] < Float32(vp.origin[2])
             @test pt[2] >= Float32(bbox.origin[2])
         end
+    end
+
+    @testset "non-root clade highlight remains narrower than full geometry on LineageAxis" begin
+        fig = Figure(; size = (400, 300))
+        lax = LineageAxis(fig[1, 1])
+        acc = lineagegraph_accessor(
+            _LA_BALANCED_ROOT;
+            children = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+        lp = lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            acc;
+            lineageunits = :edgelengths,
+            clade_vertices = [_LA_NONROOT_CLADE],
+        )
+        colorbuffer(fig)
+
+        chl = only(filter(p -> p isa CladeHighlightLayer, lp.plots))
+        rect = only(chl[:highlight_rects][])
+        geom = lp[:computed_geom][]
+
+        clade_pts = [geom.vertex_positions[v] for v in leaves(acc, _LA_NONROOT_CLADE)]
+        push!(clade_pts, geom.vertex_positions[_LA_NONROOT_CLADE])
+        raw_span = maximum(pt[1] for pt in clade_pts) - minimum(pt[1] for pt in clade_pts)
+        full_span = Float32(geom.boundingbox.widths[1])
+
+        @test rect.widths[1] >= raw_span
+        @test rect.widths[1] < full_span
     end
 
 end
