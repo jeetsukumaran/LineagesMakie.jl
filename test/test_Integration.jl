@@ -84,6 +84,21 @@ const _IT_VERTEXPOS = Dict{String, CairoMakie.Makie.Point2f}(
 )
 _it_vertexpos(n::IntegrationTestNode) = _IT_VERTEXPOS[n.name]
 
+function _it_visible_blockscene_strings(lax::LineageAxis)::Vector{String}
+    strings = String[]
+    for plot in lax.blockscene.plots
+        plot isa CairoMakie.Makie.Text || continue
+        plot.visible[] || continue
+        payload = plot.text[]
+        if payload isa AbstractVector
+            append!(strings, String[string(item) for item in payload])
+        else
+            push!(strings, string(payload))
+        end
+    end
+    return strings
+end
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 @testset "Integration" begin
@@ -331,6 +346,81 @@ _it_vertexpos(n::IntegrationTestNode) = _IT_VERTEXPOS[n.name]
         root_obs[] = _IT_ROOT6
         # 6-leaf tree: leaf_order has 6 entries after reactive recomputation.
         @test length(lp[:computed_geom][].leaf_order) == 6
+    end
+
+    @testset "2x2 LineageAxis example-style figure renders with panel-owned decorations" begin
+        tmpfile = tempname() * ".png"
+        try
+            acc = lineagegraph_accessor(
+                _IT_ROOT;
+                children = n -> n.children,
+                edgelength = (u, v) -> 1.0,
+            )
+            clade_a = _IT_ROOT.children[1]
+            clade_b = _IT_ROOT.children[2]
+
+            fig = Figure(; size = (1000, 800))
+            lax1 = LineageAxis(fig[1, 1]; title = "Forward", show_x_axis = true, xlabel = "distance")
+            lax2 = LineageAxis(fig[1, 2]; title = "Backward", show_x_axis = true, xlabel = "height")
+            lax3 = LineageAxis(fig[2, 1]; title = "Right-to-left", lineage_orientation = :right_to_left, show_x_axis = true)
+            lax4 = LineageAxis(fig[2, 2]; title = "Radial", lineage_orientation = :radial)
+
+            @test_nowarn lineageplot!(
+                lax1,
+                _IT_ROOT,
+                acc;
+                lineageunits = :edgelengths,
+                leaf_label_func = n -> n.name,
+                clade_vertices = [clade_a, clade_b],
+                clade_label_func = n -> n.name,
+            )
+            @test_nowarn lineageplot!(
+                lax2,
+                _IT_ROOT,
+                acc;
+                lineageunits = :vertexheights,
+                leaf_label_func = n -> n.name,
+                clade_vertices = [clade_a, clade_b],
+                clade_label_func = n -> n.name,
+            )
+            @test_nowarn lineageplot!(
+                lax3,
+                _IT_ROOT,
+                acc;
+                lineageunits = :edgelengths,
+                leaf_label_func = n -> n.name,
+                clade_vertices = [clade_a, clade_b],
+                clade_label_func = n -> n.name,
+            )
+            @test_nowarn lineageplot!(
+                lax4,
+                _IT_ROOT,
+                acc;
+                lineageunits = :edgelengths,
+                lineage_orientation = :radial,
+                leaf_label_func = n -> n.name,
+            )
+
+            @test_nowarn CairoMakie.colorbuffer(fig)
+            save(tmpfile, fig)
+            @test filesize(tmpfile) > 0
+
+            for (lax, title_text) in [
+                (lax1, "Forward"),
+                (lax2, "Backward"),
+                (lax3, "Right-to-left"),
+                (lax4, "Radial"),
+            ]
+                @test title_text in _it_visible_blockscene_strings(lax)
+            end
+
+            @test !isempty(lax1._xaxis_tick_segments[])
+            @test !isempty(lax2._xaxis_tick_segments[])
+            @test !isempty(lax3._xaxis_tick_segments[])
+            @test isempty(lax4._xaxis_tick_segments[])
+        finally
+            isfile(tmpfile) && rm(tmpfile)
+        end
     end
 
 end

@@ -50,6 +50,21 @@ function _plotted_lax(; lineageunits = nothing, lax_kwargs...)
     return fig, lax, lp
 end
 
+function _visible_blockscene_strings(lax::LineageAxis)::Vector{String}
+    strings = String[]
+    for plot in lax.blockscene.plots
+        plot isa Makie.Text || continue
+        plot.visible[] || continue
+        payload = plot.text[]
+        if payload isa AbstractVector
+            append!(strings, String[string(item) for item in payload])
+        else
+            push!(strings, string(payload))
+        end
+    end
+    return strings
+end
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 @testset "LineageAxis" begin
@@ -168,21 +183,20 @@ end
         lax.show_x_axis[] = true
         # Render confirms no error when ticks are active.
         @test_nowarn colorbuffer(fig)
-        # blockscene should contain at least one scatter plot that is now visible
-        # (the tick-mark scatter! added by _wire_x_axis!).
-        scatter_plots = filter(p -> p isa Makie.Scatter, lax.blockscene.plots)
-        @test !isempty(scatter_plots)
-        @test any(p -> p.visible[], scatter_plots)
+        @test !isempty(lax._xaxis_tick_segments[])
+        line_plots = filter(p -> p isa Makie.Lines, lax.blockscene.plots)
+        @test !isempty(line_plots)
+        @test any(p -> p.visible[], line_plots)
     end
 
     @testset "show_x_axis reactive toggle" begin
         fig, lax, _ = _plotted_lax()
         lax.show_x_axis[] = true
-        scatter_plots = filter(p -> p isa Makie.Scatter, lax.blockscene.plots)
-        @test any(p -> p.visible[], scatter_plots)
+        @test !isempty(lax._xaxis_tick_segments[])
         # Toggling back to false hides the ticks.
         lax.show_x_axis[] = false
-        @test !any(p -> p.visible[], scatter_plots)
+        @test isempty(lax._xaxis_tick_segments[])
+        @test isempty(lax._xaxis_tick_positions[])
     end
 
     @testset "autolimits! re-applies limits from stored geometry" begin
@@ -322,9 +336,8 @@ end
         vp = Makie.viewport(lax.scene)[]
         # After rendering, scene viewport must have non-zero width.
         @test !iszero(Makie.widths(vp)[1])
-        # Tick scatter in blockscene must be visible.
-        scatter_plots = filter(p -> p isa Makie.Scatter, lax.blockscene.plots)
-        @test any(p -> p.visible[], scatter_plots)
+        @test !isempty(lax._xaxis_tick_segments[])
+        @test !isempty(lax._xaxis_tick_positions[])
     end
 
     @testset "clade bracket pixel shapes non-empty after lineageplot! on LineageAxis" begin
@@ -339,6 +352,91 @@ end
         for pt in cll2[:bracket_pixel_shapes][]
             isnan(pt[1]) && continue
             @test isfinite(pt[1]) && isfinite(pt[2])
+        end
+    end
+
+    @testset "title text exists when title != \"\"" begin
+        fig = Figure(; size = (400, 300))
+        lax = LineageAxis(fig[1, 1]; title = "Panel title")
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            leaf_label_visible = false,
+        )
+        colorbuffer(fig)
+        @test "Panel title" in _visible_blockscene_strings(lax)
+    end
+
+    @testset "xlabel text exists when xlabel != \"\"" begin
+        fig = Figure(; size = (400, 300))
+        lax = LineageAxis(fig[1, 1]; xlabel = "distance")
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            leaf_label_visible = false,
+        )
+        colorbuffer(fig)
+        @test "distance" in _visible_blockscene_strings(lax)
+    end
+
+    @testset "inner plotting viewport is inset from full block bbox" begin
+        fig = Figure(; size = (400, 300))
+        lax = LineageAxis(
+            fig[1, 1];
+            title = "Inset",
+            xlabel = "distance",
+            show_x_axis = true,
+        )
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            leaf_label_visible = false,
+        )
+        colorbuffer(fig)
+        vp = Makie.viewport(lax.scene)[]
+        bbox = lax.layoutobservables.computedbbox[]
+        @test vp.origin[1] > bbox.origin[1]
+        @test vp.origin[2] > bbox.origin[2]
+        @test vp.widths[1] < bbox.widths[1]
+        @test vp.widths[2] < bbox.widths[2]
+    end
+
+    @testset "x-axis tick marks and labels live in the panel-owned x-axis band" begin
+        fig = Figure(; size = (800, 600))
+        lax = LineageAxis(
+            fig[2, 1];
+            title = "Bottom panel",
+            show_x_axis = true,
+            xlabel = "distance",
+        )
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            leaf_label_visible = false,
+        )
+        colorbuffer(fig)
+
+        vp = Makie.viewport(lax.scene)[]
+        bbox = lax.layoutobservables.computedbbox[]
+        @test !isempty(lax._xaxis_tick_segments[])
+        @test !isempty(lax._xaxis_tick_positions[])
+        @test !isempty(lax._xaxis_tick_labels[])
+
+        for pt in lax._xaxis_tick_positions[]
+            @test pt[2] < Float32(vp.origin[2])
+            @test pt[2] >= Float32(bbox.origin[2])
+            @test pt[1] >= Float32(bbox.origin[1])
+            @test pt[1] <= Float32(bbox.origin[1] + bbox.widths[1])
+        end
+
+        for pt in lax._xaxis_tick_segments[]
+            isnan(pt[1]) && continue
+            @test pt[2] < Float32(vp.origin[2])
+            @test pt[2] >= Float32(bbox.origin[2])
         end
     end
 

@@ -39,6 +39,11 @@ _LT_AX = Axis(_LT_FIG[1, 1])
 colorbuffer(_LT_FIG)
 
 _LT_ACC = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+_LT_ACC_UNIT = lineagegraph_accessor(
+    _LT_BALANCED_ROOT;
+    children = n -> n.children,
+    edgelength = (u, v) -> 1.0,
+)
 _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -205,6 +210,54 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
             positions_after = plot_obj[:leaf_label_positions][]
             # Positions Observable must still hold exactly 4 entries after resize.
             @test length(positions_after) == 4
+        end
+
+        @testset "rectangular leaf labels have blockscene pixel positions after layout" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            plot_obj = leaflabellayer!(ax, _LT_GEOM, _LT_ACC; text_func = v -> string(v.name))
+            colorbuffer(fig)
+            positions = plot_obj[:leaf_label_positions][]
+            @test !isempty(positions)
+            @test all(pt -> isfinite(pt[1]) && isfinite(pt[2]), positions)
+        end
+
+        @testset "radial leaf labels use blockscene pixel positions and mixed left/right alignments" begin
+            fig = Figure(; size = (500, 500))
+            ax = Axis(fig[1, 1])
+            geom = circular_layout(_LT_BALANCED_ROOT, _LT_ACC_UNIT; lineageunits = :edgelengths)
+            plot_obj = leaflabellayer!(
+                ax,
+                geom,
+                _LT_ACC_UNIT;
+                text_func = v -> string(v.name),
+                lineage_orientation = :radial,
+            )
+            colorbuffer(fig)
+            positions = plot_obj[:leaf_label_positions][]
+            aligns = plot_obj[:leaf_label_aligns][]
+            @test !isempty(positions)
+            @test all(pt -> isfinite(pt[1]) && isfinite(pt[2]), positions)
+            @test any(a -> a[1] === :left, aligns)
+            @test any(a -> a[1] === :right, aligns)
+        end
+
+        @testset "clade labels and leaf labels coexist without empty geometry" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            lp = lineageplot!(
+                ax,
+                _LT_BALANCED_ROOT,
+                _LT_ACC;
+                leaf_label_func = v -> string(v.name),
+                clade_vertices = [_LT_BALANCED_ROOT],
+                clade_label_func = v -> "root",
+            )
+            colorbuffer(fig)
+            ll = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+            @test !isempty(ll[:leaf_label_positions][])
+            @test !isempty(cll[:bracket_label_pixel_positions][])
         end
 
     end

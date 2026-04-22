@@ -214,10 +214,19 @@ end
 
 Render text labels at leaf vertex positions on axis `ax`.
 
-Label positions are computed by adding `offset` (in pixel space) to each leaf's
-data-space position. The offset is converted to data-space units via
-`CoordTransform.pixel_offset_to_data_delta`, so labels remain correctly placed
-after figure resize. Setting `italic = true` renders labels in italic style.
+Leaf labels are rendered in `Makie.parent(parent_scene(p))` (the blockscene /
+decoration layer) so they can sit beyond the data viewport without being
+clipped. Their derived positions in `:leaf_label_positions` are therefore
+blockscene pixel coordinates, not data coordinates.
+
+For rectangular layouts, `offset` is applied directly in blockscene pixel
+coordinates after converting each leaf anchor with `data_to_pixel`.
+
+For radial layouts (`lineage_orientation = :radial`), the first component of
+`offset` is applied along the outward radial direction and the second component
+is applied along the local tangent. This preserves the existing `Vec2f(4, 0)`
+default while changing its meaning from "4 px in global +x" to "4 px outward".
+Setting `italic = true` renders labels in italic style.
 
 Leaves are iterated in `geom.leaf_order` (transverse-axis order), which
 guarantees that label strings and positions share the same index mapping.
@@ -236,10 +245,13 @@ guarantees that label strings and positions share the same index mapping.
 - `fontsize`: label font size in points. Default `12`.
 - `color`: label color. Default `:black`.
 - `offset`: pixel-space offset from the leaf position as `Vec2f`. Default
-  `Vec2f(4, 0)` (4 px rightward). Converted to data-space units reactively so
-  the offset remains stable on resize.
+  `Vec2f(4, 0)`. In rectangular layouts this is a direct blockscene pixel
+  offset; in radial layouts it is interpreted in the local `(outward, tangent)`
+  basis. The offset remains stable on resize.
 - `italic`: when `true`, renders labels in italic style. Default `false`.
 - `align`: Makie text alignment tuple. Default `(:left, :center)`.
+- `lineage_orientation`: `:left_to_right` (default), `:right_to_left`, or
+  `:radial`. Determines whether radial outward placement logic is used.
 - `visible`: whether the layer is rendered. Default `true`.
 """
 @recipe LeafLabelLayer (geom, accessor) begin
@@ -253,6 +265,7 @@ guarantees that label strings and positions share the same index mapping.
     "Apply italic style to labels."
     italic = false
     align = (:left, :center)
+    lineage_orientation = :left_to_right
     visible = true
 end
 
@@ -279,28 +292,36 @@ function Makie.plot!(p::LeafLabelLayer)::LeafLabelLayer
         return String[resolved_tf(v) for v in geom.leaf_order]
     end
 
-    # Compute label positions (leaf pos + pixel-space offset converted to data).
-    # Depends on :pixel_projection so this map! reruns on viewport change.
+    # Compute blockscene pixel positions and per-label alignments. Depends on
+    # :pixel_projection so this map! reruns on viewport change.
     map!(
         p.attributes,
-        [:geom, :offset, :pixel_projection],
-        :leaf_label_positions,
-    ) do geom, offset, _
-        return Point2f[
-            geom.vertex_positions[v] +
-            Point2f(pixel_offset_to_data_delta(sc, geom.vertex_positions[v], offset))
-            for v in geom.leaf_order
-        ]
+        [:geom, :offset, :align, :lineage_orientation, :pixel_projection],
+        :leaf_label_data,
+    ) do geom, offset, align, lineage_orientation, _
+        return _leaf_label_data(sc, geom, offset, align, lineage_orientation)
     end
 
+    map!(p.attributes, [:leaf_label_data], :leaf_label_positions) do entries
+        return Point2f[pos for (pos, _) in entries]
+    end
+
+    map!(p.attributes, [:leaf_label_data], :leaf_label_aligns) do entries
+        return Tuple{Symbol, Symbol}[entry_align for (_, entry_align) in entries]
+    end
+
+    # Keep one invisible child in the data-scene recipe so Makie's plot-tree
+    # traversal still sees a child plot rooted under p.
+    lines!(p, Point2f[]; visible = false)
+
     text!(
-        p,
+        Makie.parent(sc),
         p[:leaf_label_positions];
         text = p[:leaf_label_strings],
         font = p[:resolved_font],
         fontsize = p[:fontsize],
         color = p[:color],
-        align = p[:align],
+        align = p[:leaf_label_aligns],
         visible = p[:visible],
     )
     return p
@@ -420,6 +441,64 @@ function Makie.plot!(p::VertexLabelLayer)::VertexLabelLayer
 end
 
 # ── Private helpers ───────────────────────────────────────────────────────────
+
+function _to_blockscene_pixel(sc, data_pt::Point2f)::Point2f
+    sc_vp = Makie.viewport(sc)[]
+    px = data_to_pixel(sc, data_pt)
+    return Point2f(
+        Float32(sc_vp.origin[1]) + px[1],
+        Float32(sc_vp.origin[2]) + px[2],
+    )
+end
+
+function _geom_center(bb::Rect2f)::Point2f
+    return Point2f(
+        bb.origin[1] + bb.widths[1] / 2,
+        bb.origin[2] + bb.widths[2] / 2,
+    )
+end
+
+function _normalized_or_default(vec::Vec2f, default::Vec2f)::Vec2f
+    norm_sq = vec[1]^2 + vec[2]^2
+    norm_sq > 0.0f0 || return default
+    inv_norm = inv(sqrt(norm_sq))
+    return Vec2f(vec[1] * inv_norm, vec[2] * inv_norm)
+end
+
+function _leaf_label_data(
+        sc,
+        geom::LineageGraphGeometry,
+        offset::Vec2f,
+        align::Tuple,
+        lineage_orientation::Symbol,
+    )::Vector{Tuple{Point2f, Tuple{Symbol, Symbol}}}
+    entries = Tuple{Point2f, Tuple{Symbol, Symbol}}[]
+
+    if lineage_orientation === :radial
+        center = _geom_center(geom.boundingbox)
+        for v in geom.leaf_order
+            anchor = geom.vertex_positions[v]
+            outward = _normalized_or_default(
+                Vec2f(anchor[1] - center[1], anchor[2] - center[2]),
+                Vec2f(1, 0),
+            )
+            tangent = Vec2f(-outward[2], outward[1])
+            block_anchor = _to_blockscene_pixel(sc, anchor)
+            pixel_delta = outward * offset[1] + tangent * offset[2]
+            halign = outward[1] < 0.0f0 ? :right : :left
+            push!(entries, (block_anchor + Point2f(pixel_delta), (halign, :center)))
+        end
+        return entries
+    end
+
+    resolved_align = (align[1], align[2])
+    for v in geom.leaf_order
+        anchor = geom.vertex_positions[v]
+        block_anchor = _to_blockscene_pixel(sc, anchor)
+        push!(entries, (block_anchor + Point2f(offset), resolved_align))
+    end
+    return entries
+end
 
 """
 Return `Point2f` positions of all leaves in the subtree rooted at `mrca`.
@@ -1183,6 +1262,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         offset = lp[:leaf_label_offset],
         italic = lp[:leaf_label_italic],
         align = lp[:leaf_label_align],
+        lineage_orientation = lp[:lineage_orientation],
         visible = lp[:leaf_label_visible],
     )
 
