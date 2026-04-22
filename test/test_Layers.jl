@@ -274,4 +274,170 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
 
     end
 
+    @testset "CladeHighlightLayer" begin
+
+        @testset "renders without error" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            @test plot_obj isa CladeHighlightLayer
+        end
+
+        @testset "empty clade_vertices produces empty highlight_rects" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [])
+            colorbuffer(fig)
+            @test isempty(plot_obj[:highlight_rects][])
+        end
+
+        @testset "one MRCA produces exactly one highlight rect" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            colorbuffer(fig)
+            @test length(plot_obj[:highlight_rects][]) == 1
+        end
+
+        @testset "highlight rect encloses all leaf positions for root clade" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            colorbuffer(fig)
+            rect = plot_obj[:highlight_rects][][1]
+            for v in geom.leaf_order
+                pos = geom.vertex_positions[v]
+                @test pos[1] >= rect.origin[1]
+                @test pos[1] <= rect.origin[1] + rect.widths[1]
+                @test pos[2] >= rect.origin[2]
+                @test pos[2] <= rect.origin[2] + rect.widths[2]
+            end
+        end
+
+        @testset "visible = false accepted" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladehighlightlayer!(ax, geom, acc; visible = false)
+            @test plot_obj.visible[] == false
+        end
+
+    end
+
+    @testset "CladeLabelLayer" begin
+
+        @testset "renders without error" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladelabellayer!(
+                ax,
+                geom,
+                acc;
+                clade_vertices = [_LT_BALANCED_ROOT],
+                label_func = v -> "Clade A",
+            )
+            @test plot_obj isa CladeLabelLayer
+        end
+
+        @testset "label_func text content appears in bracket_label_strings" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladelabellayer!(
+                ax,
+                geom,
+                acc;
+                clade_vertices = [_LT_BALANCED_ROOT],
+                label_func = v -> "Clade A",
+            )
+            colorbuffer(fig)
+            strings = plot_obj[:bracket_label_strings][]
+            @test any(s -> occursin("Clade A", s), strings)
+        end
+
+        @testset "empty clade_vertices produces no bracket shapes" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladelabellayer!(ax, geom, acc; clade_vertices = [])
+            colorbuffer(fig)
+            @test isempty(plot_obj[:bracket_shapes][])
+        end
+
+        @testset "visible = false accepted" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = cladelabellayer!(ax, geom, acc; visible = false)
+            @test plot_obj.visible[] == false
+        end
+
+    end
+
+    @testset "ScaleBarLayer" begin
+
+        @testset "visible defaults to false for :vertexheights" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = scalebarlayer!(ax, geom, acc, :vertexheights)
+            @test plot_obj[:resolved_visible][] == false
+        end
+
+        @testset "visible defaults to true for :edgelengths" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths)
+            @test plot_obj[:resolved_visible][] == true
+        end
+
+        @testset "explicit visible = true overrides :vertexheights default" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = scalebarlayer!(ax, geom, acc, :vertexheights; scalebar_auto_visible = true)
+            @test plot_obj[:resolved_visible][] == true
+        end
+
+        @testset "scalebar_line_pts has exactly two endpoints when rendered" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths)
+            colorbuffer(fig)
+            @test length(plot_obj[:scalebar_line_pts][]) == 2
+        end
+
+        @testset "visible defaults to true for :branchingtime and :coalescenceage" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            p1 = scalebarlayer!(ax, geom, acc, :branchingtime)
+            p2 = scalebarlayer!(ax, geom, acc, :coalescenceage)
+            @test p1[:resolved_visible][] == true
+            @test p2[:resolved_visible][] == true
+        end
+
+    end
+
 end

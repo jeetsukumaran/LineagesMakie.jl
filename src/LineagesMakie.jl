@@ -25,6 +25,12 @@ using .Layers:
     leaflabellayer!,
     VertexLabelLayer,
     vertexlabellayer!,
+    CladeHighlightLayer,
+    cladehighlightlayer!,
+    CladeLabelLayer,
+    cladelabellayer!,
+    ScaleBarLayer,
+    scalebarlayer!,
     lineageplot!
 export EdgeLayer,
     edgelayer!,
@@ -36,6 +42,12 @@ export EdgeLayer,
     leaflabellayer!,
     VertexLabelLayer,
     vertexlabellayer!,
+    CladeHighlightLayer,
+    cladehighlightlayer!,
+    CladeLabelLayer,
+    cladelabellayer!,
+    ScaleBarLayer,
+    scalebarlayer!,
     lineageplot!
 
 include("LineageAxis.jl")
