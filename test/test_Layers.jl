@@ -260,6 +260,7 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
                 geom,
                 acc;
                 value_func = v -> Dict(),
+                threshold  = v -> true,
             )
         end
 
@@ -618,6 +619,38 @@ _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
             @test edge_children[1][:color][] === :green
         end
 
+    end
+
+    @testset "CladeHighlightLayer rects clamped to bounding box" begin
+        fig = Figure(; size = (400, 300))
+        ax  = Axis(fig[1, 1])
+        acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+        lp  = lineageplot!(ax, _LT_BALANCED_ROOT, acc;
+                           clade_vertices = [_LT_BALANCED_ROOT])
+        chl = only(filter(p -> p isa CladeHighlightLayer, lp.plots))
+        bb  = lp[:computed_geom][].boundingbox
+        # Use Rect2f field access: origin is the bottom-left, widths is the extent.
+        bb_x0 = Float32(bb.origin[1])
+        bb_y0 = Float32(bb.origin[2])
+        bb_x1 = Float32(bb.origin[1] + bb.widths[1])
+        bb_y1 = Float32(bb.origin[2] + bb.widths[2])
+        # Strict clamping: rects must not extend beyond the bounding box.
+        for r in chl[:highlight_rects][]
+            @test r.origin[1] >= bb_x0
+            @test r.origin[1] + r.widths[1] <= bb_x1
+            @test r.origin[2] >= bb_y0
+            @test r.origin[2] + r.widths[2] <= bb_y1
+        end
+    end
+
+    @testset "vertex_label_threshold defaults to v -> false" begin
+        fig = Figure(; size = (400, 300))
+        ax  = Axis(fig[1, 1])
+        acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+        lp  = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
+        vll = only(filter(p -> p isa VertexLabelLayer, lp.plots))
+        # With threshold = v -> false, no vertex passes → zero label positions.
+        @test isempty(vll[:vertex_label_positions][])
     end
 
 end

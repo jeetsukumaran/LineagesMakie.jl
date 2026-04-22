@@ -51,6 +51,9 @@ using Makie: make_block_docstring
 using .Layers: _resolve_lineageunits_stub, LineagePlot
 # import (not using) to extend lineageplot! with a LineageAxis-specific method.
 import .Layers: lineageplot!
+# data_to_pixel is needed by _wire_x_axis! to convert tick x values to blockscene
+# pixel coordinates.
+using .CoordTransform: data_to_pixel
 
 # ── Block type ─────────────────────────────────────────────────────────────────
 
@@ -182,27 +185,30 @@ end
 # ── x-axis wiring (Tier-1 minimal) ────────────────────────────────────────────
 
 function _wire_x_axis!(lax::LineageAxis, blockscene::Scene)
-    # Minimal Tier-1 implementation: draw 5 evenly-spaced tick marks and labels
-    # below the scene area when show_x_axis is true. Full LineAxis integration
-    # is deferred to Tier 2.
+    # Render 5 evenly-spaced tick marks and labels in blockscene (the decoration
+    # layer, which is not subject to lax.scene's data viewport clip). Tick x
+    # positions are converted from data space to lax.scene pixel space via
+    # data_to_pixel, then translated to blockscene pixel space using the scene
+    # viewport origin. Tick y is placed 10 px below the bottom edge of lax.scene.
+    # Full LineAxis integration is deferred to Tier 2.
     tick_positions = Makie.Observable(Point2f[])
-    tick_labels = Makie.Observable(String[])
-    tick_visible = Makie.Observable(false)
+    tick_labels    = Makie.Observable(String[])
+    tick_visible   = Makie.Observable(false)
 
     scatter!(
         blockscene,
         tick_positions;
-        markersize = 0,
-        visible = tick_visible,
-        inspectable = false,
+        markersize   = 0,
+        visible      = tick_visible,
+        inspectable  = false,
     )
     text!(
         blockscene,
         tick_labels;
-        position = tick_positions,
-        align = (:center, :top),
-        fontsize = 10,
-        visible = tick_visible,
+        position    = tick_positions,
+        align       = (:center, :top),
+        fontsize    = 10,
+        visible     = tick_visible,
         inspectable = false,
     )
 
@@ -210,27 +216,38 @@ function _wire_x_axis!(lax::LineageAxis, blockscene::Scene)
         geom = lax.last_geom[]
         show = lax.show_x_axis[]
         if !show || geom === nothing
-            tick_visible[] = false
+            tick_visible[]   = false
             tick_positions[] = Point2f[]
-            tick_labels[] = String[]
+            tick_labels[]    = String[]
             return
         end
-        bb = (geom::LineageGraphGeometry).boundingbox
-        xmin = Float32(Makie.minimum(bb)[1])
-        xmax = Float32(Makie.maximum(bb)[1])
-        ymin = Float32(Makie.minimum(bb)[2])
-        tick_y = ymin - (xmax - xmin) * 0.08f0
-        n = 5
-        xs = range(xmin, xmax; length = n)
-        tick_positions[] = [Point2f(x, tick_y) for x in xs]
-        tick_labels[] = [string(round(x; digits = 2)) for x in xs]
-        tick_visible[] = true
+        sc_vp = Makie.viewport(lax.scene)[]
+        bb    = (geom::LineageGraphGeometry).boundingbox
+        xmin  = Float32(Makie.minimum(bb)[1])
+        xmax  = Float32(Makie.maximum(bb)[1])
+        n     = 5
+        xs    = range(xmin, xmax; length = n)
+
+        positions = Point2f[]
+        for x_val in xs
+            px      = data_to_pixel(lax.scene, Point2f(Float32(x_val), 0.0f0))
+            block_x = Float32(sc_vp.origin[1]) + px[1]
+            block_y = Float32(sc_vp.origin[2]) - 10.0f0
+            push!(positions, Point2f(block_x, block_y))
+        end
+        tick_positions[] = positions
+        tick_labels[]    = [string(round(x; digits = 2)) for x in xs]
+        tick_visible[]   = true
     end
 
     on(blockscene, lax.show_x_axis) do _
         _update_ticks()
     end
     on(blockscene, lax.last_geom) do _
+        _update_ticks()
+    end
+    # Recompute when lax.scene's layout position changes (e.g. on figure resize).
+    on(blockscene, Makie.viewport(lax.scene)) do _
         _update_ticks()
     end
 
@@ -375,11 +392,19 @@ Render a lineage graph on `ax`.
 When `ax` is a `LineageAxis`, this method additionally:
 1. Infers `ax.axis_polarity` from `lineageunits` unless the user has explicitly
    set it (detected by the `_polarity_locked` flag wired in `initialize_block!`).
-2. Calls `reset_limits!(ax, geom)` after the recipe sets `lp[:computed_geom]`
+2. Computes orientation-aware defaults for `leaf_label_offset`, `leaf_label_align`,
+   and `clade_label_side` based on `lineage_orientation` and `display_polarity`.
+   When leaves fall on the left side of the screen, leaf labels are offset leftward
+   (`Vec2f(-4, 0)`, right-aligned) and the clade bracket is placed on the left.
+   Caller-supplied keyword arguments always override these defaults.
+3. Calls `reset_limits!(ax, geom)` after the recipe sets `lp[:computed_geom]`
    so that axis limits fit the lineage graph bounding box with `display_polarity`
    and `lineage_orientation` applied.
-3. Registers a reactive `on` callback so that if `rootvertex` or `lineageunits`
+4. Registers a reactive `on` callback so that if `rootvertex` or `lineageunits`
    changes later, `reset_limits!` is reapplied automatically.
+
+Vertex labels are off by default (`vertex_label_threshold = v -> false`); pass an
+explicit `vertex_label_threshold` predicate to enable them.
 
 All keyword arguments are forwarded to the `LineagePlot` composite recipe.
 See `lineageplot!` for the full attribute list.
@@ -397,13 +422,36 @@ function lineageplot!(
         ax.axis_polarity[] = _infer_axis_polarity(resolved_lu)
     end
 
+    # Compute orientation-aware defaults for leaf labels and clade bracket side.
+    # leaves_on_left is true when the layout places leaf tips on the left screen edge.
+    lo                 = ax.lineage_orientation[]
+    dp                 = ax.display_polarity[]
+    backward           = resolved_lu in (:vertexheights, :coalescenceage)
+    effective_reversed = (dp === :reversed) || (lo === :right_to_left)
+    leaves_on_left     = xor(backward, effective_reversed)
+
+    orientation_defaults = if lo !== :radial
+        side_kw = (clade_label_side = leaves_on_left ? :left : :right,)
+        if leaves_on_left
+            merge(side_kw,
+                  (leaf_label_offset = Makie.Vec2f(-4, 0),
+                   leaf_label_align  = (:right, :center)))
+        else
+            side_kw
+        end
+    else
+        NamedTuple()
+    end
+    # Caller-supplied kwargs take precedence over orientation defaults.
+    merged_kwargs = merge(orientation_defaults, kwargs)
+
     # Route to ax.scene (not ax) to avoid recursive dispatch through the
     # @recipe-generated lineageplot! which also accepts AbstractAxis.
     # plot!(ax::AbstractAxis, ...) at figureplotting.jl:436 would call
     # reset_limits!(ax) after every sub-layer plot! — wasteful and premature
     # before computed_geom is populated. Going directly to ax.scene bypasses
     # the AbstractAxis protocol; we call reset_limits! manually below.
-    lp = lineageplot!(ax.scene, rootvertex, accessor; lineageunits = lineageunits, kwargs...)
+    lp = lineageplot!(ax.scene, rootvertex, accessor; lineageunits = lineageunits, merged_kwargs...)
 
     # Apply initial limits. lp[:computed_geom][] is already populated because
     # map! nodes run synchronously during plot! construction (Makie 0.24).

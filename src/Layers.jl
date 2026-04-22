@@ -333,7 +333,7 @@ vertex along the transverse axis, separating the label from the vertex marker.
   `threshold`; otherwise `ArgumentError` is raised at plot time. Default:
   `v -> ""` (empty string — labels exist but render invisibly at zero width).
 - `threshold`: a predicate `vertex -> Bool` selecting which vertices to label.
-  Default: `v -> true` (show all vertices).
+  Default: `v -> false` (show no vertices; opt-in).
 - `position`: `:vertex` places the label at the vertex data position;
   `:toward_parent` shifts the label slightly (3 px) toward the parent vertex
   along the transverse axis. Default `:vertex`.
@@ -345,8 +345,8 @@ vertex along the transverse axis, separating the label from the vertex marker.
 @recipe VertexLabelLayer (geom, accessor) begin
     "Callable `vertex -> Any` supplying label values; must return AbstractString, Number, or Symbol."
     value_func = (v -> "")
-    "Predicate `vertex -> Bool`; only vertices returning true are labelled."
-    threshold = (v -> true)
+    "Predicate `vertex -> Bool`; only vertices returning true are labelled. Default: none (opt-in)."
+    threshold = (v -> false)
     "Label position: `:vertex` or `:toward_parent`."
     position = :vertex
     font = :regular
@@ -491,9 +491,11 @@ For each MRCA vertex in `clade_vertices`, the layer collects the positions of
 all descendant leaves (via `Accessors.leaves`) plus the MRCA vertex itself,
 computes the axis-aligned bounding box of those positions, expands the box by
 `padding` (pixel space, converted to data units via
-`CoordTransform.pixel_offset_to_data_delta`), and renders the result as a
-filled rectangle using `poly!`. The padding conversion is viewport-reactive:
-it reruns whenever the scene is resized.
+`CoordTransform.pixel_offset_to_data_delta`), clamps the expanded rect to the
+layout bounding box (preventing rects from spanning the full data range when the
+viewport is zero-size at construction time), and renders the result as a filled
+rectangle using `poly!`. The padding conversion is viewport-reactive: it reruns
+whenever the scene is resized.
 
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry.
@@ -553,10 +555,30 @@ function Makie.plot!(p::CladeHighlightLayer)::CladeHighlightLayer
             centre = Point2f((xmin + xmax) / 2, (ymin + ymax) / 2)
             dx = pixel_offset_to_data_delta(sc, centre, Vec2f(padding[1], 0))[1]
             dy = pixel_offset_to_data_delta(sc, centre, Vec2f(0, padding[2]))[2]
+            # Use abs: on reversed axes the projection gives negative dx/dy, but
+            # padding always expands outward from the clade data extent.
+            adx = abs(dx)
+            ady = abs(dy)
 
+            bb          = geom.boundingbox
+            bb_x0       = Float32(Makie.minimum(bb)[1])
+            bb_x1       = Float32(Makie.maximum(bb)[1])
+            bb_y0       = Float32(Makie.minimum(bb)[2])
+            bb_y1       = Float32(Makie.maximum(bb)[2])
+            # Clamp to the layout bounding box so that when pixel_offset_to_data_delta
+            # returns the raw pixel_offset as data units (zero-viewport fallback),
+            # the rect does not span the full data range.
+            padded_xmin = max(xmin - adx, bb_x0)
+            padded_xmax = min(xmax + adx, bb_x1)
+            padded_ymin = max(ymin - ady, bb_y0)
+            padded_ymax = min(ymax + ady, bb_y1)
             push!(
                 rects,
-                Rect2f(xmin - dx, ymin - dy, (xmax - xmin) + 2dx, (ymax - ymin) + 2dy),
+                Rect2f(
+                    padded_xmin, padded_ymin,
+                    padded_xmax - padded_xmin,
+                    padded_ymax - padded_ymin,
+                ),
             )
         end
         return rects
@@ -599,8 +621,11 @@ attribute `bracket_label_data` from which positions and strings are split.
   Default `v -> ""` (invisible empty labels).
 - `color`: line and text color. Default `:black`.
 - `fontsize`: label font size in points. Default `11`.
-- `offset`: pixel-space offset from the maximum leaf x-position to the bracket
+- `offset`: pixel-space offset from the outermost leaf x-position to the bracket
   vertical bar, as `Vec2f(dx_px, 0)`. Default `Vec2f(6, 0)`.
+- `side`: which side of the leaf tips to place the bracket. `:right` (default,
+  leaves at right) or `:left` (leaves at left). Set automatically by
+  `lineageplot!(ax::LineageAxis, ...)` based on orientation.
 - `visible`: whether the layer is rendered. Default `true`.
 """
 @recipe CladeLabelLayer (geom, accessor) begin
@@ -611,6 +636,8 @@ attribute `bracket_label_data` from which positions and strings are split.
     fontsize = 11
     "Pixel-space offset from the rightmost leaf position to the bracket bar."
     offset = Makie.Vec2f(6, 0)
+    "Bracket side relative to leaf tips: :right (leaves at right) or :left (leaves at left)."
+    side = :right
     visible = true
 end
 
@@ -620,72 +647,96 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
 
     # NaN-separated bracket geometry: bottom tick + vertical bar + top tick per clade.
     # Depends on :pixel_projection so offset/tick conversions recompute on resize.
+    # :side controls whether the bracket is placed to the right or left of leaf tips.
     map!(
         p.attributes,
-        [:geom, :accessor, :clade_vertices, :offset, :pixel_projection],
+        [:geom, :accessor, :clade_vertices, :offset, :pixel_projection, :side],
         :bracket_shapes,
-    ) do geom, accessor, clade_vertices, offset, _
+    ) do geom, accessor, clade_vertices, offset, _, side
         pts = Point2f[]
-        nan = Point2f(NaN, NaN)
         for mrca in clade_vertices
             leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
             isempty(leaf_pts) && continue
 
-            ys = [q[2] for q in leaf_pts]
+            ys    = [q[2] for q in leaf_pts]
             y_min = minimum(ys)
             y_max = maximum(ys)
-            x_right = maximum(q[1] for q in leaf_pts)
             mid_y = (y_min + y_max) / 2
+            nan   = Point2f(NaN, NaN)
 
-            anchor = Point2f(x_right, mid_y)
-            dx = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
-            dtick = pixel_offset_to_data_delta(sc, anchor, Vec2f(3.0f0, 0))[1]
-            x_bar = x_right + dx
-
-            # Bottom tick
-            push!(pts, Point2f(x_bar - dtick, y_min), Point2f(x_bar, y_min), nan)
-            # Vertical bar
-            push!(pts, Point2f(x_bar, y_min), Point2f(x_bar, y_max), nan)
-            # Top tick
-            push!(pts, Point2f(x_bar, y_max), Point2f(x_bar - dtick, y_max), nan)
+            if side === :right
+                x_anchor = maximum(q[1] for q in leaf_pts)
+                anchor   = Point2f(x_anchor, mid_y)
+                dx_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+                dx_tick  = pixel_offset_to_data_delta(sc, anchor, Vec2f(3.0f0, 0))[1]
+                x_bar    = x_anchor + dx_off
+                push!(pts, Point2f(x_bar - dx_tick, y_min), Point2f(x_bar, y_min), nan)
+                push!(pts, Point2f(x_bar, y_min),            Point2f(x_bar, y_max), nan)
+                push!(pts, Point2f(x_bar, y_max),            Point2f(x_bar - dx_tick, y_max), nan)
+            else  # :left
+                x_anchor = minimum(q[1] for q in leaf_pts)
+                anchor   = Point2f(x_anchor, mid_y)
+                dx_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+                dx_tick  = pixel_offset_to_data_delta(sc, anchor, Vec2f(3.0f0, 0))[1]
+                x_bar    = x_anchor - dx_off
+                push!(pts, Point2f(x_bar + dx_tick, y_min), Point2f(x_bar, y_min), nan)
+                push!(pts, Point2f(x_bar, y_min),            Point2f(x_bar, y_max), nan)
+                push!(pts, Point2f(x_bar, y_max),            Point2f(x_bar + dx_tick, y_max), nan)
+            end
         end
         return pts
     end
 
-    # Label (position, string) pairs — one per MRCA.
+    # Label (position, string, halign) triples — one per MRCA.
     # Has a separate dependency on :label_func so label text changes do not
-    # force bracket geometry recomputation.
+    # force bracket geometry recomputation. :side governs label alignment and
+    # x-position relative to the bracket bar.
     map!(
         p.attributes,
-        [:geom, :accessor, :clade_vertices, :label_func, :offset, :pixel_projection],
+        [:geom, :accessor, :clade_vertices, :label_func, :offset, :pixel_projection, :side],
         :bracket_label_data,
-    ) do geom, accessor, clade_vertices, label_func, offset, _
-        entries = Tuple{Point2f, String}[]
+    ) do geom, accessor, clade_vertices, label_func, offset, _, side
+        entries = Tuple{Point2f, String, Symbol}[]
         for mrca in clade_vertices
             leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
             isempty(leaf_pts) && continue
 
-            ys = [q[2] for q in leaf_pts]
+            ys    = [q[2] for q in leaf_pts]
             y_min = minimum(ys)
             y_max = maximum(ys)
-            x_right = maximum(q[1] for q in leaf_pts)
             mid_y = (y_min + y_max) / 2
 
-            anchor = Point2f(x_right, mid_y)
-            dx = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
-            x_bar = x_right + dx
-
-            push!(entries, (Point2f(x_bar, mid_y), string(label_func(mrca))))
+            if side === :right
+                x_anchor = maximum(q[1] for q in leaf_pts)
+                anchor   = Point2f(x_anchor, mid_y)
+                dx_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+                x_bar    = x_anchor + dx_off
+                push!(entries, (Point2f(x_bar, mid_y), string(label_func(mrca)), :left))
+            else  # :left
+                x_anchor = minimum(q[1] for q in leaf_pts)
+                anchor   = Point2f(x_anchor, mid_y)
+                dx_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+                x_bar    = x_anchor - dx_off
+                push!(entries, (Point2f(x_bar, mid_y), string(label_func(mrca)), :right))
+            end
         end
         return entries
     end
 
     map!(p.attributes, [:bracket_label_data], :bracket_label_positions) do entries
-        return Point2f[pos for (pos, _) in entries]
+        return Point2f[pos for (pos, _, _) in entries]
     end
 
     map!(p.attributes, [:bracket_label_data], :bracket_label_strings) do entries
-        return String[str for (_, str) in entries]
+        return String[str for (_, str, _) in entries]
+    end
+
+    map!(p.attributes, [:bracket_label_data], :bracket_label_haligns) do entries
+        return Symbol[halign for (_, _, halign) in entries]
+    end
+
+    map!(p.attributes, [:bracket_label_haligns], :bracket_label_aligns) do haligns
+        return Tuple{Symbol, Symbol}[(h, :center) for h in haligns]
     end
 
     lines!(
@@ -700,7 +751,7 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
         text = p[:bracket_label_strings],
         fontsize = p[:fontsize],
         color = p[:color],
-        align = (:left, :center),
+        align = p[:bracket_label_aligns],
         visible = p[:visible],
     )
     return p
@@ -860,7 +911,9 @@ re-calling `lineageplot!`. The `rootvertex` argument may be a plain value or an
 - `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`,
   `clade_highlight_visible`: forwarded to `CladeHighlightLayer`.
 - `clade_label_func`, `clade_label_color`, `clade_label_fontsize`,
-  `clade_label_offset`, `clade_label_visible`: forwarded to `CladeLabelLayer`.
+  `clade_label_offset`, `clade_label_side`, `clade_label_visible`: forwarded to
+  `CladeLabelLayer`. `clade_label_side` is set automatically by
+  `lineageplot!(ax::LineageAxis, ...)` based on orientation.
 - `scalebar_position`, `scalebar_length`, `scalebar_label`, `scalebar_color`,
   `scalebar_linewidth`, `scalebar_auto_visible`: forwarded to `ScaleBarLayer`.
 
@@ -917,8 +970,8 @@ The `LineagePlot` plot object. Sub-layer recipes are accessible as children via
     # ── VertexLabelLayer ──────────────────────────────────────────────────────
     "Callable vertex -> Any supplying vertex label values."
     vertex_label_func = (v -> "")
-    "Predicate vertex -> Bool; only vertices returning true are labelled."
-    vertex_label_threshold = (v -> true)
+    "Predicate vertex -> Bool; only vertices returning true are labelled. Default: none (opt-in)."
+    vertex_label_threshold = (v -> false)
     "Label position: :vertex or :toward_parent."
     vertex_label_position = :vertex
     vertex_label_font = :regular
@@ -942,6 +995,8 @@ The `LineagePlot` plot object. Sub-layer recipes are accessible as children via
     clade_label_fontsize = 11
     "Pixel-space offset from the rightmost leaf position to the bracket bar."
     clade_label_offset = Makie.Vec2f(6, 0)
+    "Side on which the clade bracket is placed: :right or :left."
+    clade_label_side = :right
     clade_label_visible = true
 
     # ── ScaleBarLayer ─────────────────────────────────────────────────────────
@@ -1091,6 +1146,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         color = lp[:clade_label_color],
         fontsize = lp[:clade_label_fontsize],
         offset = lp[:clade_label_offset],
+        side = lp[:clade_label_side],
         visible = lp[:clade_label_visible],
     )
 

@@ -254,4 +254,77 @@ end
         @test Makie.get_scene(lax) === lax.scene
     end
 
+    @testset "lineageplot! orientation-aware leaf label defaults" begin
+        acc_el = lineagegraph_accessor(
+            _LA_BALANCED_ROOT;
+            children   = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+
+        # Backward (:vertexheights) + standard polarity → leaves on left →
+        # labels offset leftward, right-aligned.
+        fig1 = Figure()
+        lax1 = LineageAxis(fig1[1, 1])
+        lp1  = lineageplot!(lax1, _LA_BALANCED_ROOT, _LA_ACC;
+                             leaf_label_func = v -> string(v.name))
+        ll1  = only(filter(p -> p isa LeafLabelLayer, lp1.plots))
+        @test ll1[:offset][] == Makie.Vec2f(-4, 0)
+        @test ll1[:align][]  == (:right, :center)
+
+        # Forward (:edgelengths) + standard polarity → leaves on right →
+        # recipe defaults (4 px rightward, left-aligned).
+        fig2 = Figure()
+        lax2 = LineageAxis(fig2[1, 1])
+        lp2  = lineageplot!(lax2, _LA_BALANCED_ROOT, acc_el;
+                             leaf_label_func = v -> string(v.name))
+        ll2  = only(filter(p -> p isa LeafLabelLayer, lp2.plots))
+        @test ll2[:offset][] == Makie.Vec2f(4, 0)
+        @test ll2[:align][]  == (:left, :center)
+
+        # :right_to_left + backward (:vertexheights) → double reversal → leaves
+        # on right → recipe defaults.
+        fig3 = Figure()
+        lax3 = LineageAxis(fig3[1, 1]; lineage_orientation = :right_to_left)
+        lp3  = lineageplot!(lax3, _LA_BALANCED_ROOT, _LA_ACC;
+                             leaf_label_func = v -> string(v.name))
+        ll3  = only(filter(p -> p isa LeafLabelLayer, lp3.plots))
+        @test ll3[:offset][] == Makie.Vec2f(4, 0)
+        @test ll3[:align][]  == (:left, :center)
+    end
+
+    @testset "lineageplot! orientation-aware clade_label_side" begin
+        acc_el = lineagegraph_accessor(
+            _LA_BALANCED_ROOT;
+            children   = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+
+        # Backward + standard → leaves on left → bracket on left.
+        fig1 = Figure()
+        lax1 = LineageAxis(fig1[1, 1])
+        lp1  = lineageplot!(lax1, _LA_BALANCED_ROOT, _LA_ACC;
+                             clade_vertices = [_LA_BALANCED_ROOT])
+        @test lp1[:clade_label_side][] === :left
+
+        # Forward + standard → leaves on right → bracket on right.
+        fig2 = Figure()
+        lax2 = LineageAxis(fig2[1, 1])
+        lp2  = lineageplot!(lax2, _LA_BALANCED_ROOT, acc_el;
+                             clade_vertices = [_LA_BALANCED_ROOT])
+        @test lp2[:clade_label_side][] === :right
+    end
+
+    @testset "x-axis ticks in blockscene pixel space when show_x_axis = true" begin
+        fig = Figure()
+        lax = LineageAxis(fig[1, 1]; show_x_axis = true)
+        lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC)
+        colorbuffer(fig)
+        vp = Makie.viewport(lax.scene)[]
+        # After rendering, scene viewport must have non-zero width.
+        @test !iszero(Makie.widths(vp)[1])
+        # Tick scatter in blockscene must be visible.
+        scatter_plots = filter(p -> p isa Makie.Scatter, lax.blockscene.plots)
+        @test any(p -> p.visible[], scatter_plots)
+    end
+
 end
