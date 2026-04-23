@@ -1,3 +1,8 @@
+---
+date-created: 2026-04-22T19:11:10
+date-updated: 2026-04-22T19:11:10
+---
+
 # Salvaged session analysis — Tier 1 visual correctness issues
 
 Source: JSONL session `e7159d37-a1f6-455e-b76a-e3c350c1cd97`, lines 387 and 395.
