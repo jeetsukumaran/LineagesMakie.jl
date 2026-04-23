@@ -1,11 +1,14 @@
 ---
 date-created: 2026-04-22T19:13:22
-date-updated: 2026-04-22T19:13:22
+date-updated: 2026-04-22T19:29:00
 ---
 
+# Agent
 
 **Findings**
 - Panels 1 to 3 still have a real annotation-layout bug: leaf labels and clade labels are being placed independently, with no shared lane model and no text measurement. The call path is [examples/lineageplot_ex2.jl](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/examples/lineageplot_ex2.jl:84) -> [lineageplot!(::LineageAxis, ...)](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/LineageAxis.jl:580) -> fixed defaults at [src/LineageAxis.jl](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/LineageAxis.jl:593) -> separate placement code in [_leaf_label_data](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:468) and [CladeLabelLayer.plot!](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:742). In the live figure, panel 1 leaf labels are anchored at `x = 492.5` and clade labels at `x = 516.5`, only 24 px apart, so overlap is baked in. This misses the Tier 1 intent in [03_tasks--16.md](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/.workflow-docs/202604181600_tier1/completed-tasks/03_tasks--16.md:14) and its explicit gutter requirement at [03_tasks--16.md](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/.workflow-docs/202604181600_tier1/completed-tasks/03_tasks--16.md:203).
+
+- The visible gap at internal edge intersections is a rendering/compositing issue, not a geometry break. The rectangular edge geometry is continuous in [_build_edge_shapes](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Geometry.jl:561): every edge starts at the exact parent coordinate and runs `(xp, yp) -> (xp, yc) -> (xc, yc)`. The apparent cut-out happens later because [EdgeLayer.plot!](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:50) draws the lines first, then [VertexLayer.plot!](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:126) draws opaque internal markers on top. In `lineageplot_ex2`, those markers are explicitly white-filled at [examples/lineageplot_ex2.jl](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/examples/lineageplot_ex2.jl:74), so they erase the junction visually. If we consider this a defect, the root cause is the current marker/edge compositing contract, not missing or gapped edge paths.
 
 - The missing scale bar in panel 1 is not a cosmetic glitch; it is in the wrong coordinate/layout model. Panel 1 explicitly asks for it at [examples/lineageplot_ex2.jl](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/examples/lineageplot_ex2.jl:106), but [_scalebar_origin](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:529) puts a bottom bar at `bb.origin[2] - 0.5`, and [ScaleBarLayer.plot!](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:959) renders it in data space. Meanwhile [reset_limits!](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/LineageAxis.jl:467) only adds generic 5% padding. In the current render, panel 1’s scale bar points are `[(0.0, 0.5), (1.0, 0.5)]`, below the visible data area, so it is clipped away. The visible unlabeled bar in radial panel 4 comes from the same design: [_scalebar_visible](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:521) auto-enables it for `:edgelengths` even when `label == ""`.
 
@@ -14,11 +17,38 @@ date-updated: 2026-04-22T19:13:22
 - The tests are not specifying readability. [test/test_Layers.jl](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/test/test_Layers.jl:273) only checks that leaf/clade label geometry exists, not that text stays separated. [test/test_Integration.jl](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/test/test_Integration.jl:351) only checks that the example-style figure renders and some decorations exist. That is why the current PNG can violate the visual acceptance described in [03_tasks--16.md](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/.workflow-docs/202604181600_tier1/completed-tasks/03_tasks--16.md:435) while tests still pass.
 
 **Trace**
-`examples/lineageplot_ex2.jl` builds four `LineageAxis` panels, then [lineageplot!(::LineageAxis, ...)](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/LineageAxis.jl:580) injects only fixed orientation defaults and delegates to the composite recipe. `LineagePlot` then instantiates [leaf labels](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1267), [clade labels](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1291), and the [scale bar](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1310) as separate layers. Coordination stops there, so each layer solves only its own local placement problem.
+`examples/lineageplot_ex2.jl` builds four `LineageAxis` panels, then [lineageplot!(::LineageAxis, ...)](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/LineageAxis.jl:580) injects only fixed orientation defaults and delegates to the composite recipe. `LineagePlot` then instantiates [edges](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1240), [internal vertex markers](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1247), [leaf labels](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1267), [clade labels](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1291), and the [scale bar](/home/jeetsukumaran/site/storage/local/computing/research/20260418_LineagesMakie.jl/LineagesMakie.jl/src/Layers.jl:1310) as separate layers. Coordination stops there, so each layer solves only its own local placement problem and the edge/marker stack has no explicit visual-junction contract.
 
 **Fix**
 A full package rewrite does not look necessary. `Accessors`, `Geometry`, and the main lineage layout logic look sound; `examples/lineageplot_ex1.jl` is fine, and the recent clade-highlight/bracket fixes seem to have landed correctly. The subsystem that does need re-architecture is decoration layout.
 
 The right fix is to make `LineageAxis` the single owner of annotation layout: reserve explicit lanes for leaf labels, clade brackets, clade labels, and the scale bar; size those lanes from actual text extents instead of fixed offsets; and let `LeafLabelLayer`, `CladeLabelLayer`, and `ScaleBarLayer` consume semantic anchors from that shared layout model rather than inventing their own positions. Makie already uses text bounding boxes to reserve axis label space in [lineaxis.jl](/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/Makie/src/makielayout/lineaxis.jl:311) and [lineaxis.jl](/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/Makie/src/makielayout/lineaxis.jl:562); `LineagesMakie` should do the same here.
 
+For the intersection gap, the non-band-aid fix is to define an explicit junction rendering policy instead of relying on the current draw order. The clean options are:
+- Treat internal markers as overlays that must not obscure branch continuity: e.g. transparent or partially transparent fills, smaller fills with stroke-dominant styling, or marker shapes that reveal the underlying intersection.
+- Treat junctions as owned by the marker layer and trim edge endpoints intentionally to the marker boundary, so the visible gap becomes a deliberate design rather than accidental erasure.
+- Centralize that choice in the edge/vertex rendering contract so edge geometry, marker size, line width, and draw order are resolved together. Right now those decisions are independent, which is why the current default styling can visually punch holes in otherwise continuous geometry.
+
 I ran `examples/lineageplot_ex2.jl` and `examples/lineageplot_ex1.jl`, inspected the generated PNGs and live plot objects, and traced the code end-to-end. I also attempted `julia --project=test test/runtests.jl`, but it was terminated in this environment before completion, so I’m not claiming a full test pass.
+
+
+---
+
+
+# User
+
+
+---
+
+Also, is the return value of lineageplot[!] consistent with the rest of the Makie ecosystem?
+
+In VS Code, each of these show me a live pop up figure,
+
+
+```
+julia> fig = scatter(rand(100), rand(100))
+julia> fig
+julia> fig = Figure(); ax = Axis(fig[1, 1]); scatter!(ax, rand...); fig
+```
+
+whereas the `fig` from `lineageplot_ex1` and 2 do nothing.
