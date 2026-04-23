@@ -16,6 +16,8 @@ pull request.
 
 [What should I know before I get started?](#what-should-i-know-before-i-get-started)
   - [Package Conventions](#package-conventions)
+  - [Governance documents and pass-forward obligations](#governance-documents-and-pass-forward-obligations)
+  - [Architecture, upstream contracts, and verification](#architecture-upstream-contracts-and-verification)
   - [Package Maintainers](#package-maintainers)
   - [Administrators](#administrators)
   - [Etiquette and conduct](#etiquette-and-conduct)
@@ -102,6 +104,50 @@ If questions remain, ask an organization member.
 We use the status badges defined by [repostatus](https://www.repostatus.org/)
 to classify the development and maintainership status of each of our packages.
 Please familiarize yourself with these.
+
+#### Governance documents and pass-forward obligations
+
+All contributors, including coding agents, are responsible for identifying,
+reading, and complying with every applicable governance document before they
+plan, implement, verify, review, or delegate work.
+
+Applicable governance documents include:
+
+- `CONTRIBUTING.md`
+- all relevant `STYLE*.md` files
+- `STYLE-vocabulary.md`
+- any project-specific design or policy documents explicitly identified by the
+  project owner
+
+This reading obligation is line-by-line, not cursory.
+
+If you generate downstream instructions or artifacts — for example PRDs,
+tranche documents, tasking documents, review requests, audit scopes, or
+delegated task descriptions — you must pass the applicable mandates forward.
+That means:
+
+- explicitly naming the governance documents that must be read downstream
+- explicitly naming any upstream primary sources that must be read downstream
+- restating any relevant controlled-vocabulary, authorization-boundary, and
+  verification requirements
+- preserving these obligations through every further handoff
+
+It is not acceptable to assume the next contributor or agent will infer these
+requirements from context.
+
+#### Architecture, upstream contracts, and verification
+
+When work affects architecture, shared ownership, host-framework behavior,
+rendering, layout, public API contracts, or external integrations, also read
+and follow:
+
+- `STYLE-architecture.md`
+- `STYLE-upstream-contracts.md`
+- `STYLE-verification.md`
+- `STYLE-workflow-docs.md`
+
+If the project uses a framework-specific governance file such as
+`STYLE-makie.md`, that document is also mandatory for the relevant work.
 
 
 ### Package Maintainers
@@ -363,7 +409,16 @@ git clone https://github.com/<YOUR_GITHUB_USERNAME>/PackageName.jl.git
 
    - Follow the [Julia style guide](https://docs.julialang.org/en/v1/manual/style-guide/).
 
-   - Follow the [additional Julia style suggestions](CONTRIBUTING.organization.STYLE-julia.md).
+   - Follow the additional Julia style suggestions in `STYLE-julia.md`.
+
+   - Follow all applicable project governance documents, including project-local
+     `STYLE*.md` files, not just language-level style guidance.
+
+   - If the work touches architecture, shared ownership, rendering, layout,
+     public API behavior, or host-framework semantics, read and follow
+     `STYLE-architecture.md`, `STYLE-upstream-contracts.md`,
+     `STYLE-verification.md`, and any project-specific framework style guides
+     such as `STYLE-makie.md`.
 
    - Follow the [Julia performance tips](https://docs.julialang.org/en/v1/manual/performance-tips/).
 
@@ -374,6 +429,12 @@ git clone https://github.com/<YOUR_GITHUB_USERNAME>/PackageName.jl.git
      folder of the repository if necessary.
 
    - Ensure that unit tests have been added covering your code changes.
+
+   - Ensure that verification matches the real contract boundary. Visual,
+     rendering, layout, public-API, migration, and architecture changes often
+     require more than unit tests alone: integration checks, example outputs,
+     rendered artifacts, docs builds, or migration verification may also be
+     mandatory.
 
    - Ensure that you have added an entry to the `[UNRELEASED]` section of
      the `CHANGELOG.md` file for the package. Use previous entries as an
@@ -411,6 +472,10 @@ git clone https://github.com/<YOUR_GITHUB_USERNAME>/PackageName.jl.git
      - *Does your change alter APIs or existing exposed methods/types?*
        If so, this may cause dependency issues and breakages, so the
        maintainer will need to consider this when versioning the next release.
+     - *Does your change alter upstream-framework alignment, rendering policy,
+       ownership boundaries, or verification obligations?* If so, state the
+       governing documents and upstream primary sources you used to justify the
+       change.
      - If your changes are intended to increase performance, provide the
        results of a simple performance benchmark demonstrating the
        improvement, especially if the changes make code less legible.
@@ -430,8 +495,12 @@ assess it.
 Your pull request will be accepted and merged if:
 
 1. The dedicated package maintainers approve the pull request for merging.
-2. The automated build system confirms that all unit tests pass without
-   issues.
+2. The automated build system confirms that all required verification passes
+   without issues.
+
+Required verification may include unit tests, integration tests, docs builds,
+example outputs, rendered artifacts, migration checks, or other contract-level
+verification demanded by the relevant governance documents.
 
 There may be package-specific requirements or guidelines for some packages;
 the maintainers will let you know.

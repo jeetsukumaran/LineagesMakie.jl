@@ -1274,6 +1274,9 @@ end
   omitted.
 - At *least* one test file per source file: `test/test_<module>.jl` mirrors `src/<module>.jl`. If test files exceed LOC thresholds (500-600 non-commented LOC), then break into subfiles to be `include`d.
 - Test directory gets its own `Project.toml` (see below).
+- Tests must verify externally meaningful behavior, not just internal geometry
+  or implementation-adjacent proxies. For stronger guidance, also follow
+  `STYLE-verification.md`.
 
 ### 3.5 Error handling
 
@@ -1297,12 +1300,28 @@ end
 - Do not define macros that generate non-obvious code or change program
   semantics in opaque ways.
 
-### 3.8 Docuumentation
+### 3.8 Documentation
 
-- Use a dedicated Documenter.jl subproject in `docs/`, with its own `Project.toml` to managem documentation.
+- Use a dedicated Documenter.jl subproject in `docs/`, with its own `Project.toml` to manage documentation.
 - The root `README.md` should include synopsis of package, motivation/purpose, installation (from General as well as cloning from GitHub, links to served documentation, quick start, general tour of features through MWE's and snippets.
 - The Documenter project should provide all the deeper and foundational details, include example-rich tours and walkthroughs of all public functions and types, as well as supporting concepts, functions, types, and so on.
 - Documenter pages should be broken up to stay within Documenter's warning limits.
+
+### 3.9 Ownership, invariants, and anti-fixes
+
+- Repair shared invariants at the owning layer. Do not distribute one invariant
+  across many call sites through repeated defensive patches.
+- If multiple modules are applying the same corrective logic, stop and identify
+  the real owner before adding another patch.
+- Prefer a single well-owned repair over many local compensations.
+- Do not clamp, mask, or cosmetically suppress invalid state merely to make
+  tests pass or output look plausible. That is an anti-fix unless the masking
+  policy is itself the explicit owner-level contract.
+- When wrapping or extending a host framework, preserve the host-framework
+  contract unless an explicit, documented divergence has been approved.
+- When a local fix appears to require changes in several sibling layers, treat
+  that as an architectural smell and consult `STYLE-architecture.md` and
+  `STYLE-upstream-contracts.md`.
 
 ---
 
