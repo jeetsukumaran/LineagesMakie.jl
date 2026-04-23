@@ -32,23 +32,3 @@ For the intersection gap, the non-band-aid fix is to define an explicit junction
 I ran `examples/lineageplot_ex2.jl` and `examples/lineageplot_ex1.jl`, inspected the generated PNGs and live plot objects, and traced the code end-to-end. I also attempted `julia --project=test test/runtests.jl`, but it was terminated in this environment before completion, so I’m not claiming a full test pass.
 
 
----
-
-
-# User
-
-
----
-
-Also, is the return value of lineageplot[!] consistent with the rest of the Makie ecosystem?
-
-In VS Code, each of these show me a live pop up figure,
-
-
-```
-julia> fig = scatter(rand(100), rand(100))
-julia> fig
-julia> fig = Figure(); ax = Axis(fig[1, 1]); scatter!(ax, rand...); fig
-```
-
-whereas the `fig` from `lineageplot_ex1` and 2 do nothing.
