@@ -200,6 +200,65 @@ end
         @test isempty(lax._xaxis_tick_positions[])
     end
 
+    @testset "measured annotation layout reserves coordinated right-side lanes" begin
+        fig, lax = _fresh_lax()
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineageunits = :vertexlevels,
+            leaf_label_func = n -> "species_" * n.name,
+            clade_vertices = [_LA_NONROOT_CLADE],
+            clade_label_func = n -> "clade_" * n.name,
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        @test layout.active_annotation_side === :right
+        @test layout.right_gutter_px > layout.left_gutter_px
+        @test isfinite(layout.leaf_label_anchor_x)
+        @test layout.leaf_label_outer_edge_x < layout.clade_bracket_x - layout.clade_tick_length_px
+        @test layout.clade_bracket_x < layout.clade_label_anchor_x
+    end
+
+    @testset "measured annotation layout mirrors to the left side" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :right_to_left)
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineageunits = :vertexlevels,
+            leaf_label_func = n -> "species_" * n.name,
+            clade_vertices = [_LA_NONROOT_CLADE],
+            clade_label_func = n -> "clade_" * n.name,
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        @test layout.active_annotation_side === :left
+        @test layout.left_gutter_px > layout.right_gutter_px
+        @test isfinite(layout.leaf_label_anchor_x)
+        @test layout.leaf_label_outer_edge_x > layout.clade_bracket_x + layout.clade_tick_length_px
+        @test layout.clade_label_anchor_x < layout.clade_bracket_x
+    end
+
+    @testset "radial annotation layout uses measured outer padding" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :radial)
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineage_orientation = :radial,
+            leaf_label_func = n -> "species_" * n.name * "_label",
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        @test layout.active_annotation_side === :radial
+        @test layout.left_gutter_px ≈ layout.right_gutter_px
+        @test layout.radial_outer_pad_px > 24.0f0
+    end
+
     @testset "autolimits! re-applies limits from stored geometry" begin
         fig, lax, _ = _plotted_lax()
         proj_before = Makie.camera(lax.scene).projection[]

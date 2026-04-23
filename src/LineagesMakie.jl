@@ -57,6 +57,6 @@ export LineagePlot,
 # be in the including module's scope. LineageAxis (type) is auto-exported by
 # the @Block macro; reset_limits! is exported manually below.
 include("LineageAxis.jl")
-export reset_limits!
+export lineageplot, reset_limits!
 
 end

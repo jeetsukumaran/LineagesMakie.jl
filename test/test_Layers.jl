@@ -288,6 +288,66 @@ end
             @test !isempty(cll[:bracket_label_pixel_positions][])
         end
 
+        @testset "LineageAxis leaf and clade labels consume shared lane anchors" begin
+            fig = Figure(; size = (500, 350))
+            lax = LineageAxis(fig[1, 1])
+            lp = lineageplot!(
+                lax,
+                _LT_BALANCED_ROOT,
+                _LT_ACC_UNIT;
+                lineageunits = :edgelengths,
+                leaf_label_func = v -> "species_" * string(v.name),
+                clade_vertices = [_LT_NONROOT_CLADE],
+                clade_label_func = v -> "clade_" * string(v.name),
+            )
+            colorbuffer(fig)
+
+            layout = lax._decoration_layout[]
+            ll = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+
+            @test all(
+                pos -> isapprox(pos[1], layout.leaf_label_anchor_x; atol = 1.0f-3),
+                ll[:leaf_label_positions][],
+            )
+
+            bracket_xs = unique(Float32[pt[1] for pt in cll[:bracket_pixel_shapes][] if isfinite(pt[1])])
+            @test any(x -> isapprox(x, layout.clade_bracket_x; atol = 1.0f-3), bracket_xs)
+            @test all(
+                pos -> isapprox(pos[1], layout.clade_label_anchor_x; atol = 1.0f-3),
+                cll[:bracket_label_pixel_positions][],
+            )
+        end
+
+        @testset "LineageAxis shared lanes mirror on the left side" begin
+            fig = Figure(; size = (500, 350))
+            lax = LineageAxis(fig[1, 1]; lineage_orientation = :right_to_left)
+            lp = lineageplot!(
+                lax,
+                _LT_BALANCED_ROOT,
+                _LT_ACC_UNIT;
+                lineageunits = :edgelengths,
+                leaf_label_func = v -> "species_" * string(v.name),
+                clade_vertices = [_LT_NONROOT_CLADE],
+                clade_label_func = v -> "clade_" * string(v.name),
+            )
+            colorbuffer(fig)
+
+            layout = lax._decoration_layout[]
+            ll = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+
+            @test all(
+                pos -> isapprox(pos[1], layout.leaf_label_anchor_x; atol = 1.0f-3),
+                ll[:leaf_label_positions][],
+            )
+            @test all(
+                pos -> isapprox(pos[1], layout.clade_label_anchor_x; atol = 1.0f-3),
+                cll[:bracket_label_pixel_positions][],
+            )
+            @test layout.clade_label_anchor_x < layout.clade_bracket_x < layout.leaf_label_anchor_x
+        end
+
     end
 
     @testset "VertexLabelLayer" begin

@@ -266,6 +266,9 @@ guarantees that label strings and positions share the same index mapping.
     italic = false
     align = (:left, :center)
     lineage_orientation = :left_to_right
+    # Internal LineageAxis-owned layout contract. Standalone layer use leaves
+    # this as nothing and falls back to the local offset path.
+    annotation_layout = nothing
     visible = true
 end
 
@@ -296,10 +299,10 @@ function Makie.plot!(p::LeafLabelLayer)::LeafLabelLayer
     # :pixel_projection so this map! reruns on viewport change.
     map!(
         p.attributes,
-        [:geom, :offset, :align, :lineage_orientation, :pixel_projection],
+        [:geom, :offset, :align, :lineage_orientation, :annotation_layout, :pixel_projection],
         :leaf_label_data,
-    ) do geom, offset, align, lineage_orientation, _
-        return _leaf_label_data(sc, geom, offset, align, lineage_orientation)
+    ) do geom, offset, align, lineage_orientation, annotation_layout, _
+        return _leaf_label_data(sc, geom, offset, align, lineage_orientation, annotation_layout)
     end
 
     map!(p.attributes, [:leaf_label_data], :leaf_label_positions) do entries
@@ -471,11 +474,31 @@ function _leaf_label_data(
         offset::Vec2f,
         align::Tuple,
         lineage_orientation::Symbol,
+        annotation_layout,
     )::Vector{Tuple{Point2f, Tuple{Symbol, Symbol}}}
     entries = Tuple{Point2f, Tuple{Symbol, Symbol}}[]
 
+    if annotation_layout !== nothing && lineage_orientation !== :radial
+        side = annotation_layout.active_annotation_side
+        if side in (:left, :right)
+            shared_align = annotation_layout.leaf_label_align
+            anchor_x = annotation_layout.leaf_label_anchor_x
+            for v in geom.leaf_order
+                anchor = geom.vertex_positions[v]
+                block_anchor = _to_blockscene_pixel(sc, anchor)
+                push!(entries, (Point2f(anchor_x, block_anchor[2]), shared_align))
+            end
+            return entries
+        end
+    end
+
     if lineage_orientation === :radial
         center = _geom_center(geom.boundingbox)
+        outward_gap_px = if annotation_layout !== nothing && annotation_layout.active_annotation_side === :radial
+            annotation_layout.radial_leaf_gap_px
+        else
+            offset[1]
+        end
         for v in geom.leaf_order
             anchor = geom.vertex_positions[v]
             outward = _normalized_or_default(
@@ -484,7 +507,7 @@ function _leaf_label_data(
             )
             tangent = Vec2f(-outward[2], outward[1])
             block_anchor = _to_blockscene_pixel(sc, anchor)
-            pixel_delta = outward * offset[1] + tangent * offset[2]
+            pixel_delta = outward * outward_gap_px + tangent * offset[2]
             halign = outward[1] < 0.0f0 ? :right : :left
             push!(entries, (block_anchor + Point2f(pixel_delta), (halign, :center)))
         end
@@ -498,6 +521,68 @@ function _leaf_label_data(
         push!(entries, (block_anchor + Point2f(offset), resolved_align))
     end
     return entries
+end
+
+function _shared_clade_annotation_active(annotation_layout)::Bool
+    annotation_layout === nothing && return false
+    return annotation_layout.active_annotation_side in (:left, :right)
+end
+
+function _shared_bracket_pixel_shapes(
+        sc,
+        geom::LineageGraphGeometry,
+        accessor::LineageGraphAccessor,
+        clade_vertices,
+        annotation_layout,
+    )::Vector{Point2f}
+    !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
+
+    side = annotation_layout.active_annotation_side
+    x_bar = annotation_layout.clade_bracket_x
+    tick_length_px = annotation_layout.clade_tick_length_px
+    pts = Point2f[]
+    nan = Point2f(NaN, NaN)
+
+    for mrca in clade_vertices
+        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
+        isempty(leaf_pts) && continue
+        leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
+        ys = [q[2] for q in leaf_px]
+        y_min = minimum(ys)
+        y_max = maximum(ys)
+
+        if side === :right
+            push!(pts, Point2f(x_bar - tick_length_px, y_min), Point2f(x_bar, y_min), nan)
+            push!(pts, Point2f(x_bar, y_min), Point2f(x_bar, y_max), nan)
+            push!(pts, Point2f(x_bar, y_max), Point2f(x_bar - tick_length_px, y_max), nan)
+        else
+            push!(pts, Point2f(x_bar + tick_length_px, y_min), Point2f(x_bar, y_min), nan)
+            push!(pts, Point2f(x_bar, y_min), Point2f(x_bar, y_max), nan)
+            push!(pts, Point2f(x_bar, y_max), Point2f(x_bar + tick_length_px, y_max), nan)
+        end
+    end
+    return pts
+end
+
+function _shared_bracket_label_pixel_positions(
+        sc,
+        geom::LineageGraphGeometry,
+        accessor::LineageGraphAccessor,
+        clade_vertices,
+        annotation_layout,
+    )::Vector{Point2f}
+    !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
+
+    x_label = annotation_layout.clade_label_anchor_x
+    positions = Point2f[]
+    for mrca in clade_vertices
+        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
+        isempty(leaf_pts) && continue
+        leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
+        ys = [q[2] for q in leaf_px]
+        push!(positions, Point2f(x_label, (minimum(ys) + maximum(ys)) / 2))
+    end
+    return positions
 end
 
 """
@@ -736,6 +821,7 @@ the scene viewport or camera changes.
     offset = Makie.Vec2f(6, 0)
     "Bracket side relative to leaf tips: :right (leaves at right) or :left (leaves at left)."
     side = :right
+    annotation_layout = nothing
     visible = true
 end
 
@@ -833,7 +919,10 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
         return Symbol[halign for (_, _, halign) in entries]
     end
 
-    map!(p.attributes, [:bracket_label_haligns], :bracket_label_aligns) do haligns
+    map!(p.attributes, [:bracket_label_haligns, :annotation_layout], :bracket_label_aligns) do haligns, annotation_layout
+        if _shared_clade_annotation_active(annotation_layout)
+            return Tuple{Symbol, Symbol}[annotation_layout.clade_label_align for _ in haligns]
+        end
         return Tuple{Symbol, Symbol}[(h, :center) for h in haligns]
     end
 
@@ -841,9 +930,13 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     # Depends on :pixel_projection so this reruns whenever viewport or camera changes.
     map!(
         p.attributes,
-        [:bracket_shapes, :pixel_projection],
+        [:geom, :accessor, :clade_vertices, :bracket_shapes, :annotation_layout, :pixel_projection],
         :bracket_pixel_shapes,
-    ) do shapes, _
+    ) do geom, accessor, clade_vertices, shapes, annotation_layout, _
+        if _shared_clade_annotation_active(annotation_layout)
+            return _shared_bracket_pixel_shapes(sc, geom, accessor, clade_vertices, annotation_layout)
+        end
+
         sc_vp = Makie.viewport(sc)[]
         result = Point2f[]
         for pt in shapes
@@ -864,9 +957,19 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     # Depends on :pixel_projection so this reruns whenever viewport or camera changes.
     map!(
         p.attributes,
-        [:bracket_label_positions, :pixel_projection],
+        [:geom, :accessor, :clade_vertices, :bracket_label_positions, :annotation_layout, :pixel_projection],
         :bracket_label_pixel_positions,
-    ) do positions, _
+    ) do geom, accessor, clade_vertices, positions, annotation_layout, _
+        if _shared_clade_annotation_active(annotation_layout)
+            return _shared_bracket_label_pixel_positions(
+                sc,
+                geom,
+                accessor,
+                clade_vertices,
+                annotation_layout,
+            )
+        end
+
         sc_vp = Makie.viewport(sc)[]
         return Point2f[
             Point2f(
@@ -1069,6 +1172,9 @@ re-calling `lineageplot!`. The `rootvertex` argument may be a plain value or an
 The `LineagePlot` plot object. Sub-layer recipes are accessible as children via
 `lp.plots` (e.g. `filter(p -> p isa EdgeLayer, lp.plots)`).
 
+For the non-mutating convenience entry point that creates a `Figure` and
+`LineageAxis` automatically, use `LineagesMakie.lineageplot`.
+
 # Derived ComputeGraph attributes
 - `lp[:computed_geom][]` — current `LineageGraphGeometry`.
 - `lp[:resolved_lineageunits][]` — resolved `lineageunits` `Symbol`.
@@ -1156,6 +1262,7 @@ The `LineagePlot` plot object. Sub-layer recipes are accessible as children via
     scalebar_linewidth = 1.5f0
     "nothing → derived from lineageunits; Bool overrides auto-visibility."
     scalebar_auto_visible = nothing
+
 end
 
 function Makie.plot!(lp::LineagePlot)::LineagePlot

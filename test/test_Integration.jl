@@ -118,6 +118,31 @@ end
         end
     end
 
+    @testset "lineageplot returns FigureAxisPlot with LineageAxis" begin
+        tmpfile = tempname() * ".png"
+        try
+            acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+            plot_result = lineageplot(
+                _IT_ROOT,
+                acc;
+                figure = (; size = (700, 500)),
+                axis = (; title = "Integration plot"),
+                leaf_label_func = n -> n.name,
+            )
+            @test plot_result isa CairoMakie.Makie.FigureAxisPlot
+            fig, lax, lp = plot_result
+            @test fig isa Figure
+            @test lax isa LineageAxis
+            @test lp isa LineagePlot
+            @test lax.last_geom[] !== nothing
+            @test repr(MIME("text/plain"), plot_result) == "FigureAxisPlot()"
+            save(tmpfile, fig)
+            @test filesize(tmpfile) > 0
+        finally
+            isfile(tmpfile) && rm(tmpfile)
+        end
+    end
+
     @testset "lineageplot! on LineageAxis returns LineagePlot and sets last_geom" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])

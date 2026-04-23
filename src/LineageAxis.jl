@@ -49,7 +49,7 @@ using Makie: make_block_docstring
 
 # _resolve_lineageunits_stub is private (unexported) but needed by lineageplot!.
 # LineagePlot is the return type of the updated lineageplot! method.
-using .Layers: _resolve_lineageunits_stub, LineagePlot
+using .Layers: _resolve_lineageunits_stub, CladeLabelLayer, LeafLabelLayer, LineagePlot
 # import (not using) to extend lineageplot! with a LineageAxis-specific method.
 import .Layers: lineageplot!
 # data_to_pixel is needed by _wire_x_axis! to convert tick x values to blockscene
@@ -58,10 +58,45 @@ using .CoordTransform: data_to_pixel
 
 # ── Block type ─────────────────────────────────────────────────────────────────
 
-const _LineageAxisDecorationLayout = NamedTuple{
-    (:plot_rect, :title_band_rect, :xaxis_band_rect, :xlabel_band_rect, :left_gutter_px, :right_gutter_px),
-    Tuple{Rect2f, Rect2f, Rect2f, Rect2f, Float32, Float32},
-}
+struct _LineageAxisAnnotationMeasurements
+    active_side::Symbol
+    leaf_label_visible::Bool
+    leaf_label_align::Tuple{Symbol, Symbol}
+    leaf_label_gap_px::Float32
+    leaf_label_toward_plot_px::Float32
+    leaf_label_away_from_plot_px::Float32
+    leaf_label_max_width_px::Float32
+    leaf_label_max_height_px::Float32
+    clade_annotation_visible::Bool
+    clade_bracket_min_gap_px::Float32
+    clade_tick_length_px::Float32
+    clade_label_gap_px::Float32
+    clade_label_max_width_px::Float32
+    clade_label_max_height_px::Float32
+    radial_leaf_gap_px::Float32
+    radial_leaf_max_width_px::Float32
+    radial_leaf_max_height_px::Float32
+end
+
+struct _LineageAxisDecorationLayout
+    plot_rect::Rect2f
+    title_band_rect::Rect2f
+    xaxis_band_rect::Rect2f
+    xlabel_band_rect::Rect2f
+    left_gutter_px::Float32
+    right_gutter_px::Float32
+    active_annotation_side::Symbol
+    leaf_label_anchor_x::Float32
+    leaf_label_align::Tuple{Symbol, Symbol}
+    leaf_label_outer_edge_x::Float32
+    clade_bracket_x::Float32
+    clade_tick_length_px::Float32
+    clade_label_anchor_x::Float32
+    clade_label_align::Tuple{Symbol, Symbol}
+    clade_annotation_outer_edge_x::Float32
+    radial_outer_pad_px::Float32
+    radial_leaf_gap_px::Float32
+end
 
 """
     LineageAxis
@@ -125,6 +160,7 @@ Makie.@Block LineageAxis <: Makie.AbstractAxis begin
     # Justified exception to STYLE-julia.md §1.12: existential parametricity.
     last_geom::Makie.Observable{Any}
     _polarity_locked::Makie.Observable{Bool}
+    _annotation_measurements::Makie.Observable{_LineageAxisAnnotationMeasurements}
     # Decoration layout and derived tick geometry are stored on Observables so
     # tests and downstream wiring can inspect the current panel-owned bands.
     _decoration_layout::Makie.Observable{_LineageAxisDecorationLayout}
@@ -168,6 +204,18 @@ Makie.@Block LineageAxis <: Makie.AbstractAxis begin
     end
 end
 
+function _layout_kwargs_namedtuple(raw_kwargs, keyword_name::AbstractString)::NamedTuple
+    raw_kwargs isa NamedTuple && return raw_kwargs
+    raw_kwargs isa Attributes && return (; pairs(raw_kwargs)...)
+    raw_kwargs isa AbstractDict{Symbol} && return (; pairs(raw_kwargs)...)
+    throw(
+        ArgumentError(
+            "the $(keyword_name) keyword expects a NamedTuple, Attributes, or " *
+            "AbstractDict{Symbol}; got $(repr(raw_kwargs)) ($(typeof(raw_kwargs)))",
+        ),
+    )
+end
+
 # ── Decoration layout helpers ────────────────────────────────────────────────
 
 const _LINEAGEAXIS_TITLE_BAND_PX = 28.0f0
@@ -176,11 +224,15 @@ const _LINEAGEAXIS_XLABEL_BAND_PX = 24.0f0
 const _LINEAGEAXIS_SIDE_GUTTER_PX = 84.0f0
 const _LINEAGEAXIS_RADIAL_OUTER_PAD_PX = 24.0f0
 const _LINEAGEAXIS_PLOT_GAP_PX = 8.0f0
+const _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX = 8.0f0
 const _LINEAGEAXIS_TITLE_FONTSIZE = 16
 const _LINEAGEAXIS_LABEL_FONTSIZE = 12
 const _LINEAGEAXIS_TICK_FONTSIZE = 10
 const _LINEAGEAXIS_TICK_LENGTH_PX = 6.0f0
 const _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX = 28.0f0
+const _LINEAGEAXIS_CLADE_LANE_GAP_PX = 8.0f0
+const _LINEAGEAXIS_CLADE_TICK_LENGTH_PX = 3.0f0
+const _LINEAGEAXIS_CLADE_TEXT_GAP_PX = 6.0f0
 
 function _rectf(
         x::Float32,
@@ -201,12 +253,116 @@ function _rect_center(rect::Rect2f)::Point2f
     )
 end
 
+function _default_annotation_measurements()::_LineageAxisAnnotationMeasurements
+    return _LineageAxisAnnotationMeasurements(
+        :none,
+        false,
+        (:left, :center),
+        0.0f0,
+        0.0f0,
+        0.0f0,
+        0.0f0,
+        0.0f0,
+        false,
+        _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX,
+        _LINEAGEAXIS_CLADE_TICK_LENGTH_PX,
+        _LINEAGEAXIS_CLADE_TEXT_GAP_PX,
+        0.0f0,
+        0.0f0,
+        4.0f0,
+        0.0f0,
+        0.0f0,
+    )
+end
+
+function _text_anchor_extents(width_px::Float32, halign::Symbol)::Tuple{Float32, Float32}
+    if halign === :right
+        return (width_px, 0.0f0)
+    elseif halign === :center
+        half_width = width_px / 2.0f0
+        return (half_width, half_width)
+    else
+        return (0.0f0, width_px)
+    end
+end
+
+function _text_extents_for_side(
+        width_px::Float32,
+        halign::Symbol,
+        side::Symbol,
+    )::Tuple{Float32, Float32}
+    left_extent, right_extent = _text_anchor_extents(width_px, halign)
+    if side === :left
+        return (right_extent, left_extent)
+    end
+    return (left_extent, right_extent)
+end
+
+function _max_text_size_px(strings::Vector{String}, font, fontsize)::Tuple{Float32, Float32}
+    resolved_font = if font isa Symbol
+        raw_fonts = theme(:fonts)
+        fonts = if raw_fonts isa Observable
+            raw_fonts[]
+        else
+            raw_fonts
+        end
+        if fonts isa NamedTuple
+            Makie.to_font(Attributes(; pairs(fonts)...), font)
+        elseif fonts isa Attributes
+            Makie.to_font(fonts, font)
+        else
+            Makie.defaultfont()
+        end
+    else
+        Makie.to_font(font)
+    end
+    max_width = 0.0f0
+    max_height = 0.0f0
+    for label in strings
+        isempty(label) && continue
+        bb = Makie.text_bb(label, resolved_font, fontsize)
+        width_px = Float32(bb.widths[1])
+        height_px = Float32(bb.widths[2])
+        isfinite(width_px) || continue
+        isfinite(height_px) || continue
+        max_width = max(max_width, width_px)
+        max_height = max(max_height, height_px)
+    end
+    return (max_width, max_height)
+end
+
+function _rectangular_annotation_extent_px(
+        measurements::_LineageAxisAnnotationMeasurements,
+    )::Float32
+    leaf_extent = if measurements.leaf_label_visible
+        measurements.leaf_label_gap_px +
+        measurements.leaf_label_toward_plot_px +
+        measurements.leaf_label_away_from_plot_px
+    else
+        0.0f0
+    end
+
+    if !measurements.clade_annotation_visible
+        return leaf_extent
+    end
+
+    clade_bracket_extent = max(
+        measurements.clade_bracket_min_gap_px,
+        leaf_extent + _LINEAGEAXIS_CLADE_LANE_GAP_PX + measurements.clade_tick_length_px,
+    )
+    clade_label_extent = clade_bracket_extent +
+        measurements.clade_label_gap_px +
+        measurements.clade_label_max_width_px
+    return max(leaf_extent, clade_label_extent)
+end
+
 function _decoration_layout(
         bbox,
         title::String,
         xlabel::String,
         show_x_axis::Bool,
         lineage_orientation::Symbol,
+        measurements::_LineageAxisAnnotationMeasurements,
     )
     x0 = Float32(bbox.origin[1])
     y0 = Float32(bbox.origin[2])
@@ -220,14 +376,42 @@ function _decoration_layout(
     title_band_h  = has_title ? _LINEAGEAXIS_TITLE_BAND_PX : 0.0f0
     xaxis_band_h  = show_x_axis ? _LINEAGEAXIS_XAXIS_BAND_PX : 0.0f0
     xlabel_band_h = has_xlabel ? _LINEAGEAXIS_XLABEL_BAND_PX : 0.0f0
-    side_gutter   = is_radial ? _LINEAGEAXIS_RADIAL_OUTER_PAD_PX : _LINEAGEAXIS_SIDE_GUTTER_PX
-    vertical_pad  = is_radial ? _LINEAGEAXIS_RADIAL_OUTER_PAD_PX : _LINEAGEAXIS_PLOT_GAP_PX
+    radial_outer_pad = if is_radial
+        max(
+            _LINEAGEAXIS_RADIAL_OUTER_PAD_PX,
+            measurements.radial_leaf_gap_px +
+            max(measurements.radial_leaf_max_width_px, measurements.radial_leaf_max_height_px) +
+            _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX,
+        )
+    else
+        _LINEAGEAXIS_RADIAL_OUTER_PAD_PX
+    end
 
-    plot_x0 = x0 + side_gutter
+    active_side = is_radial ? :radial : measurements.active_side
+    annotation_extent_px = is_radial ? 0.0f0 : _rectangular_annotation_extent_px(measurements)
+    left_gutter = if is_radial
+        radial_outer_pad
+    elseif active_side === :left
+        _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX + annotation_extent_px
+    else
+        _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX
+    end
+    right_gutter = if is_radial
+        radial_outer_pad
+    elseif active_side === :right
+        _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX + annotation_extent_px
+    else
+        _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX
+    end
+    vertical_pad  = is_radial ? radial_outer_pad : _LINEAGEAXIS_PLOT_GAP_PX
+
+    plot_x0 = x0 + left_gutter
     plot_y0 = y0 + xlabel_band_h + xaxis_band_h + vertical_pad
-    plot_w  = w - 2.0f0 * side_gutter
+    plot_w  = w - left_gutter - right_gutter
     plot_h  = h - title_band_h - xlabel_band_h - xaxis_band_h - 2.0f0 * vertical_pad
     plot_rect = _rectf(plot_x0, plot_y0, plot_w, plot_h; clamp_minimum = true)
+    plot_left = plot_rect.origin[1]
+    plot_right = plot_rect.origin[1] + plot_rect.widths[1]
 
     plot_top = plot_rect.origin[2] + plot_rect.widths[2]
     title_band_rect = _rectf(
@@ -249,13 +433,62 @@ function _decoration_layout(
         xlabel_band_h,
     )
 
-    return (
-        plot_rect = plot_rect,
-        title_band_rect = title_band_rect,
-        xaxis_band_rect = xaxis_band_rect,
-        xlabel_band_rect = xlabel_band_rect,
-        left_gutter_px = side_gutter,
-        right_gutter_px = side_gutter,
+    leaf_anchor_x = Float32(NaN)
+    leaf_outer_edge_x = Float32(NaN)
+    clade_bracket_x = Float32(NaN)
+    clade_label_anchor_x = Float32(NaN)
+    clade_annotation_outer_edge_x = Float32(NaN)
+    leaf_align = measurements.leaf_label_align
+    clade_align = active_side === :left ? (:right, :center) : (:left, :center)
+
+    if !is_radial && active_side === :right
+        leaf_anchor_x = plot_right + measurements.leaf_label_gap_px + measurements.leaf_label_toward_plot_px
+        leaf_outer_edge_x = leaf_anchor_x + measurements.leaf_label_away_from_plot_px
+        clade_bracket_x = max(
+            plot_right + measurements.clade_bracket_min_gap_px,
+            leaf_outer_edge_x + _LINEAGEAXIS_CLADE_LANE_GAP_PX + measurements.clade_tick_length_px,
+        )
+        clade_label_anchor_x = clade_bracket_x + measurements.clade_label_gap_px
+        clade_annotation_outer_edge_x = max(
+            leaf_outer_edge_x,
+            measurements.clade_annotation_visible ?
+                (clade_label_anchor_x + measurements.clade_label_max_width_px) :
+                leaf_outer_edge_x,
+        )
+    elseif !is_radial && active_side === :left
+        leaf_anchor_x = plot_left - measurements.leaf_label_gap_px - measurements.leaf_label_toward_plot_px
+        leaf_outer_edge_x = leaf_anchor_x - measurements.leaf_label_away_from_plot_px
+        clade_bracket_x = min(
+            plot_left - measurements.clade_bracket_min_gap_px,
+            leaf_outer_edge_x - _LINEAGEAXIS_CLADE_LANE_GAP_PX - measurements.clade_tick_length_px,
+        )
+        clade_label_anchor_x = clade_bracket_x - measurements.clade_label_gap_px
+        clade_annotation_outer_edge_x = min(
+            leaf_outer_edge_x,
+            measurements.clade_annotation_visible ?
+                (clade_label_anchor_x - measurements.clade_label_max_width_px) :
+                leaf_outer_edge_x,
+        )
+    end
+
+    return _LineageAxisDecorationLayout(
+        plot_rect,
+        title_band_rect,
+        xaxis_band_rect,
+        xlabel_band_rect,
+        left_gutter,
+        right_gutter,
+        active_side,
+        leaf_anchor_x,
+        leaf_align,
+        leaf_outer_edge_x,
+        clade_bracket_x,
+        measurements.clade_tick_length_px,
+        clade_label_anchor_x,
+        clade_align,
+        clade_annotation_outer_edge_x,
+        radial_outer_pad,
+        measurements.radial_leaf_gap_px,
     )
 end
 
@@ -263,6 +496,7 @@ end
 
 function Makie.initialize_block!(lax::LineageAxis)
     blockscene = lax.blockscene
+    annotation_measurements = Makie.Observable(_default_annotation_measurements())
 
     layout_obs = lift(
         blockscene,
@@ -271,8 +505,9 @@ function Makie.initialize_block!(lax::LineageAxis)
         lax.xlabel,
         lax.show_x_axis,
         lax.lineage_orientation,
-    ) do bbox, title, xlabel, show_x_axis, lineage_orientation
-        _decoration_layout(bbox, title, xlabel, show_x_axis, lineage_orientation)
+        annotation_measurements,
+    ) do bbox, title, xlabel, show_x_axis, lineage_orientation, measurements
+        _decoration_layout(bbox, title, xlabel, show_x_axis, lineage_orientation, measurements)
     end
 
     # Create the plotting scene inside the reserved plot rect rather than using
@@ -285,6 +520,7 @@ function Makie.initialize_block!(lax::LineageAxis)
     # Initialize non-attribute Observable fields.
     setfield!(lax, :last_geom, Makie.Observable{Any}(nothing))
     setfield!(lax, :_polarity_locked, Makie.Observable{Bool}(false))
+    setfield!(lax, :_annotation_measurements, annotation_measurements)
     setfield!(lax, :_decoration_layout, layout_obs)
     setfield!(lax, :_xaxis_tick_positions, Makie.Observable(Point2f[]))
     setfield!(lax, :_xaxis_tick_segments, Makie.Observable(Point2f[]))
@@ -549,7 +785,204 @@ function _infer_axis_polarity(lineageunits::Symbol)::Symbol
     return :forward
 end
 
+function _resolved_leaf_label_font(font, italic::Bool)
+    return italic ? :italic : font
+end
+
+function _resolved_leaf_label_strings(
+        geom::LineageGraphGeometry,
+        accessor::LineageGraphAccessor,
+        text_func,
+    )::Vector{String}
+    resolved_tf = if text_func === nothing
+        if accessor.vertexvalue !== nothing
+            v -> string(accessor.vertexvalue(v))
+        else
+            v -> string(v)
+        end
+    else
+        text_func
+    end
+    return String[resolved_tf(v) for v in geom.leaf_order]
+end
+
+function _resolved_clade_label_strings(clade_vertices, label_func)::Vector{String}
+    return String[string(label_func(v)) for v in clade_vertices]
+end
+
+function _annotation_measurements(
+        geom::LineageGraphGeometry,
+        accessor::LineageGraphAccessor,
+        lineage_orientation::Symbol,
+        leaf_label_func,
+        leaf_label_font,
+        leaf_label_fontsize,
+        leaf_label_italic::Bool,
+        leaf_label_align::Tuple,
+        leaf_label_visible::Bool,
+        leaf_label_offset::Makie.Vec2f,
+        clade_vertices,
+        clade_label_func,
+        clade_label_fontsize,
+        clade_label_visible::Bool,
+        clade_label_offset::Makie.Vec2f,
+        clade_label_side::Symbol,
+    )::_LineageAxisAnnotationMeasurements
+    resolved_leaf_font = _resolved_leaf_label_font(leaf_label_font, leaf_label_italic)
+    leaf_strings = _resolved_leaf_label_strings(geom, accessor, leaf_label_func)
+    leaf_width_px, leaf_height_px = _max_text_size_px(leaf_strings, resolved_leaf_font, leaf_label_fontsize)
+
+    clade_strings = _resolved_clade_label_strings(clade_vertices, clade_label_func)
+    clade_width_px, clade_height_px = _max_text_size_px(clade_strings, :regular, clade_label_fontsize)
+
+    if lineage_orientation === :radial
+        radial_gap_px = max(abs(Float32(leaf_label_offset[1])), 4.0f0)
+        return _LineageAxisAnnotationMeasurements(
+            :radial,
+            leaf_label_visible && !isempty(leaf_strings),
+            (leaf_label_align[1], leaf_label_align[2]),
+            0.0f0,
+            0.0f0,
+            0.0f0,
+            leaf_width_px,
+            leaf_height_px,
+            false,
+            abs(Float32(clade_label_offset[1])),
+            _LINEAGEAXIS_CLADE_TICK_LENGTH_PX,
+            _LINEAGEAXIS_CLADE_TEXT_GAP_PX,
+            clade_width_px,
+            clade_height_px,
+            radial_gap_px,
+            leaf_width_px,
+            leaf_height_px,
+        )
+    end
+
+    active_side = clade_label_side
+    leaf_halign = leaf_label_align[1]
+    toward_plot_px, away_from_plot_px = _text_extents_for_side(leaf_width_px, leaf_halign, active_side)
+
+    return _LineageAxisAnnotationMeasurements(
+        active_side,
+        leaf_label_visible && !isempty(leaf_strings),
+        (leaf_label_align[1], leaf_label_align[2]),
+        abs(Float32(leaf_label_offset[1])),
+        toward_plot_px,
+        away_from_plot_px,
+        leaf_width_px,
+        leaf_height_px,
+        clade_label_visible && !isempty(clade_vertices),
+        abs(Float32(clade_label_offset[1])),
+        _LINEAGEAXIS_CLADE_TICK_LENGTH_PX,
+        _LINEAGEAXIS_CLADE_TEXT_GAP_PX,
+        clade_width_px,
+        clade_height_px,
+        max(abs(Float32(leaf_label_offset[1])), 4.0f0),
+        leaf_width_px,
+        leaf_height_px,
+    )
+end
+
+function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothing
+    function _update_annotation_measurements()
+        geom = lp[:computed_geom][]
+        geom === nothing && return
+
+        ax._annotation_measurements[] = _annotation_measurements(
+            geom,
+            lp[:accessor][],
+            lp[:lineage_orientation][],
+            lp[:leaf_label_func][],
+            lp[:leaf_label_font][],
+            lp[:leaf_label_fontsize][],
+            lp[:leaf_label_italic][],
+            lp[:leaf_label_align][],
+            lp[:leaf_label_visible][],
+            lp[:leaf_label_offset][],
+            lp[:clade_vertices][],
+            lp[:clade_label_func][],
+            lp[:clade_label_fontsize][],
+            lp[:clade_label_visible][],
+            lp[:clade_label_offset][],
+            lp[:clade_label_side][],
+        )
+    end
+
+    _update_annotation_measurements()
+
+    onany(
+        ax.scene,
+        lp[:computed_geom],
+        lp[:lineage_orientation],
+        lp[:leaf_label_func],
+        lp[:leaf_label_font],
+        lp[:leaf_label_fontsize],
+        lp[:leaf_label_italic],
+        lp[:leaf_label_align],
+        lp[:leaf_label_visible],
+        lp[:leaf_label_offset],
+        lp[:clade_vertices],
+        lp[:clade_label_func],
+        lp[:clade_label_fontsize],
+        lp[:clade_label_visible],
+        lp[:clade_label_offset],
+        lp[:clade_label_side],
+    ) do args...
+        _update_annotation_measurements()
+    end
+
+    return nothing
+end
+
+function _wire_annotation_layout!(ax::LineageAxis, lp::LineagePlot)::Nothing
+    annotation_layers = filter(p -> p isa Union{LeafLabelLayer, CladeLabelLayer}, lp.plots)
+
+    function _push_annotation_layout!(layout)
+        for plot in annotation_layers
+            plot.annotation_layout = layout
+        end
+        return nothing
+    end
+
+    _push_annotation_layout!(ax._decoration_layout[])
+    on(ax.scene, ax._decoration_layout) do layout
+        _push_annotation_layout!(layout)
+    end
+
+    return nothing
+end
+
 # ── lineageplot! dispatch for LineageAxis ──────────────────────────────────────
+
+"""
+    lineageplot(rootvertex, accessor::LineageGraphAccessor; figure = NamedTuple(),
+                axis = NamedTuple(), kwargs...) -> Makie.FigureAxisPlot
+
+Non-mutating public entry point for lineage-graph plotting.
+
+Creates a new `Figure` and a new `LineageAxis`, calls `lineageplot!` on that
+axis, and returns a Makie `FigureAxisPlot` so the result behaves like other
+non-bang Makie plotting functions in the REPL and VS Code.
+
+Use `figure = (...)` to pass keyword arguments to `Figure` and `axis = (...)`
+to pass keyword arguments to `LineageAxis`.
+
+For plotting into an existing `Axis` or `LineageAxis`, use `lineageplot!`.
+"""
+function lineageplot(
+        rootvertex,
+        accessor::LineageGraphAccessor;
+        figure = NamedTuple(),
+        axis = NamedTuple(),
+        kwargs...,
+    )::Makie.FigureAxisPlot
+    figure_kwargs = _layout_kwargs_namedtuple(figure, "figure")
+    axis_kwargs   = _layout_kwargs_namedtuple(axis, "axis")
+    fig = Figure(; figure_kwargs...)
+    lax = LineageAxis(fig[1, 1]; axis_kwargs...)
+    lp = lineageplot!(lax, rootvertex, accessor; kwargs...)
+    return Makie.FigureAxisPlot(fig, lax, lp)
+end
 
 """
     lineageplot!(ax::LineageAxis, rootvertex, accessor::LineageGraphAccessor;
@@ -573,6 +1006,9 @@ When `ax` is a `LineageAxis`, this method additionally:
 
 Vertex labels are off by default (`vertex_label_threshold = v -> false`); pass an
 explicit `vertex_label_threshold` predicate to enable them.
+
+For the non-mutating convenience form that creates a new `Figure` and
+`LineageAxis`, use `lineageplot(rootvertex, accessor; kwargs...)`.
 
 All keyword arguments are forwarded to the `LineagePlot` composite recipe.
 See `lineageplot!` for the full attribute list.
@@ -614,7 +1050,8 @@ function lineageplot!(
         NamedTuple()
     end
     # Caller-supplied kwargs take precedence over orientation defaults.
-    merged_kwargs = merge(orientation_defaults, kwargs)
+    user_kwargs = (; kwargs...)
+    merged_kwargs = merge(orientation_defaults, user_kwargs)
 
     # Route to ax.scene (not ax) to avoid recursive dispatch through the
     # @recipe-generated lineageplot! which also accepts AbstractAxis.
@@ -623,6 +1060,9 @@ function lineageplot!(
     # before computed_geom is populated. Going directly to ax.scene bypasses
     # the AbstractAxis protocol; we call reset_limits! manually below.
     lp = lineageplot!(ax.scene, rootvertex, accessor; lineageunits = lineageunits, merged_kwargs...)
+
+    _wire_annotation_layout!(ax, lp)
+    _sync_annotation_measurements!(ax, lp)
 
     # Apply initial limits. lp[:computed_geom][] is already populated because
     # map! nodes run synchronously during plot! construction (Makie 0.24).
