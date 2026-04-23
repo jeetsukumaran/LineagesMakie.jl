@@ -99,6 +99,22 @@ function _it_visible_blockscene_strings(lax::LineageAxis)::Vector{String}
     return strings
 end
 
+function _it_sample_figure_pixel(img, scene, data_pt)
+    px = data_to_pixel(scene, data_pt)
+    vp = scene.viewport[]
+    col = clamp(round(Int, Float32(vp.origin[1]) + px[1]), 1, size(img, 2))
+    row = clamp(round(Int, size(img, 1) - (Float32(vp.origin[2]) + px[2]) + 1), 1, size(img, 1))
+    return img[row, col]
+end
+
+function _it_rgb_channels(pixel)
+    word = reinterpret(UInt32, [pixel])[1]
+    r = Float32((word >> 16) & 0xff) / 255.0f0
+    g = Float32((word >> 8) & 0xff) / 255.0f0
+    b = Float32(word & 0xff) / 255.0f0
+    return (r, g, b)
+end
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 @testset "Integration" begin
@@ -197,6 +213,90 @@ end
             @test filesize(tmpfile) > 0
         finally
             isfile(tmpfile) && rm(tmpfile)
+        end
+    end
+
+    @testset "example-style scale bar is rendered in the panel-owned band" begin
+        fig = Figure(; size = (800, 600))
+        lax = LineageAxis(fig[1, 1]; show_x_axis = true)
+        acc = lineagegraph_accessor(
+            _IT_ROOT;
+            children = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+        lp = lineageplot!(
+            lax,
+            _IT_ROOT,
+            acc;
+            lineageunits = :edgelengths,
+            scalebar_auto_visible = true,
+            scalebar_label = "1 unit",
+        )
+        CairoMakie.colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        scalebar = only(filter(p -> p isa ScaleBarLayer, lp.plots))
+        @test layout.scalebar_visible
+        @test length(scalebar[:scalebar_line_pixel_pts][]) == 2
+        @test scalebar[:resolved_visible][] == true
+    end
+
+    @testset "radial scale bar remains auto-hidden when unlabeled" begin
+        fig = Figure(; size = (600, 600))
+        lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)
+        acc = lineagegraph_accessor(
+            _IT_ROOT;
+            children = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+        lp = lineageplot!(
+            lax,
+            _IT_ROOT,
+            acc;
+            lineageunits = :edgelengths,
+            lineage_orientation = :radial,
+        )
+        CairoMakie.colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        scalebar = only(filter(p -> p isa ScaleBarLayer, lp.plots))
+        @test !layout.scalebar_visible
+        @test scalebar[:resolved_visible][] == false
+    end
+
+    @testset "internal vertex markers preserve junction continuity under example styling" begin
+        fig = Figure(; size = (500, 400))
+        lax = LineageAxis(fig[1, 1])
+        acc = lineagegraph_accessor(
+            _IT_ROOT;
+            children = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+        lp = lineageplot!(
+            lax,
+            _IT_ROOT,
+            acc;
+            lineageunits = :edgelengths,
+            edge_color = :slategray,
+            edge_linewidth = 1.5,
+            vertex_color = :white,
+            vertex_strokecolor = :slategray,
+            vertex_markersize = 12,
+        )
+        img = CairoMakie.colorbuffer(fig; px_per_unit = 1)
+
+        vertex_layers = filter(p -> p isa VertexLayer, lp.plots)
+        @test length(vertex_layers) == 2
+        @test vertex_layers[1].render_fill[] == true
+        @test vertex_layers[1].render_stroke[] == false
+        @test vertex_layers[2].render_fill[] == false
+        @test vertex_layers[2].render_stroke[] == true
+
+        geom = lp[:computed_geom][]
+        for v in (_IT_ROOT.children[1], _IT_ROOT.children[2])
+            junction_pixel = _it_sample_figure_pixel(img, lax.scene, geom.vertex_positions[v])
+            r, g, b = _it_rgb_channels(junction_pixel)
+            @test max(r, g, b) < 0.95f0
         end
     end
 

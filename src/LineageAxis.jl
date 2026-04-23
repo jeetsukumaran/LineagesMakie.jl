@@ -49,7 +49,7 @@ using Makie: make_block_docstring
 
 # _resolve_lineageunits_stub is private (unexported) but needed by lineageplot!.
 # LineagePlot is the return type of the updated lineageplot! method.
-using .Layers: _resolve_lineageunits_stub, CladeLabelLayer, LeafLabelLayer, LineagePlot
+using .Layers: _resolve_lineageunits_stub, CladeLabelLayer, LeafLabelLayer, LineagePlot, ScaleBarLayer
 # import (not using) to extend lineageplot! with a LineageAxis-specific method.
 import .Layers: lineageplot!
 # data_to_pixel is needed by _wire_x_axis! to convert tick x values to blockscene
@@ -76,11 +76,18 @@ struct _LineageAxisAnnotationMeasurements
     radial_leaf_gap_px::Float32
     radial_leaf_max_width_px::Float32
     radial_leaf_max_height_px::Float32
+    scalebar_visible::Bool
+    scalebar_position::Tuple{Symbol, Symbol}
+    scalebar_label_max_width_px::Float32
+    scalebar_label_max_height_px::Float32
+    scalebar_label_gap_px::Float32
+    scalebar_band_padding_px::Float32
 end
 
 struct _LineageAxisDecorationLayout
     plot_rect::Rect2f
     title_band_rect::Rect2f
+    scalebar_band_rect::Rect2f
     xaxis_band_rect::Rect2f
     xlabel_band_rect::Rect2f
     left_gutter_px::Float32
@@ -96,6 +103,11 @@ struct _LineageAxisDecorationLayout
     clade_annotation_outer_edge_x::Float32
     radial_outer_pad_px::Float32
     radial_leaf_gap_px::Float32
+    scalebar_visible::Bool
+    scalebar_halign::Symbol
+    scalebar_valign::Symbol
+    scalebar_line_y::Float32
+    scalebar_label_y::Float32
 end
 
 """
@@ -233,6 +245,9 @@ const _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX = 28.0f0
 const _LINEAGEAXIS_CLADE_LANE_GAP_PX = 8.0f0
 const _LINEAGEAXIS_CLADE_TICK_LENGTH_PX = 3.0f0
 const _LINEAGEAXIS_CLADE_TEXT_GAP_PX = 6.0f0
+const _LINEAGEAXIS_SCALEBAR_FONTSIZE = 10
+const _LINEAGEAXIS_SCALEBAR_LABEL_GAP_PX = 3.0f0
+const _LINEAGEAXIS_SCALEBAR_BAND_PADDING_PX = 6.0f0
 
 function _rectf(
         x::Float32,
@@ -272,6 +287,12 @@ function _default_annotation_measurements()::_LineageAxisAnnotationMeasurements
         4.0f0,
         0.0f0,
         0.0f0,
+        false,
+        (:left, :bottom),
+        0.0f0,
+        0.0f0,
+        _LINEAGEAXIS_SCALEBAR_LABEL_GAP_PX,
+        _LINEAGEAXIS_SCALEBAR_BAND_PADDING_PX,
     )
 end
 
@@ -356,6 +377,15 @@ function _rectangular_annotation_extent_px(
     return max(leaf_extent, clade_label_extent)
 end
 
+function _scalebar_band_height_px(
+        measurements::_LineageAxisAnnotationMeasurements,
+    )::Float32
+    measurements.scalebar_visible || return 0.0f0
+    label_height = measurements.scalebar_label_max_height_px
+    label_gap = label_height > 0.0f0 ? measurements.scalebar_label_gap_px : 0.0f0
+    return 2.0f0 * measurements.scalebar_band_padding_px + label_gap + label_height
+end
+
 function _decoration_layout(
         bbox,
         title::String,
@@ -372,6 +402,11 @@ function _decoration_layout(
     has_title  = !isempty(strip(title))
     has_xlabel = !isempty(strip(xlabel))
     is_radial  = lineage_orientation === :radial
+    scalebar_halign = measurements.scalebar_position[1]
+    scalebar_valign = measurements.scalebar_position[2] === :top ? :top : :bottom
+    scalebar_band_h = _scalebar_band_height_px(measurements)
+    scalebar_top_band_h = measurements.scalebar_visible && scalebar_valign === :top ? scalebar_band_h : 0.0f0
+    scalebar_bottom_band_h = measurements.scalebar_visible && scalebar_valign !== :top ? scalebar_band_h : 0.0f0
 
     title_band_h  = has_title ? _LINEAGEAXIS_TITLE_BAND_PX : 0.0f0
     xaxis_band_h  = show_x_axis ? _LINEAGEAXIS_XAXIS_BAND_PX : 0.0f0
@@ -406,17 +441,33 @@ function _decoration_layout(
     vertical_pad  = is_radial ? radial_outer_pad : _LINEAGEAXIS_PLOT_GAP_PX
 
     plot_x0 = x0 + left_gutter
-    plot_y0 = y0 + xlabel_band_h + xaxis_band_h + vertical_pad
+    plot_y0 = y0 + xlabel_band_h + xaxis_band_h + scalebar_bottom_band_h + vertical_pad
     plot_w  = w - left_gutter - right_gutter
-    plot_h  = h - title_band_h - xlabel_band_h - xaxis_band_h - 2.0f0 * vertical_pad
+    plot_h  = h - title_band_h - xlabel_band_h - xaxis_band_h - scalebar_top_band_h -
+        scalebar_bottom_band_h - 2.0f0 * vertical_pad
     plot_rect = _rectf(plot_x0, plot_y0, plot_w, plot_h; clamp_minimum = true)
     plot_left = plot_rect.origin[1]
     plot_right = plot_rect.origin[1] + plot_rect.widths[1]
 
     plot_top = plot_rect.origin[2] + plot_rect.widths[2]
+    scalebar_band_rect = if scalebar_valign === :top
+        _rectf(
+            plot_rect.origin[1],
+            plot_top + vertical_pad,
+            plot_rect.widths[1],
+            scalebar_top_band_h,
+        )
+    else
+        _rectf(
+            plot_rect.origin[1],
+            y0 + xlabel_band_h + xaxis_band_h,
+            plot_rect.widths[1],
+            scalebar_bottom_band_h,
+        )
+    end
     title_band_rect = _rectf(
         plot_rect.origin[1],
-        plot_top + vertical_pad,
+        plot_top + vertical_pad + scalebar_top_band_h,
         plot_rect.widths[1],
         title_band_h,
     )
@@ -438,6 +489,8 @@ function _decoration_layout(
     clade_bracket_x = Float32(NaN)
     clade_label_anchor_x = Float32(NaN)
     clade_annotation_outer_edge_x = Float32(NaN)
+    scalebar_line_y = Float32(NaN)
+    scalebar_label_y = Float32(NaN)
     leaf_align = measurements.leaf_label_align
     clade_align = active_side === :left ? (:right, :center) : (:left, :center)
 
@@ -471,9 +524,17 @@ function _decoration_layout(
         )
     end
 
+    if measurements.scalebar_visible
+        band_top = scalebar_band_rect.origin[2] + scalebar_band_rect.widths[2]
+        scalebar_line_y = band_top - measurements.scalebar_band_padding_px
+        label_gap = measurements.scalebar_label_max_height_px > 0.0f0 ? measurements.scalebar_label_gap_px : 0.0f0
+        scalebar_label_y = scalebar_line_y - label_gap
+    end
+
     return _LineageAxisDecorationLayout(
         plot_rect,
         title_band_rect,
+        scalebar_band_rect,
         xaxis_band_rect,
         xlabel_band_rect,
         left_gutter,
@@ -489,6 +550,11 @@ function _decoration_layout(
         clade_annotation_outer_edge_x,
         radial_outer_pad,
         measurements.radial_leaf_gap_px,
+        measurements.scalebar_visible,
+        scalebar_halign,
+        scalebar_valign,
+        scalebar_line_y,
+        scalebar_label_y,
     )
 end
 
@@ -810,6 +876,10 @@ function _resolved_clade_label_strings(clade_vertices, label_func)::Vector{Strin
     return String[string(label_func(v)) for v in clade_vertices]
 end
 
+function _resolved_scalebar_label(label)::String
+    return string(label)
+end
+
 function _annotation_measurements(
         geom::LineageGraphGeometry,
         accessor::LineageGraphAccessor,
@@ -827,6 +897,9 @@ function _annotation_measurements(
         clade_label_visible::Bool,
         clade_label_offset::Makie.Vec2f,
         clade_label_side::Symbol,
+        scalebar_visible::Bool,
+        scalebar_position::Tuple,
+        scalebar_label,
     )::_LineageAxisAnnotationMeasurements
     resolved_leaf_font = _resolved_leaf_label_font(leaf_label_font, leaf_label_italic)
     leaf_strings = _resolved_leaf_label_strings(geom, accessor, leaf_label_func)
@@ -834,6 +907,12 @@ function _annotation_measurements(
 
     clade_strings = _resolved_clade_label_strings(clade_vertices, clade_label_func)
     clade_width_px, clade_height_px = _max_text_size_px(clade_strings, :regular, clade_label_fontsize)
+    scalebar_label_string = _resolved_scalebar_label(scalebar_label)
+    scalebar_width_px, scalebar_height_px = _max_text_size_px(
+        String[scalebar_label_string],
+        Makie.defaultfont(),
+        _LINEAGEAXIS_SCALEBAR_FONTSIZE,
+    )
 
     if lineage_orientation === :radial
         radial_gap_px = max(abs(Float32(leaf_label_offset[1])), 4.0f0)
@@ -855,6 +934,12 @@ function _annotation_measurements(
             radial_gap_px,
             leaf_width_px,
             leaf_height_px,
+            scalebar_visible,
+            (scalebar_position[1], scalebar_position[2]),
+            scalebar_width_px,
+            scalebar_height_px,
+            _LINEAGEAXIS_SCALEBAR_LABEL_GAP_PX,
+            _LINEAGEAXIS_SCALEBAR_BAND_PADDING_PX,
         )
     end
 
@@ -880,6 +965,12 @@ function _annotation_measurements(
         max(abs(Float32(leaf_label_offset[1])), 4.0f0),
         leaf_width_px,
         leaf_height_px,
+        scalebar_visible,
+        (scalebar_position[1], scalebar_position[2]),
+        scalebar_width_px,
+        scalebar_height_px,
+        _LINEAGEAXIS_SCALEBAR_LABEL_GAP_PX,
+        _LINEAGEAXIS_SCALEBAR_BAND_PADDING_PX,
     )
 end
 
@@ -905,6 +996,9 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
             lp[:clade_label_visible][],
             lp[:clade_label_offset][],
             lp[:clade_label_side][],
+            lp[:resolved_scalebar_visible][],
+            lp[:scalebar_position][],
+            lp[:scalebar_label][],
         )
     end
 
@@ -927,6 +1021,9 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
         lp[:clade_label_visible],
         lp[:clade_label_offset],
         lp[:clade_label_side],
+        lp[:resolved_scalebar_visible],
+        lp[:scalebar_position],
+        lp[:scalebar_label],
     ) do args...
         _update_annotation_measurements()
     end
@@ -935,7 +1032,7 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
 end
 
 function _wire_annotation_layout!(ax::LineageAxis, lp::LineagePlot)::Nothing
-    annotation_layers = filter(p -> p isa Union{LeafLabelLayer, CladeLabelLayer}, lp.plots)
+    annotation_layers = filter(p -> p isa Union{LeafLabelLayer, CladeLabelLayer, ScaleBarLayer}, lp.plots)
 
     function _push_annotation_layout!(layout)
         for plot in annotation_layers

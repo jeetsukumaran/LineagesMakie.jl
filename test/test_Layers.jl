@@ -628,12 +628,21 @@ end
             @test plot_obj[:resolved_visible][] == false
         end
 
-        @testset "visible defaults to true for :edgelengths" begin
+        @testset "visible defaults to false for :edgelengths when label is empty" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths)
+            @test plot_obj[:resolved_visible][] == false
+        end
+
+        @testset "visible defaults to true for :edgelengths when label is present" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
+            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths; label = "1 unit")
             @test plot_obj[:resolved_visible][] == true
         end
 
@@ -651,18 +660,18 @@ end
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths)
+            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths; label = "1 unit")
             colorbuffer(fig)
             @test length(plot_obj[:scalebar_line_pts][]) == 2
         end
 
-        @testset "visible defaults to true for :branchingtime and :coalescenceage" begin
+        @testset "visible defaults to true for :branchingtime and :coalescenceage when labelled" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            p1 = scalebarlayer!(ax, geom, acc, :branchingtime)
-            p2 = scalebarlayer!(ax, geom, acc, :coalescenceage)
+            p1 = scalebarlayer!(ax, geom, acc, :branchingtime; label = "1 unit")
+            p2 = scalebarlayer!(ax, geom, acc, :coalescenceage; label = "1 unit")
             @test p1[:resolved_visible][] == true
             @test p2[:resolved_visible][] == true
         end
@@ -804,6 +813,40 @@ end
             scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
             @test !isempty(scalebar_children)
             @test scalebar_children[1][:resolved_visible][] == false
+        end
+
+        @testset "scalebar is auto-hidden for :edgelengths when label is empty" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(
+                _LT_BALANCED_ROOT;
+                children = n -> n.children,
+                edgelength = (u, v) -> 1.0,
+            )
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
+            scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
+            @test !isempty(scalebar_children)
+            @test scalebar_children[1][:resolved_visible][] == false
+        end
+
+        @testset "scalebar is auto-visible for :edgelengths when label is present" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(
+                _LT_BALANCED_ROOT;
+                children = n -> n.children,
+                edgelength = (u, v) -> 1.0,
+            )
+            lp = lineageplot!(
+                ax,
+                _LT_BALANCED_ROOT,
+                acc;
+                lineageunits = :edgelengths,
+                scalebar_label = "1 unit",
+            )
+            scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
+            @test !isempty(scalebar_children)
+            @test scalebar_children[1][:resolved_visible][] == true
         end
 
         @testset "computed_geom updates reactively when lineageunits attribute changes" begin

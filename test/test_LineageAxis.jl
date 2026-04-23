@@ -259,6 +259,58 @@ end
         @test layout.radial_outer_pad_px > 24.0f0
     end
 
+    @testset "scale bar reserves a bottom decoration band when visible" begin
+        fig, lax = _fresh_lax(; show_x_axis = true)
+        lp = lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            lineagegraph_accessor(
+                _LA_BALANCED_ROOT;
+                children = n -> n.children,
+                edgelength = (u, v) -> 1.0,
+            );
+            lineageunits = :edgelengths,
+            scalebar_auto_visible = true,
+            scalebar_label = "1 unit",
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        scalebar = only(filter(p -> p isa ScaleBarLayer, lp.plots))
+        @test layout.scalebar_visible
+        @test layout.scalebar_band_rect.widths[2] > 0.0f0
+        @test length(scalebar[:scalebar_line_pixel_pts][]) == 2
+        @test all(pt -> isfinite(pt[1]) && isfinite(pt[2]), scalebar[:scalebar_line_pixel_pts][])
+        line_y = scalebar[:scalebar_line_pixel_pts][][1][2]
+        band_bottom = layout.scalebar_band_rect.origin[2]
+        band_top = band_bottom + layout.scalebar_band_rect.widths[2]
+        @test band_bottom <= line_y <= band_top
+        xaxis_top = layout.xaxis_band_rect.origin[2] + layout.xaxis_band_rect.widths[2]
+        @test xaxis_top <= layout.scalebar_band_rect.origin[2]
+    end
+
+    @testset "radial scale bar is auto-hidden when unlabeled" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :radial)
+        lp = lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            lineagegraph_accessor(
+                _LA_BALANCED_ROOT;
+                children = n -> n.children,
+                edgelength = (u, v) -> 1.0,
+            );
+            lineageunits = :edgelengths,
+            lineage_orientation = :radial,
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        scalebar = only(filter(p -> p isa ScaleBarLayer, lp.plots))
+        @test !layout.scalebar_visible
+        @test layout.scalebar_band_rect.widths[2] == 0.0f0
+        @test scalebar[:resolved_visible][] == false
+    end
+
     @testset "autolimits! re-applies limits from stored geometry" begin
         fig, lax, _ = _plotted_lax()
         proj_before = Makie.camera(lax.scene).projection[]

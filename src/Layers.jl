@@ -111,6 +111,8 @@ returns `false`. The derived attribute `:vertex_pos_data` holds the filtered
 - `color`: marker fill color. Default `:black`.
 - `markersize`: marker diameter in pixels. Default `8`.
 - `strokecolor`: marker stroke color. Default `:black`.
+- `render_fill`: whether the marker fill is rendered. Default `true`.
+- `render_stroke`: whether the marker stroke is rendered. Default `true`.
 - `alpha`: transparency multiplier in `[0, 1]`. Default `1.0`.
 - `visible`: whether the layer is rendered. Default `true`.
 """
@@ -120,6 +122,8 @@ returns `false`. The derived attribute `:vertex_pos_data` holds the filtered
     markersize = 8
     strokecolor = :black
     alpha = 1.0
+    render_fill = true
+    render_stroke = true
     visible = true
 end
 
@@ -131,13 +135,21 @@ function Makie.plot!(p::VertexLayer)
         return [pos for (v, pos) in geom.vertex_positions if !is_leaf(accessor, v)]
     end
 
+    map!(p.attributes, [:color, :render_fill], :resolved_fill_color) do color, render_fill
+        return render_fill ? color : Makie.RGBAf(0.0f0, 0.0f0, 0.0f0, 0.0f0)
+    end
+
+    map!(p.attributes, [:strokecolor, :render_stroke], :resolved_strokecolor) do strokecolor, render_stroke
+        return render_stroke ? strokecolor : Makie.RGBAf(0.0f0, 0.0f0, 0.0f0, 0.0f0)
+    end
+
     scatter!(
         p,
         p[:vertex_pos_data];
         marker = p[:marker],
-        color = p[:color],
+        color = p[:resolved_fill_color],
         markersize = p[:markersize],
-        strokecolor = p[:strokecolor],
+        strokecolor = p[:resolved_strokecolor],
         alpha = p[:alpha],
         markerspace = :pixel,
     )
@@ -602,9 +614,58 @@ end
 Return `true` iff `lineageunits` encodes physical process-coordinate units for
 which a scale bar is meaningful (`:edgelengths`, `:branchingtime`,
 `:coalescenceage`). Returns `false` for all topological modes.
+
+The two-argument overload additionally requires a non-empty label, which is the
+default user-facing auto-visibility contract for `ScaleBarLayer`.
 """
 function _scalebar_visible(lineageunits::Symbol)::Bool
     return lineageunits in (:edgelengths, :branchingtime, :coalescenceage)
+end
+
+function _scalebar_visible(lineageunits::Symbol, label)::Bool
+    return _scalebar_visible(lineageunits) && !isempty(strip(string(label)))
+end
+
+function _resolved_scalebar_length(geom::LineageGraphGeometry, len)::Float64
+    bb = geom.boundingbox
+    return len === nothing ? Float64(bb.widths[1]) * 0.1 : Float64(len)
+end
+
+function _scalebar_length_px(
+        sc,
+        geom::LineageGraphGeometry,
+        bar_length::Float64,
+        lineage_orientation::Symbol,
+    )::Float32
+    bb = geom.boundingbox
+    if lineage_orientation === :radial
+        center = _geom_center(bb)
+        start_pt = center
+        end_pt = Point2f(center[1] + Float32(bar_length), center[2])
+    else
+        y_mid = Float32(Makie.minimum(bb)[2] + Makie.maximum(bb)[2]) / 2.0f0
+        start_x = Float32(Makie.minimum(bb)[1])
+        start_pt = Point2f(start_x, y_mid)
+        end_pt = Point2f(start_x + Float32(bar_length), y_mid)
+    end
+
+    px_start = data_to_pixel(sc, start_pt)
+    px_end = data_to_pixel(sc, end_pt)
+    return abs(Float32(px_end[1] - px_start[1]))
+end
+
+function _scalebar_origin_x(
+        halign::Symbol,
+        band_rect::Rect2f,
+        bar_length_px::Float32,
+    )::Float32
+    usable_width = max(Float32(band_rect.widths[1]) - bar_length_px, 0.0f0)
+    if halign === :right
+        return Float32(band_rect.origin[1]) + usable_width
+    elseif halign === :center
+        return Float32(band_rect.origin[1]) + usable_width / 2.0f0
+    end
+    return Float32(band_rect.origin[1])
 end
 
 """
@@ -1017,12 +1078,16 @@ end
 
 Render a scale bar showing the magnitude of process-coordinate units on axis `ax`.
 
-The scale bar is visible by default only when `lineageunits_val` is one of
-`:edgelengths`, `:branchingtime`, or `:coalescenceage` — values that carry
-physical units. For topological layouts (`:vertexheights`, `:vertexlevels`,
-`:vertexdepths`, `:vertexcoords`, `:vertexpos`) the bar defaults to invisible.
-This default can be overridden by passing `scalebar_auto_visible = true` or
-`scalebar_auto_visible = false` explicitly.
+The scale bar is visible by default only when both of the following are true:
+
+- `lineageunits_val` is one of `:edgelengths`, `:branchingtime`, or
+  `:coalescenceage` — values that carry physical units.
+- `label` is non-empty after trimming whitespace.
+
+For topological layouts (`:vertexheights`, `:vertexlevels`, `:vertexdepths`,
+`:vertexcoords`, `:vertexpos`) or unlabeled bars, the scale bar defaults to
+invisible. This default can be overridden by passing
+`scalebar_auto_visible = true` or `scalebar_auto_visible = false` explicitly.
 
 The bar length defaults to 10% of the process-coordinate span of
 `geom.boundingbox`. Pass an explicit `length` value (in data units) to override.
@@ -1044,8 +1109,9 @@ The bar length defaults to 10% of the process-coordinate span of
 - `label`: text displayed below the bar midpoint. Default `""`.
 - `color`: bar and label color. Default `:black`.
 - `linewidth`: bar line width in pixels. Default `1.5f0`.
-- `scalebar_auto_visible`: `nothing` (default) → derived from `lineageunits_val` via
-  `_scalebar_visible`; `true` or `false` overrides the derived default.
+- `scalebar_auto_visible`: `nothing` (default) → derived from
+  `lineageunits_val` and `label`; `true` or `false` overrides the derived
+  default.
   Use the standard `visible` attribute to hide the entire plot object regardless.
 """
 @recipe ScaleBarLayer (geom, accessor, lineageunits_val) begin
@@ -1055,50 +1121,102 @@ The bar length defaults to 10% of the process-coordinate span of
     label = ""
     color = :black
     linewidth = 1.5f0
-    "nothing → derived from lineageunits_val via _scalebar_visible; true/false overrides."
+    lineage_orientation = :left_to_right
+    annotation_layout = nothing
+    "nothing → derived from lineageunits_val and label; true/false overrides."
     scalebar_auto_visible = nothing
 end
 
 function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
     # accessor is not used in the core logic; accepted for API symmetry.
     _ = p[:accessor]
-
-    # NOTE: register_pixel_projection! is intentionally omitted here.
-    # The scale bar lives entirely in data space (geom.boundingbox); no
-    # pixel-space offset conversion is needed.
+    sc = parent_scene(p)
+    register_pixel_projection!(p.attributes, sc)
 
     # Resolve the auto-visibility sentinel reactively via map!.
     # We use a dedicated `scalebar_auto_visible` attribute rather than overriding
     # Makie's standard `visible` attribute, because Makie internals (autolimit
     # code, bounding-box queries) call `!(plot.visible[])` and would fail if
     # `visible` held `nothing`.
-    # `scalebar_auto_visible = nothing` → derived from lineageunits_val;
+    # `scalebar_auto_visible = nothing` → derived from lineageunits_val and label;
     # Bool value → used directly.
-    map!(p.attributes, [:lineageunits_val, :scalebar_auto_visible], :resolved_visible) do lu, av
-        return av === nothing ? _scalebar_visible(lu) : av::Bool
+    map!(p.attributes, [:lineageunits_val, :label, :scalebar_auto_visible], :resolved_visible) do lu, label, av
+        return av === nothing ? _scalebar_visible(lu, label) : av::Bool
     end
 
     map!(p.attributes, [:geom, :position, :length], :scalebar_line_pts) do geom, position, len
         bb = geom.boundingbox
-        bar_length = len === nothing ? Float64(bb.widths[1]) * 0.1 : Float64(len)
+        bar_length = _resolved_scalebar_length(geom, len)
         origin = _scalebar_origin(position, bb, bar_length)
         return Point2f[origin, Point2f(origin[1] + bar_length, origin[2])]
     end
 
     map!(p.attributes, [:geom, :position, :length], :scalebar_label_pos_vec) do geom, position, len
         bb = geom.boundingbox
-        bar_length = len === nothing ? Float64(bb.widths[1]) * 0.1 : Float64(len)
+        bar_length = _resolved_scalebar_length(geom, len)
         origin = _scalebar_origin(position, bb, bar_length)
         midpoint = Point2f(origin[1] + bar_length / 2, origin[2])
         return Point2f[midpoint]
     end
+
+    map!(
+        p.attributes,
+        [:geom, :length, :lineage_orientation, :annotation_layout, :pixel_projection],
+        :scalebar_line_pixel_pts,
+    ) do geom, len, lineage_orientation, annotation_layout, _
+        annotation_layout === nothing && return Point2f[]
+        annotation_layout.scalebar_visible || return Point2f[]
+
+        bar_length = _resolved_scalebar_length(geom, len)
+        bar_length_px = min(
+            _scalebar_length_px(sc, geom, bar_length, lineage_orientation),
+            Float32(annotation_layout.scalebar_band_rect.widths[1]),
+        )
+        x0 = _scalebar_origin_x(
+            annotation_layout.scalebar_halign,
+            annotation_layout.scalebar_band_rect,
+            bar_length_px,
+        )
+        y = annotation_layout.scalebar_line_y
+        return Point2f[Point2f(x0, y), Point2f(x0 + bar_length_px, y)]
+    end
+
+    map!(
+        p.attributes,
+        [:scalebar_line_pixel_pts, :annotation_layout],
+        :scalebar_label_pixel_pos_vec,
+    ) do line_pts, annotation_layout
+        annotation_layout === nothing && return Point2f[]
+        length(line_pts) == 2 || return Point2f[]
+        return Point2f[
+            Point2f(
+                (line_pts[1][1] + line_pts[2][1]) / 2.0f0,
+                annotation_layout.scalebar_label_y,
+            ),
+        ]
+    end
+
+    map!(p.attributes, [:annotation_layout], :render_in_blockscene) do annotation_layout
+        return annotation_layout !== nothing
+    end
+
+    map!(p.attributes, [:resolved_visible, :render_in_blockscene], :resolved_data_visible) do visible, in_blockscene
+        return visible && !in_blockscene
+    end
+
+    map!(p.attributes, [:resolved_visible, :render_in_blockscene], :resolved_blockscene_visible) do visible, in_blockscene
+        return visible && in_blockscene
+    end
+
+    lines!(p, Point2f[]; visible = false)
+    decoration_sc = Makie.parent(sc)
 
     lines!(
         p,
         p[:scalebar_line_pts];
         color = p[:color],
         linewidth = p[:linewidth],
-        visible = p[:resolved_visible],
+        visible = p[:resolved_data_visible],
     )
     text!(
         p,
@@ -1106,7 +1224,24 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
         text = p[:label],
         color = p[:color],
         align = (:center, :top),
-        visible = p[:resolved_visible],
+        fontsize = 10,
+        visible = p[:resolved_data_visible],
+    )
+    lines!(
+        decoration_sc,
+        p[:scalebar_line_pixel_pts];
+        color = p[:color],
+        linewidth = p[:linewidth],
+        visible = p[:resolved_blockscene_visible],
+    )
+    text!(
+        decoration_sc,
+        p[:scalebar_label_pixel_pos_vec];
+        text = p[:label],
+        color = p[:color],
+        align = (:center, :top),
+        fontsize = 10,
+        visible = p[:resolved_blockscene_visible],
     )
     return p
 end
@@ -1260,7 +1395,7 @@ For the non-mutating convenience entry point that creates a `Figure` and
     scalebar_label = ""
     scalebar_color = :black
     scalebar_linewidth = 1.5f0
-    "nothing → derived from lineageunits; Bool overrides auto-visibility."
+    "nothing → derived from lineageunits and label; Bool overrides auto-visibility."
     scalebar_auto_visible = nothing
 
 end
@@ -1312,10 +1447,10 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     # scalebarlayer! (unsupported pattern in Makie 0.24).
     map!(
         lp.attributes,
-        [:resolved_lineageunits, :scalebar_auto_visible],
+        [:resolved_lineageunits, :scalebar_label, :scalebar_auto_visible],
         :resolved_scalebar_visible,
-    ) do lu, av
-        return av === nothing ? _scalebar_visible(lu) : av::Bool
+    ) do lu, label, av
+        return av === nothing ? _scalebar_visible(lu, label) : av::Bool
     end
 
     # Step 4: Call all 8 sub-layer recipes, passing ComputeGraph node handles
@@ -1342,6 +1477,21 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         visible = lp[:clade_highlight_visible],
     )
 
+    # Internal vertex markers are rendered in two passes so the marker fill can
+    # sit under the branches while the outline remains visible on top. This
+    # preserves junction continuity without discarding marker styling.
+    vertexlayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        marker = lp[:vertex_marker],
+        color = lp[:vertex_color],
+        markersize = lp[:vertex_markersize],
+        strokecolor = lp[:vertex_strokecolor],
+        alpha = lp[:vertex_alpha],
+        render_fill = true,
+        render_stroke = false,
+        visible = lp[:vertex_visible],
+    )
+
     edgelayer!(
         lp, lp[:computed_geom];
         color = lp[:edge_color],
@@ -1358,6 +1508,8 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         markersize = lp[:vertex_markersize],
         strokecolor = lp[:vertex_strokecolor],
         alpha = lp[:vertex_alpha],
+        render_fill = false,
+        render_stroke = true,
         visible = lp[:vertex_visible],
     )
 
@@ -1421,6 +1573,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         label = lp[:scalebar_label],
         color = lp[:scalebar_color],
         linewidth = lp[:scalebar_linewidth],
+        lineage_orientation = lp[:lineage_orientation],
         scalebar_auto_visible = lp[:resolved_scalebar_visible],
     )
 
