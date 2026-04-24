@@ -7,6 +7,6 @@
 
 Makie-native lineage-graph plotting for Julia.
 
-Use `lineageplot(rootvertex, accessor; kwargs...)` for a non-mutating,
-display-ready plotting result, and `lineageplot!(ax, rootvertex, accessor;
+Use `lineageplot(rootnode, accessor; kwargs...)` for a non-mutating,
+display-ready plotting result, and `lineageplot!(ax, rootnode, accessor;
 kwargs...)` when plotting into an existing `Axis` or `LineageAxis`.

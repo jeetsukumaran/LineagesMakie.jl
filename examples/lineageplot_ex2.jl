@@ -7,10 +7,10 @@
 #
 # Demonstrates:
 #   - Hand-coded phylogenetic tree with branch lengths
-#   - lineagegraph_accessor with edgelength and vertexvalue
-#   - Four panels: forward-time (:edgelengths), backward-time (:vertexheights),
+#   - lineagegraph_accessor with edgelength and nodevalue
+#   - Four panels: forward-time (:edgelengths), backward-time (:nodeheights),
 #     top-to-bottom orientation, and radial layout
-#   - All major attribute groups: edge styling, vertex markers, leaf labels,
+#   - All major attribute groups: edge styling, node markers, leaf labels,
 #     clade highlights, clade labels, scalebar
 
 using CairoMakie
@@ -56,9 +56,9 @@ const PHYROOT = PhyloNode("root", 0.0, [
 
 const PHYACC = lineagegraph_accessor(
     PHYROOT;
-    children   = n -> n.children,
-    edgelength = (parent, child) -> child.branch_length,
-    vertexvalue = n -> n.name,
+    children   = node -> node.children,
+    edgelength = (src, dst) -> dst.branch_length,
+    nodevalue  = node -> node.name,
 )
 
 # Clade roots for highlights and bracket labels.
@@ -67,13 +67,13 @@ const CLADE_B = PHYROOT.children[2]
 
 # ── Shared style constants ─────────────────────────────────────────────────────
 
-const EDGE_COLOR     = :slategray
-const EDGE_LW        = 1.5f0
-const LEAF_COLOR     = :black
-const LEAF_SIZE      = 7
-const VERTEX_COLOR   = :white
-const VERTEX_STROKE  = :slategray
-const VERTEX_SIZE    = 6
+const EDGE_COLOR    = :slategray
+const EDGE_LW       = 1.5f0
+const LEAF_COLOR    = :black
+const LEAF_SIZE     = 7
+const NODE_COLOR    = :white
+const NODE_STROKE   = :slategray
+const NODE_SIZE     = 6
 
 # ── Figure ────────────────────────────────────────────────────────────────────
 
@@ -92,43 +92,43 @@ lineageplot!(
     lineageunits          = :edgelengths,
     edge_color            = EDGE_COLOR,
     edge_linewidth        = EDGE_LW,
-    vertex_color          = VERTEX_COLOR,
-    vertex_strokecolor    = VERTEX_STROKE,
-    vertex_markersize     = VERTEX_SIZE,
+    node_color            = NODE_COLOR,
+    node_strokecolor      = NODE_STROKE,
+    node_markersize       = NODE_SIZE,
     leaf_color            = LEAF_COLOR,
     leaf_markersize       = LEAF_SIZE,
-    leaf_label_func       = n -> n.name,
+    leaf_label_func       = node -> node.name,
     leaf_label_fontsize   = 11,
-    clade_vertices        = [CLADE_A, CLADE_B],
-    clade_label_func      = n -> n.name,
+    clade_nodes           = [CLADE_A, CLADE_B],
+    clade_label_func      = node -> node.name,
     clade_label_fontsize  = 10,
     clade_highlight_alpha = 0.08,
     scalebar_auto_visible = true,
     scalebar_label        = "1 Ma",
 )
 
-# ── Panel 2 (top-right): backward time, :vertexheights ────────────────────────
+# ── Panel 2 (top-right): backward time, :nodeheights ──────────────────────────
 
 lax2 = LineageAxis(
     fig[1, 2];
-    title = "Backward time — vertex heights",
+    title = "Backward time — node heights",
     show_x_axis = true,
     xlabel = "edge count to farthest leaf",
 )
 lineageplot!(
     lax2, PHYROOT, PHYACC;
-    lineageunits        = :vertexheights,
+    lineageunits        = :nodeheights,
     edge_color          = :steelblue,
     edge_linewidth      = EDGE_LW,
-    vertex_color        = VERTEX_COLOR,
-    vertex_strokecolor  = :steelblue,
-    vertex_markersize   = VERTEX_SIZE,
+    node_color          = NODE_COLOR,
+    node_strokecolor    = :steelblue,
+    node_markersize     = NODE_SIZE,
     leaf_color          = :steelblue,
     leaf_markersize     = LEAF_SIZE,
-    leaf_label_func     = n -> n.name,
+    leaf_label_func     = node -> node.name,
     leaf_label_fontsize = 11,
-    clade_vertices      = [CLADE_A, CLADE_B],
-    clade_label_func    = n -> n.name,
+    clade_nodes         = [CLADE_A, CLADE_B],
+    clade_label_func    = node -> node.name,
     clade_highlight_alpha = 0.08,
 )
 
@@ -147,15 +147,15 @@ lineageplot!(
     lineageunits          = :edgelengths,
     edge_color            = EDGE_COLOR,
     edge_linewidth        = EDGE_LW,
-    vertex_color          = VERTEX_COLOR,
-    vertex_strokecolor    = VERTEX_STROKE,
-    vertex_markersize     = VERTEX_SIZE,
+    node_color            = NODE_COLOR,
+    node_strokecolor      = NODE_STROKE,
+    node_markersize       = NODE_SIZE,
     leaf_color            = LEAF_COLOR,
     leaf_markersize       = LEAF_SIZE,
-    leaf_label_func       = n -> n.name,
+    leaf_label_func       = node -> node.name,
     leaf_label_fontsize   = 11,
-    clade_vertices        = [CLADE_A, CLADE_B],
-    clade_label_func      = n -> n.name,
+    clade_nodes           = [CLADE_A, CLADE_B],
+    clade_label_func      = node -> node.name,
     clade_highlight_alpha = 0.08,
 )
 
@@ -172,12 +172,12 @@ lineageplot!(
     lineage_orientation = :radial,
     edge_color          = EDGE_COLOR,
     edge_linewidth      = EDGE_LW,
-    vertex_color        = VERTEX_COLOR,
-    vertex_strokecolor  = VERTEX_STROKE,
-    vertex_markersize   = VERTEX_SIZE,
+    node_color          = NODE_COLOR,
+    node_strokecolor    = NODE_STROKE,
+    node_markersize     = NODE_SIZE,
     leaf_color          = LEAF_COLOR,
     leaf_markersize     = LEAF_SIZE,
-    leaf_label_func     = n -> n.name,
+    leaf_label_func     = node -> node.name,
     leaf_label_fontsize = 11,
 )
 

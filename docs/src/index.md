@@ -15,7 +15,7 @@ immediate-display workflows:
 using CairoMakie
 using LineagesMakie
 
-plot_result = lineageplot(rootvertex, accessor; axis = (; title = "Lineage plot"))
+plot_result = lineageplot(rootnode, accessor; axis = (; title = "Lineage plot"))
 fig, ax, lp = plot_result
 ```
 

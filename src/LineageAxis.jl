@@ -130,7 +130,7 @@ end
 A custom Makie `Block` for lineage graph visualization that separates the three
 independently variable concerns of any lineage graph plot:
 
-- **Lineage graph-centric view** — what scalar positions each vertex along the
+- **Lineage graph-centric view** — what scalar positions each node along the
   primary dimension. Captured by `lineageunits` and accessor callables passed to
   `lineageplot!`; `axis_polarity` records the resulting direction.
 - **User-centric view** — what the researcher means by those scalars. Recorded by
@@ -179,7 +179,7 @@ using CairoMakie, LineagesMakie
 
 fig = Figure()
 ax  = LineageAxis(fig[1, 1])
-lineageplot!(ax, rootvertex, accessor)
+lineageplot!(ax, rootnode, accessor)
 display(fig)
 ```
 
@@ -187,8 +187,8 @@ See `lineageplot!` for accepted keyword arguments.
 """
 Makie.@Block LineageAxis <: Makie.AbstractAxis begin
     scene::Scene
-    # V in LineageGraphGeometry{V} is determined at call time and may differ
-    # across calls; Observable{Any} avoids an unnecessary type restriction.
+    # NodeT in LineageGraphGeometry{NodeT} is determined at call time and may
+    # differ across calls; Observable{Any} avoids an unnecessary type restriction.
     # Justified exception to STYLE-julia.md §1.12: existential parametricity.
     last_geom::Makie.Observable{Any}
     _polarity_locked::Makie.Observable{Bool}
@@ -448,10 +448,10 @@ function _effective_process_reversed(
     return xor(policy.orientation_reversed, user_reversed)
 end
 
-function _compute_rectangular_boundingbox(vertex_positions::Dict)::Rect2f
-    xs = Float32[pos[1] for pos in values(vertex_positions)]
-    ys = Float32[pos[2] for pos in values(vertex_positions)]
-    isempty(xs) && throw(ArgumentError("cannot compute a bounding box for empty vertex positions"))
+function _compute_rectangular_boundingbox(node_positions::Dict)::Rect2f
+    xs = Float32[pos[1] for pos in values(node_positions)]
+    ys = Float32[pos[2] for pos in values(node_positions)]
+    isempty(xs) && throw(ArgumentError("cannot compute a bounding box for empty node positions"))
     xmin = minimum(xs)
     xmax = maximum(xs)
     ymin = minimum(ys)
@@ -481,16 +481,16 @@ function _orient_rectangular_geometry(
         return Point2f(transverse, process_coord)
     end
 
-    key_t = Base.keytype(typeof(geom.vertex_positions))
-    vertex_positions = Dict{key_t, Point2f}()
-    sizehint!(vertex_positions, length(geom.vertex_positions))
-    for (vertex, pos) in geom.vertex_positions
-        vertex_positions[vertex] = _transform_rectangular_point(pos)
+    key_t = Base.keytype(typeof(geom.node_positions))
+    node_positions = Dict{key_t, Point2f}()
+    sizehint!(node_positions, length(geom.node_positions))
+    for (node, pos) in geom.node_positions
+        node_positions[node] = _transform_rectangular_point(pos)
     end
     edge_shapes = Point2f[_transform_rectangular_point(pt) for pt in geom.edge_shapes]
-    boundingbox = _compute_rectangular_boundingbox(vertex_positions)
+    boundingbox = _compute_rectangular_boundingbox(node_positions)
     return LineageGraphGeometry(
-        vertex_positions,
+        node_positions,
         edge_shapes,
         copy(geom.edges),
         copy(geom.leaf_order),
@@ -1376,12 +1376,12 @@ end
 
 Return the `axis_polarity` that corresponds to `lineageunits`.
 
-Backward `lineageunits` values (`:coalescenceage`, `:vertexheights`) assign a
+Backward `lineageunits` values (`:coalescenceage`, `:nodeheights`) assign a
 process coordinate of 0 to leaves and increasing values toward the root.
 All other values are forward (root = 0, increasing toward leaves).
 """
 function _infer_axis_polarity(lineageunits::Symbol)::Symbol
-    lineageunits in (:coalescenceage, :vertexheights) && return :backward
+    lineageunits in (:coalescenceage, :nodeheights) && return :backward
     return :forward
 end
 
@@ -1438,7 +1438,7 @@ function _resolved_lineageaxis_plot_contract!(
 
     lo = ax.lineage_orientation[]
     policy = _lineage_orientation_policy(lo)
-    backward = resolved_lu in (:vertexheights, :coalescenceage)
+    backward = resolved_lu in (:nodeheights, :coalescenceage)
     effective_reversed = _effective_process_reversed(policy, ax.display_polarity[])
     leaves_on_negative_end = xor(backward, effective_reversed)
     annotation_side = leaves_on_negative_end ? policy.negative_annotation_side : policy.positive_annotation_side
@@ -1472,19 +1472,19 @@ function _resolved_leaf_label_strings(
         text_func,
     )::Vector{String}
     resolved_tf = if text_func === nothing
-        if accessor.vertexvalue !== nothing
-            v -> string(accessor.vertexvalue(v))
+        if accessor.nodevalue !== nothing
+            node -> string(accessor.nodevalue(node))
         else
-            v -> string(v)
+            node -> string(node)
         end
     else
         text_func
     end
-    return String[resolved_tf(v) for v in geom.leaf_order]
+    return String[resolved_tf(node) for node in geom.leaf_order]
 end
 
-function _resolved_clade_label_strings(clade_vertices, label_func)::Vector{String}
-    return String[string(label_func(v)) for v in clade_vertices]
+function _resolved_clade_label_strings(clade_nodes, label_func)::Vector{String}
+    return String[string(label_func(node)) for node in clade_nodes]
 end
 
 function _resolved_scalebar_label(label)::String
@@ -1502,7 +1502,7 @@ function _annotation_measurements(
         leaf_label_align::Tuple,
         leaf_label_visible::Bool,
         leaf_label_offset::Makie.Vec2f,
-        clade_vertices,
+        clade_nodes,
         clade_label_func,
         clade_label_fontsize,
         clade_label_visible::Bool,
@@ -1516,7 +1516,7 @@ function _annotation_measurements(
     leaf_strings = _resolved_leaf_label_strings(geom, accessor, leaf_label_func)
     leaf_width_px, leaf_height_px = _max_text_size_px(leaf_strings, resolved_leaf_font, leaf_label_fontsize)
 
-    clade_strings = _resolved_clade_label_strings(clade_vertices, clade_label_func)
+    clade_strings = _resolved_clade_label_strings(clade_nodes, clade_label_func)
     clade_width_px, clade_height_px = _max_text_size_px(clade_strings, :regular, clade_label_fontsize)
     scalebar_label_string = _resolved_scalebar_label(scalebar_label)
     scalebar_width_px, scalebar_height_px = _max_text_size_px(
@@ -1572,7 +1572,7 @@ function _annotation_measurements(
         away_from_plot_px,
         leaf_width_px,
         leaf_height_px,
-        clade_label_visible && !isempty(clade_vertices),
+        clade_label_visible && !isempty(clade_nodes),
         _offset_component_px(clade_label_offset, active_side),
         _LINEAGEAXIS_CLADE_TICK_LENGTH_PX,
         _LINEAGEAXIS_CLADE_TEXT_GAP_PX,
@@ -1606,7 +1606,7 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
             lp[:leaf_label_align][],
             lp[:leaf_label_visible][],
             lp[:leaf_label_offset][],
-            lp[:clade_vertices][],
+            lp[:clade_nodes][],
             lp[:clade_label_func][],
             lp[:clade_label_fontsize][],
             lp[:clade_label_visible][],
@@ -1631,7 +1631,7 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
         lp[:leaf_label_align],
         lp[:leaf_label_visible],
         lp[:leaf_label_offset],
-        lp[:clade_vertices],
+        lp[:clade_nodes],
         lp[:clade_label_func],
         lp[:clade_label_fontsize],
         lp[:clade_label_visible],
@@ -1668,7 +1668,7 @@ end
 # ── lineageplot! dispatch for LineageAxis ──────────────────────────────────────
 
 """
-    lineageplot(rootvertex, accessor::LineageGraphAccessor; figure = NamedTuple(),
+    lineageplot(rootnode, accessor::LineageGraphAccessor; figure = NamedTuple(),
                 axis = NamedTuple(), kwargs...) -> Makie.FigureAxisPlot
 
 Non-mutating public entry point for lineage-graph plotting.
@@ -1683,7 +1683,7 @@ to pass keyword arguments to `LineageAxis`.
 For plotting into an existing `Axis` or `LineageAxis`, use `lineageplot!`.
 """
 function lineageplot(
-        rootvertex,
+        rootnode,
         accessor::LineageGraphAccessor;
         figure = NamedTuple(),
         axis = NamedTuple(),
@@ -1693,12 +1693,12 @@ function lineageplot(
     axis_kwargs   = _layout_kwargs_namedtuple(axis, "axis")
     fig = Figure(; figure_kwargs...)
     lax = LineageAxis(fig[1, 1]; axis_kwargs...)
-    lp = lineageplot!(lax, rootvertex, accessor; kwargs...)
+    lp = lineageplot!(lax, rootnode, accessor; kwargs...)
     return Makie.FigureAxisPlot(fig, lax, lp)
 end
 
 """
-    lineageplot!(ax::LineageAxis, rootvertex, accessor::LineageGraphAccessor;
+    lineageplot!(ax::LineageAxis, rootnode, accessor::LineageGraphAccessor;
                  lineageunits=nothing, kwargs...) -> LineagePlot
 
 Render a lineage graph on `ax`.
@@ -1714,21 +1714,21 @@ When `ax` is a `LineageAxis`, this method additionally:
 3. Calls `reset_limits!(ax, geom)` after the recipe sets `lp[:computed_geom]`
    so that axis limits fit the lineage graph bounding box with `display_polarity`
    and `lineage_orientation` applied.
-4. Registers a reactive `on` callback so that if `rootvertex` or `lineageunits`
+4. Registers a reactive `on` callback so that if `rootnode` or `lineageunits`
    changes later, `reset_limits!` is reapplied automatically.
 
-Vertex labels are off by default (`vertex_label_threshold = v -> false`); pass an
-explicit `vertex_label_threshold` predicate to enable them.
+Node labels are off by default (`node_label_threshold = node -> false`); pass an
+explicit `node_label_threshold` predicate to enable them.
 
 For the non-mutating convenience form that creates a new `Figure` and
-`LineageAxis`, use `lineageplot(rootvertex, accessor; kwargs...)`.
+`LineageAxis`, use `lineageplot(rootnode, accessor; kwargs...)`.
 
 All keyword arguments are forwarded to the `LineagePlot` composite recipe.
 See `lineageplot!` for the full attribute list.
 """
 function lineageplot!(
         ax::LineageAxis,
-        rootvertex,
+        rootnode,
         accessor::LineageGraphAccessor;
         lineageunits = nothing,
         kwargs...,
@@ -1744,7 +1744,7 @@ function lineageplot!(
     # reset_limits!(ax) after every sub-layer plot! — wasteful and premature
     # before computed_geom is populated. Going directly to ax.scene bypasses
     # the AbstractAxis protocol; we call reset_limits! manually below.
-    lp = lineageplot!(ax.scene, rootvertex, accessor; lineageunits = lineageunits, contract.plot_kwargs...)
+    lp = lineageplot!(ax.scene, rootnode, accessor; lineageunits = lineageunits, contract.plot_kwargs...)
 
     _wire_annotation_layout!(ax, lp)
     _sync_annotation_measurements!(ax, lp)
@@ -1753,7 +1753,7 @@ function lineageplot!(
     # map! nodes run synchronously during plot! construction (Makie 0.24).
     reset_limits!(ax, lp[:computed_geom][])
 
-    # Register reactive limit updates: whenever rootvertex, accessor, or
+    # Register reactive limit updates: whenever rootnode, accessor, or
     # lineageunits changes, computed_geom fires and we re-apply limits.
     on(ax.scene, lp[:computed_geom]) do geom
         reset_limits!(ax, geom)

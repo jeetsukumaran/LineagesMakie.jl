@@ -83,9 +83,9 @@ using CairoMakie: Point2f, Vec2f, Rect2i, on
         # Computed nodes), which covers both registration paths.
         @test haskey(pl.attributes, :viewport)
         @test haskey(pl.attributes, :projectionview)
-        # The derived :pixel_projection node must exist.
+        # The derived :pixel_projection computation cell must exist.
         @test haskey(pl.attributes, :pixel_projection)
-        # Changing the scene viewport must trigger the :pixel_projection node.
+        # Changing the scene viewport must trigger the :pixel_projection computation cell.
         # on(computed) uses get_observable! which deepcopies the value by default;
         # the closure captures a Scene (which holds Module refs) so deepcopy fails.
         # Use get_observable!(; use_deepcopy=false) to get a plain Observable we

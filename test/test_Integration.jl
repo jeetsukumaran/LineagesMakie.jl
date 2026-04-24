@@ -19,7 +19,7 @@ struct IntegrationTestNode
 end
 
 # 4-leaf balanced tree: root → {ab → {a, b}, cd → {c, d}}
-# Internal vertices: root, ab, cd (3 total); leaves: a, b, c, d (4 total)
+# Internal nodes: root, ab, cd (3 total); leaves: a, b, c, d (4 total)
 const _IT_ROOT = IntegrationTestNode("root", [
     IntegrationTestNode("ab", [
         IntegrationTestNode("a", IntegrationTestNode[]),
@@ -32,7 +32,7 @@ const _IT_ROOT = IntegrationTestNode("root", [
 ])
 
 # 6-leaf unbalanced tree for Observable reactivity test (Task 3)
-# Internal vertices: root6, ab, cdef, cd, ef (5 total); leaves: a,b,c,d,e,f (6 total)
+# Internal nodes: root6, ab, cdef, cd, ef (5 total); leaves: a,b,c,d,e,f (6 total)
 const _IT_ROOT6 = IntegrationTestNode("root6", [
     IntegrationTestNode("ab", [
         IntegrationTestNode("a", IntegrationTestNode[]),
@@ -54,18 +54,18 @@ const _IT_ROOT6 = IntegrationTestNode("root6", [
 
 # branchingtime: root=0.0, ab/cd=1.0, leaves=2.0
 # (Consistent with edgelength=1.0 per edge on the 4-leaf balanced tree)
-function _it_branchingtime(n::IntegrationTestNode)
-    return n.name in ("a", "b", "c", "d") ? 2.0 : n.name in ("ab", "cd") ? 1.0 : 0.0
+function _it_branchingtime(node::IntegrationTestNode)
+    return node.name in ("a", "b", "c", "d") ? 2.0 : node.name in ("ab", "cd") ? 1.0 : 0.0
 end
 
 # coalescenceage: leaves=0.0, ab/cd=1.0, root=2.0
 # Ultrametric (all leaf-to-root sums equal); consistent with edgelength=1.0
-function _it_coalescenceage(n::IntegrationTestNode)
-    return n.name in ("a", "b", "c", "d") ? 0.0 : n.name in ("ab", "cd") ? 1.0 : 2.0
+function _it_coalescenceage(node::IntegrationTestNode)
+    return node.name in ("a", "b", "c", "d") ? 0.0 : node.name in ("ab", "cd") ? 1.0 : 2.0
 end
 
-# vertexcoords: data-space Point2f for each vertex in the 4-leaf tree
-const _IT_VERTEXCOORDS = Dict{String, CairoMakie.Makie.Point2f}(
+# nodecoords: data-space Point2f for each node in the 4-leaf tree
+const _IT_NODECOORDS = Dict{String, CairoMakie.Makie.Point2f}(
     "root" => CairoMakie.Makie.Point2f(0, 2),
     "ab" => CairoMakie.Makie.Point2f(1, 1),
     "cd" => CairoMakie.Makie.Point2f(1, 3),
@@ -74,10 +74,10 @@ const _IT_VERTEXCOORDS = Dict{String, CairoMakie.Makie.Point2f}(
     "c" => CairoMakie.Makie.Point2f(2, 3),
     "d" => CairoMakie.Makie.Point2f(2, 4),
 )
-_it_vertexcoords(n::IntegrationTestNode) = _IT_VERTEXCOORDS[n.name]
+_it_nodecoords(node::IntegrationTestNode) = _IT_NODECOORDS[node.name]
 
-# vertexpos: pixel-space Point2f for each vertex in the 4-leaf tree
-const _IT_VERTEXPOS = Dict{String, CairoMakie.Makie.Point2f}(
+# nodepos: pixel-space Point2f for each node in the 4-leaf tree
+const _IT_NODEPOS = Dict{String, CairoMakie.Makie.Point2f}(
     "root" => CairoMakie.Makie.Point2f(100, 200),
     "ab" => CairoMakie.Makie.Point2f(200, 100),
     "cd" => CairoMakie.Makie.Point2f(200, 300),
@@ -86,7 +86,7 @@ const _IT_VERTEXPOS = Dict{String, CairoMakie.Makie.Point2f}(
     "c" => CairoMakie.Makie.Point2f(300, 250),
     "d" => CairoMakie.Makie.Point2f(300, 350),
 )
-_it_vertexpos(n::IntegrationTestNode) = _IT_VERTEXPOS[n.name]
+_it_nodepos(node::IntegrationTestNode) = _IT_NODEPOS[node.name]
 
 function _it_visible_blockscene_strings(lax::LineageAxis)::Vector{String}
     strings = String[]
@@ -128,7 +128,7 @@ end
         try
             fig = Figure(; size = (800, 600))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _IT_ROOT, acc)
             @test lp isa LineagePlot
             save(tmpfile, fig)
@@ -141,13 +141,13 @@ end
     @testset "lineageplot returns FigureAxisPlot with LineageAxis" begin
         tmpfile = tempname() * ".png"
         try
-            acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
             plot_result = lineageplot(
                 _IT_ROOT,
                 acc;
                 figure = (; size = (700, 500)),
                 axis = (; title = "Integration plot"),
-                leaf_label_func = n -> n.name,
+                leaf_label_func = node -> node.name,
             )
             @test plot_result isa CairoMakie.Makie.FigureAxisPlot
             fig, lax, lp = plot_result
@@ -166,7 +166,7 @@ end
     @testset "lineageplot! on LineageAxis returns LineagePlot and sets last_geom" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
         lp = lineageplot!(lax, _IT_ROOT, acc)
         @test lp isa LineagePlot
         @test lax.last_geom[] !== nothing
@@ -176,8 +176,8 @@ end
     @testset "vertical screen-axis API renders through lineageplot" begin
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
         plot_result = lineageplot(
             _IT_ROOT,
@@ -193,7 +193,7 @@ end
         )
         fig, lax, lp = plot_result
         geom = lp[:computed_geom][]
-        leaf_positions = [geom.vertex_positions[v] for v in geom.leaf_order]
+        leaf_positions = [geom.node_positions[node] for node in geom.leaf_order]
         leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
         leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
         @test lp isa LineagePlot
@@ -212,8 +212,8 @@ end
         ax = Axis(fig[1, 1])
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             ax,
@@ -223,7 +223,7 @@ end
             lineage_orientation = :top_to_bottom,
         )
         geom = lp[:computed_geom][]
-        leaf_positions = [geom.vertex_positions[v] for v in geom.leaf_order]
+        leaf_positions = [geom.node_positions[node] for node in geom.leaf_order]
         leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
         leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
         @test lp[:lineage_orientation][] === :top_to_bottom
@@ -236,7 +236,7 @@ end
     @testset "LineageAxis camera projection is non-identity after lineageplot!" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
         lineageplot!(lax, _IT_ROOT, acc)
         # reset_limits! was called, so projection is no longer the identity matrix.
         proj = CairoMakie.Makie.camera(lax.scene).projection[]
@@ -248,18 +248,18 @@ end
         lax = LineageAxis(fig[1, 1])
         # edgelength = 2.0:
         #   :edgelengths produces x ∈ [0, 4] (cumulative edge length from root)
-        #   :vertexlevels produces x ∈ [0, 2] (integer depth, ignores edge lengths)
+        #   :nodelevels produces x ∈ [0, 2] (integer depth, ignores edge lengths)
         # These have different bounding boxes, so the orthographic projection must
         # change when lineageunits is mutated reactively.
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 2.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 2.0,
         )
         lp = lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
         proj_before = CairoMakie.Makie.camera(lax.scene).projection[]
         # Mutating lineageunits → computed_geom fires → on() callback → reset_limits!.
-        lp.lineageunits = :vertexlevels
+        lp.lineageunits = :nodelevels
         proj_after = CairoMakie.Makie.camera(lax.scene).projection[]
         # x-scale differs between [0,4]+pad and [0,2]+pad projections.
         @test proj_before != proj_after
@@ -270,7 +270,7 @@ end
         try
             fig = Figure(; size = (600, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)
-            acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
             lp = lineageplot!(lax, _IT_ROOT, acc; lineage_orientation = :radial)
             @test lp isa LineagePlot
             save(tmpfile, fig)
@@ -285,8 +285,8 @@ end
         lax = LineageAxis(fig[1, 1]; show_x_axis = true)
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
@@ -310,8 +310,8 @@ end
         lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
@@ -328,13 +328,13 @@ end
         @test scalebar[:resolved_visible][] == false
     end
 
-    @testset "internal vertex markers preserve junction continuity under example styling" begin
+    @testset "internal node markers preserve junction continuity under example styling" begin
         fig = Figure(; size = (500, 400))
         lax = LineageAxis(fig[1, 1])
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
@@ -343,22 +343,22 @@ end
             lineageunits = :edgelengths,
             edge_color = :slategray,
             edge_linewidth = 1.5,
-            vertex_color = :white,
-            vertex_strokecolor = :slategray,
-            vertex_markersize = 12,
+            node_color = :white,
+            node_strokecolor = :slategray,
+            node_markersize = 12,
         )
         img = CairoMakie.colorbuffer(fig; px_per_unit = 1)
 
-        vertex_layers = filter(p -> p isa VertexLayer, lp.plots)
-        @test length(vertex_layers) == 2
-        @test vertex_layers[1].render_fill[] == true
-        @test vertex_layers[1].render_stroke[] == false
-        @test vertex_layers[2].render_fill[] == false
-        @test vertex_layers[2].render_stroke[] == true
+        node_layers = filter(p -> p isa NodeLayer, lp.plots)
+        @test length(node_layers) == 2
+        @test node_layers[1].render_fill[] == true
+        @test node_layers[1].render_stroke[] == false
+        @test node_layers[2].render_fill[] == false
+        @test node_layers[2].render_stroke[] == true
 
         geom = lp[:computed_geom][]
-        for v in (_IT_ROOT.children[1], _IT_ROOT.children[2])
-            junction_pixel = _it_sample_figure_pixel(img, lax.scene, geom.vertex_positions[v])
+        for node in (_IT_ROOT.children[1], _IT_ROOT.children[2])
+            junction_pixel = _it_sample_figure_pixel(img, lax.scene, geom.node_positions[node])
             r, g, b = _it_rgb_channels(junction_pixel)
             @test max(r, g, b) < 0.95f0
         end
@@ -369,8 +369,8 @@ end
         ax = Axis(fig[1, 1])
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
         @test_nowarn begin
             lineageplot!(
@@ -380,17 +380,16 @@ end
                 edge_linewidth = 2.0,
                 edge_linestyle = :dash,
                 edge_alpha = 0.8,
-                vertex_color = :red,
-                vertex_markersize = 6,
+                node_color = :red,
+                node_markersize = 6,
                 leaf_color = :green,
                 leaf_markersize = 10,
-                leaf_label_func = n -> n.name,
-                leaf_label_fontsize = 10,
-                vertex_label_func = v -> "",
-                vertex_label_threshold = v -> false,
-                clade_vertices = [_IT_ROOT],
+                leaf_label_func = node -> node.name,
+                node_label_func = node -> "",
+                node_label_threshold = node -> false,
+                clade_nodes = [_IT_ROOT],
                 clade_highlight_alpha = 0.1,
-                clade_label_func = v -> "root",
+                clade_label_func = node -> "root",
                 scalebar_auto_visible = true,
                 scalebar_label = "1 unit",
             )
@@ -403,14 +402,14 @@ end
     @testset "smoke/rectangular" begin
         # Each entry: (lineageunits symbol, string label for testset name, accessor kwargs)
         lu_cases = [
-            (:edgelengths, "edgelengths", (edgelength = (u, v) -> 1.0,)),
+            (:edgelengths, "edgelengths", (edgelength = (src, dst) -> 1.0,)),
             (:branchingtime, "branchingtime", (branchingtime = _it_branchingtime,)),
             (:coalescenceage, "coalescenceage", (coalescenceage = _it_coalescenceage,)),
-            (:vertexdepths, "vertexdepths", NamedTuple()),
-            (:vertexheights, "vertexheights", NamedTuple()),
-            (:vertexlevels, "vertexlevels", NamedTuple()),
-            (:vertexcoords, "vertexcoords", (vertexcoords = _it_vertexcoords,)),
-            (:vertexpos, "vertexpos", (vertexpos = _it_vertexpos,)),
+            (:nodedepths, "nodedepths", NamedTuple()),
+            (:nodeheights, "nodeheights", NamedTuple()),
+            (:nodelevels, "nodelevels", NamedTuple()),
+            (:nodecoords, "nodecoords", (nodecoords = _it_nodecoords,)),
+            (:nodepos, "nodepos", (nodepos = _it_nodepos,)),
         ]
 
         for (lu_sym, lu_str, acc_extra) in lu_cases
@@ -426,7 +425,7 @@ end
                         ax = make_ax(fig)
                         acc = lineagegraph_accessor(
                             _IT_ROOT;
-                            children = n -> n.children,
+                            children = node -> node.children,
                             acc_extra...,
                         )
                         lp = lineageplot!(ax, _IT_ROOT, acc; lineageunits = lu_sym)
@@ -447,12 +446,12 @@ end
         # Pre-build accessors outside the loop; both are reusable across sub-testsets.
         acc_el = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
         acc_ca = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
+            children = node -> node.children,
             coalescenceage = _it_coalescenceage,
         )
 
@@ -475,8 +474,8 @@ end
     @testset "lineage_orientation" begin
         acc = lineagegraph_accessor(
             _IT_ROOT;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
 
         @testset "left_to_right" begin
@@ -524,14 +523,14 @@ end
     @testset "resize_stability" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
         lp = lineageplot!(lax, _IT_ROOT, acc)
-        # VertexLayer renders at internal vertices with markerspace = :pixel.
-        vl = first(p for p in lp.plots if p isa VertexLayer)
-        markersize_before = vl.markersize[]
+        # NodeLayer renders at internal nodes with markerspace = :pixel.
+        nl = first(p for p in lp.plots if p isa NodeLayer)
+        markersize_before = nl.markersize[]
         # Simulate a viewport resize by updating the scene viewport Observable.
         lax.scene.viewport[] = CairoMakie.Makie.Rect2i(0, 0, 1200, 900)
-        markersize_after = vl.markersize[]
+        markersize_after = nl.markersize[]
         # Pixel-space markers must not be rescaled by CoordTransform on viewport change.
         @test markersize_before == markersize_after
     end
@@ -540,7 +539,7 @@ end
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
         # Same accessor works for both _IT_ROOT and _IT_ROOT6 (both IntegrationTestNode).
-        acc = lineagegraph_accessor(_IT_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
         root_obs = CairoMakie.Makie.Observable(_IT_ROOT)
         lp = lineageplot!(lax, root_obs, acc)
         # 4-leaf tree: leaf_order has 4 entries.
@@ -556,8 +555,8 @@ end
         try
             acc = lineagegraph_accessor(
                 _IT_ROOT;
-                children = n -> n.children,
-                edgelength = (u, v) -> 1.0,
+                children = node -> node.children,
+                edgelength = (src, dst) -> 1.0,
             )
             clade_a = _IT_ROOT.children[1]
             clade_b = _IT_ROOT.children[2]
@@ -580,27 +579,27 @@ end
                 _IT_ROOT,
                 acc;
                 lineageunits = :edgelengths,
-                leaf_label_func = n -> n.name,
-                clade_vertices = [clade_a, clade_b],
-                clade_label_func = n -> n.name,
+                leaf_label_func = node -> node.name,
+                clade_nodes = [clade_a, clade_b],
+                clade_label_func = node -> node.name,
             )
             @test_nowarn lineageplot!(
                 lax2,
                 _IT_ROOT,
                 acc;
-                lineageunits = :vertexheights,
-                leaf_label_func = n -> n.name,
-                clade_vertices = [clade_a, clade_b],
-                clade_label_func = n -> n.name,
+                lineageunits = :nodeheights,
+                leaf_label_func = node -> node.name,
+                clade_nodes = [clade_a, clade_b],
+                clade_label_func = node -> node.name,
             )
             lp3 = @test_nowarn lineageplot!(
                 lax3,
                 _IT_ROOT,
                 acc;
                 lineageunits = :edgelengths,
-                leaf_label_func = n -> n.name,
-                clade_vertices = [clade_a, clade_b],
-                clade_label_func = n -> n.name,
+                leaf_label_func = node -> node.name,
+                clade_nodes = [clade_a, clade_b],
+                clade_label_func = node -> node.name,
             )
             @test_nowarn lineageplot!(
                 lax4,
@@ -608,7 +607,7 @@ end
                 acc;
                 lineageunits = :edgelengths,
                 lineage_orientation = :radial,
-                leaf_label_func = n -> n.name,
+                leaf_label_func = node -> node.name,
             )
 
             @test_nowarn CairoMakie.colorbuffer(fig)
@@ -633,7 +632,7 @@ end
             @test lp3[:rectangular_orientation_owner][] === :lineageaxis
 
             geom3 = lp3[:computed_geom][]
-            leaf_positions3 = [geom3.vertex_positions[v] for v in geom3.leaf_order]
+            leaf_positions3 = [geom3.node_positions[node] for node in geom3.leaf_order]
             leaf_ys3 = unique(round(pos[2]; digits = 5) for pos in leaf_positions3)
             leaf_xs3 = unique(round(pos[1]; digits = 5) for pos in leaf_positions3)
             @test length(leaf_ys3) == 1

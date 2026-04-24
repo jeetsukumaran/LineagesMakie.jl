@@ -43,18 +43,18 @@ _LT_FIG = Figure(; size = (800, 600))
 _LT_AX = Axis(_LT_FIG[1, 1])
 colorbuffer(_LT_FIG)
 
-_LT_ACC = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+_LT_ACC = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
 _LT_ACC_UNIT = lineagegraph_accessor(
     _LT_BALANCED_ROOT;
-    children = n -> n.children,
-    edgelength = (u, v) -> 1.0,
+    children = node -> node.children,
+    edgelength = (src, dst) -> 1.0,
 )
 _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
 _LT_NONROOT_CLADE = _LT_BALANCED_ROOT.children[1]
 
 function _lt_clade_points(geom::LineageGraphGeometry, acc, mrca)
-    pts = [geom.vertex_positions[v] for v in leaves(acc, mrca)]
-    push!(pts, geom.vertex_positions[mrca])
+    pts = [geom.node_positions[node] for node in leaves(acc, mrca)]
+    push!(pts, geom.node_positions[mrca])
     return pts
 end
 
@@ -87,7 +87,7 @@ end
         @testset "renders without error" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = edgelayer!(ax, geom)
             @test plot_obj isa EdgeLayer
@@ -96,7 +96,7 @@ end
         @testset "visible = false" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = edgelayer!(ax, geom; visible = false)
             @test plot_obj.visible[] == false
@@ -105,9 +105,9 @@ end
         @testset "per-edge color function" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = edgelayer!(ax, geom; color = (u, v) -> :red)
+            plot_obj = edgelayer!(ax, geom; color = (src, dst) -> :red)
             colorbuffer(fig)
             @test plot_obj[:resolved_color][] isa AbstractVector
         end
@@ -115,41 +115,41 @@ end
         @testset "linewidth and alpha accepted" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             @test_nowarn edgelayer!(ax, geom; linewidth = 2.0, alpha = 0.5)
         end
 
     end
 
-    @testset "VertexLayer" begin
+    @testset "NodeLayer" begin
 
         @testset "renders without error" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = vertexlayer!(ax, geom, acc)
-            @test plot_obj isa VertexLayer
+            plot_obj = nodelayer!(ax, geom, acc)
+            @test plot_obj isa NodeLayer
         end
 
-        @testset "exactly 3 internal vertices" begin
+        @testset "exactly 3 internal nodes" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = vertexlayer!(ax, geom, acc)
+            plot_obj = nodelayer!(ax, geom, acc)
             colorbuffer(fig)
-            # 4-leaf balanced binary tree has root + 2 internal nodes = 3 internal vertices
-            @test length(plot_obj[:vertex_pos_data][]) == 3
+            # 4-leaf balanced binary tree has root + 2 internal nodes = 3 internal nodes
+            @test length(plot_obj[:node_pos_data][]) == 3
         end
 
         @testset "pixel-size stability after viewport change" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = vertexlayer!(ax, geom, acc; markersize = 12)
+            plot_obj = nodelayer!(ax, geom, acc; markersize = 12)
             colorbuffer(fig)
             initial_size = plot_obj.markersize[]
             ax.scene.viewport[] = Rect2i(0, 0, 1200, 900)
@@ -163,7 +163,7 @@ end
         @testset "renders without error" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = leaflayer!(ax, geom, acc)
             @test plot_obj isa LeafLayer
@@ -172,22 +172,22 @@ end
         @testset "exactly 4 leaf positions" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = leaflayer!(ax, geom, acc)
             colorbuffer(fig)
             @test length(plot_obj[:leaf_pos_data][]) == 4
         end
 
-        @testset "independence: visible = false on LeafLayer does not affect VertexLayer" begin
+        @testset "independence: visible = false on LeafLayer does not affect NodeLayer" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            vl = vertexlayer!(ax, geom, acc)
+            nl = nodelayer!(ax, geom, acc)
             ll = leaflayer!(ax, geom, acc)
             ll.visible[] = false
-            @test vl.visible[] == true
+            @test nl.visible[] == true
         end
 
     end
@@ -197,18 +197,18 @@ end
         @testset "renders without error" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = leaflabellayer!(ax, geom, acc; text_func = v -> "label")
+            plot_obj = leaflabellayer!(ax, geom, acc; text_func = node -> "label")
             @test plot_obj isa LeafLabelLayer
         end
 
         @testset "label positions: 4 entries for 4-leaf tree" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = leaflabellayer!(ax, geom, acc; text_func = v -> "x")
+            plot_obj = leaflabellayer!(ax, geom, acc; text_func = node -> "x")
             colorbuffer(fig)
             @test length(plot_obj[:leaf_label_positions][]) == 4
         end
@@ -216,7 +216,7 @@ end
         @testset "italic = true encodes italic font in resolved_font" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = leaflabellayer!(ax, geom, acc; italic = true)
             @test plot_obj[:resolved_font][] == :italic
@@ -225,7 +225,7 @@ end
         @testset "visible = false" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = leaflabellayer!(ax, geom, acc; visible = false)
             @test plot_obj.visible[] == false
@@ -234,7 +234,7 @@ end
         @testset "pixel offset: positions update reactively after viewport change" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = leaflabellayer!(ax, geom, acc; offset = Vec2f(10, 0))
             colorbuffer(fig)
@@ -247,7 +247,7 @@ end
         @testset "rectangular leaf labels have blockscene pixel positions after layout" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            plot_obj = leaflabellayer!(ax, _LT_GEOM, _LT_ACC; text_func = v -> string(v.name))
+            plot_obj = leaflabellayer!(ax, _LT_GEOM, _LT_ACC; text_func = node -> string(node.name))
             colorbuffer(fig)
             positions = plot_obj[:leaf_label_positions][]
             @test !isempty(positions)
@@ -262,7 +262,7 @@ end
                 ax,
                 geom,
                 _LT_ACC_UNIT;
-                text_func = v -> string(v.name),
+                text_func = node -> string(node.name),
                 lineage_orientation = :radial,
             )
             colorbuffer(fig)
@@ -281,9 +281,9 @@ end
                 ax,
                 _LT_BALANCED_ROOT,
                 _LT_ACC;
-                leaf_label_func = v -> string(v.name),
-                clade_vertices = [_LT_BALANCED_ROOT],
-                clade_label_func = v -> "root",
+                leaf_label_func = node -> string(node.name),
+                clade_nodes = [_LT_BALANCED_ROOT],
+                clade_label_func = node -> "root",
             )
             colorbuffer(fig)
             ll = only(filter(p -> p isa LeafLabelLayer, lp.plots))
@@ -305,8 +305,8 @@ end
             colorbuffer(fig)
 
             geom = lp[:computed_geom][]
-            root_pos = geom.vertex_positions[_LT_BALANCED_ROOT]
-            leaf_pos = geom.vertex_positions[_LT_BALANCED_ROOT.children[1].children[1]]
+            root_pos = geom.node_positions[_LT_BALANCED_ROOT]
+            leaf_pos = geom.node_positions[_LT_BALANCED_ROOT.children[1].children[1]]
             @test root_pos[2] > leaf_pos[2]
 
             fig2 = Figure(; size = (500, 350))
@@ -321,8 +321,8 @@ end
             colorbuffer(fig2)
 
             geom2 = lp2[:computed_geom][]
-            root_pos2 = geom2.vertex_positions[_LT_BALANCED_ROOT]
-            leaf_pos2 = geom2.vertex_positions[_LT_BALANCED_ROOT.children[1].children[1]]
+            root_pos2 = geom2.node_positions[_LT_BALANCED_ROOT]
+            leaf_pos2 = geom2.node_positions[_LT_BALANCED_ROOT.children[1].children[1]]
             @test root_pos2[1] > leaf_pos2[1]
         end
 
@@ -334,9 +334,9 @@ end
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
                 lineageunits = :edgelengths,
-                leaf_label_func = v -> "species_" * string(v.name),
-                clade_vertices = [_LT_NONROOT_CLADE],
-                clade_label_func = v -> "clade_" * string(v.name),
+                leaf_label_func = node -> "species_" * string(node.name),
+                clade_nodes = [_LT_NONROOT_CLADE],
+                clade_label_func = node -> "clade_" * string(node.name),
             )
             colorbuffer(fig)
 
@@ -365,9 +365,9 @@ end
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
                 lineageunits = :edgelengths,
-                leaf_label_func = v -> "species_" * string(v.name),
-                clade_vertices = [_LT_NONROOT_CLADE],
-                clade_label_func = v -> "clade_" * string(v.name),
+                leaf_label_func = node -> "species_" * string(node.name),
+                clade_nodes = [_LT_NONROOT_CLADE],
+                clade_label_func = node -> "clade_" * string(node.name),
             )
             colorbuffer(fig)
 
@@ -394,9 +394,9 @@ end
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
                 lineageunits = :edgelengths,
-                leaf_label_func = v -> "species_" * string(v.name),
-                clade_vertices = [_LT_NONROOT_CLADE],
-                clade_label_func = v -> "clade_" * string(v.name),
+                leaf_label_func = node -> "species_" * string(node.name),
+                clade_nodes = [_LT_NONROOT_CLADE],
+                clade_label_func = node -> "clade_" * string(node.name),
             )
             colorbuffer(fig)
 
@@ -426,9 +426,9 @@ end
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
                 lineageunits = :edgelengths,
-                leaf_label_func = v -> "species_" * string(v.name),
-                clade_vertices = [_LT_NONROOT_CLADE],
-                clade_label_func = v -> "clade_" * string(v.name),
+                leaf_label_func = node -> "species_" * string(node.name),
+                clade_nodes = [_LT_NONROOT_CLADE],
+                clade_label_func = node -> "clade_" * string(node.name),
             )
             colorbuffer(fig)
 
@@ -458,9 +458,9 @@ end
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
                 lineageunits = :edgelengths,
-                leaf_label_func = v -> "species_" * string(v.name),
-                clade_vertices = [_LT_BALANCED_ROOT.children[1], _LT_BALANCED_ROOT.children[2]],
-                clade_label_func = v -> "clade_" * string(v.name),
+                leaf_label_func = node -> "species_" * string(node.name),
+                clade_nodes = [_LT_BALANCED_ROOT.children[1], _LT_BALANCED_ROOT.children[2]],
+                clade_label_func = node -> "clade_" * string(node.name),
             )
             colorbuffer(fig)
 
@@ -484,67 +484,67 @@ end
 
     end
 
-    @testset "VertexLabelLayer" begin
+    @testset "NodeLabelLayer" begin
 
         @testset "renders without error" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = vertexlabellayer!(ax, geom, acc)
-            @test plot_obj isa VertexLabelLayer
+            plot_obj = nodelabellayer!(ax, geom, acc)
+            @test plot_obj isa NodeLabelLayer
         end
 
-        @testset "threshold = v -> false: zero labels" begin
+        @testset "threshold = node -> false: zero labels" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = vertexlabellayer!(ax, geom, acc; threshold = v -> false)
+            plot_obj = nodelabellayer!(ax, geom, acc; threshold = node -> false)
             colorbuffer(fig)
-            @test length(plot_obj[:vertex_label_strings][]) == 0
+            @test length(plot_obj[:node_label_strings][]) == 0
         end
 
-        @testset "threshold = v -> true: all 7 vertices labelled" begin
+        @testset "threshold = node -> true: all 7 nodes labelled" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            # 4-leaf balanced tree has 3 internal + 4 leaf = 7 vertices total.
-            plot_obj = vertexlabellayer!(
+            # 4-leaf balanced tree has 3 internal + 4 leaf = 7 nodes total.
+            plot_obj = nodelabellayer!(
                 ax,
                 geom,
                 acc;
-                value_func = v -> "x",
-                threshold = v -> true,
+                value_func = node -> "x",
+                threshold = node -> true,
             )
             colorbuffer(fig)
-            @test length(plot_obj[:vertex_label_strings][]) == 7
+            @test length(plot_obj[:node_label_strings][]) == 7
         end
 
         @testset "value_func returning non-renderable type raises error at plot time" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             # Makie's ComputeGraph wraps map! errors in ResolveException, so we
             # match by message content. The cause is an ArgumentError naming
-            # the vertex and the non-renderable type.
-            @test_throws r"cannot be rendered as text" vertexlabellayer!(
+            # the node and the non-renderable type.
+            @test_throws r"cannot be rendered as text" nodelabellayer!(
                 ax,
                 geom,
                 acc;
-                value_func = v -> Dict(),
-                threshold  = v -> true,
+                value_func = node -> Dict(),
+                threshold  = node -> true,
             )
         end
 
         @testset "visible = false" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = vertexlabellayer!(ax, geom, acc; visible = false)
+            plot_obj = nodelabellayer!(ax, geom, acc; visible = false)
             @test plot_obj.visible[] == false
         end
 
@@ -555,18 +555,18 @@ end
         @testset "renders without error" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [_LT_BALANCED_ROOT])
             @test plot_obj isa CladeHighlightLayer
         end
 
-        @testset "empty clade_vertices produces empty highlight_rects" begin
+        @testset "empty clade_nodes produces empty highlight_rects" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [])
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [])
             colorbuffer(fig)
             @test isempty(plot_obj[:highlight_rects][])
         end
@@ -574,9 +574,9 @@ end
         @testset "one MRCA produces exactly one highlight rect" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [_LT_BALANCED_ROOT])
             colorbuffer(fig)
             @test length(plot_obj[:highlight_rects][]) == 1
         end
@@ -584,13 +584,13 @@ end
         @testset "highlight rect encloses all leaf positions for root clade" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [_LT_BALANCED_ROOT])
             colorbuffer(fig)
             rect = plot_obj[:highlight_rects][][1]
-            for v in geom.leaf_order
-                pos = geom.vertex_positions[v]
+            for node in geom.leaf_order
+                pos = geom.node_positions[node]
                 @test pos[1] >= rect.origin[1]
                 @test pos[1] <= rect.origin[1] + rect.widths[1]
                 @test pos[2] >= rect.origin[2]
@@ -601,7 +601,7 @@ end
         @testset "visible = false accepted" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = cladehighlightlayer!(ax, geom, acc; visible = false)
             @test plot_obj.visible[] == false
@@ -612,11 +612,11 @@ end
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
-                children = n -> n.children,
-                edgelength = (u, v) -> 1.0,
+                children = node -> node.children,
+                edgelength = (src, dst) -> 1.0,
             )
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
-            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_NONROOT_CLADE])
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [_LT_NONROOT_CLADE])
             colorbuffer(fig)
 
             rect = only(plot_obj[:highlight_rects][])
@@ -631,8 +631,8 @@ end
             end
 
             outside_leaves = [
-                geom.vertex_positions[v] for v in geom.leaf_order
-                if !(v in collect(leaves(acc, _LT_NONROOT_CLADE)))
+                geom.node_positions[node] for node in geom.leaf_order
+                if !(node in collect(leaves(acc, _LT_NONROOT_CLADE)))
             ]
             @test any(pt -> !_lt_rect_contains(rect, pt), outside_leaves)
         end
@@ -642,11 +642,11 @@ end
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
-                children = n -> n.children,
-                edgelength = (u, v) -> 1.0,
+                children = node -> node.children,
+                edgelength = (src, dst) -> 1.0,
             )
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
-            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_vertices = [_LT_NONROOT_CLADE])
+            plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [_LT_NONROOT_CLADE])
             raw_span = _lt_clade_xspan(geom, acc, _LT_NONROOT_CLADE)
             full_span = Float32(geom.boundingbox.widths[1])
             initial_viewport = ax.scene.viewport[]
@@ -673,14 +673,14 @@ end
         @testset "renders without error" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = cladelabellayer!(
                 ax,
                 geom,
                 acc;
-                clade_vertices = [_LT_BALANCED_ROOT],
-                label_func = v -> "Clade A",
+                clade_nodes = [_LT_BALANCED_ROOT],
+                label_func = node -> "Clade A",
             )
             @test plot_obj isa CladeLabelLayer
         end
@@ -688,26 +688,26 @@ end
         @testset "label_func text content appears in bracket_label_strings" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = cladelabellayer!(
                 ax,
                 geom,
                 acc;
-                clade_vertices = [_LT_BALANCED_ROOT],
-                label_func = v -> "Clade A",
+                clade_nodes = [_LT_BALANCED_ROOT],
+                label_func = node -> "Clade A",
             )
             colorbuffer(fig)
             strings = plot_obj[:bracket_label_strings][]
             @test any(s -> occursin("Clade A", s), strings)
         end
 
-        @testset "empty clade_vertices produces no bracket shapes" begin
+        @testset "empty clade_nodes produces no bracket shapes" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = cladelabellayer!(ax, geom, acc; clade_vertices = [])
+            plot_obj = cladelabellayer!(ax, geom, acc; clade_nodes = [])
             colorbuffer(fig)
             @test isempty(plot_obj[:bracket_shapes][])
         end
@@ -715,7 +715,7 @@ end
         @testset "visible = false accepted" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = cladelabellayer!(ax, geom, acc; visible = false)
             @test plot_obj.visible[] == false
@@ -725,8 +725,8 @@ end
             fig = Figure(; size = (400, 300))
             ax  = Axis(fig[1, 1])
             lp  = lineageplot!(ax, _LT_BALANCED_ROOT, _LT_ACC;
-                               clade_vertices = [_LT_BALANCED_ROOT],
-                               clade_label_func = v -> "root")
+                               clade_nodes = [_LT_BALANCED_ROOT],
+                               clade_label_func = node -> "root")
             colorbuffer(fig)   # force layout resolution so viewport is non-zero
             cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
             # bracket_pixel_shapes must be non-empty after layout.
@@ -742,8 +742,8 @@ end
             fig = Figure(; size = (400, 300))
             ax  = Axis(fig[1, 1])
             lp  = lineageplot!(ax, _LT_BALANCED_ROOT, _LT_ACC;
-                               clade_vertices = [_LT_BALANCED_ROOT],
-                               clade_label_func = v -> "root")
+                               clade_nodes = [_LT_BALANCED_ROOT],
+                               clade_label_func = node -> "root")
             colorbuffer(fig)
             cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
             @test !isempty(cll[:bracket_label_pixel_positions][])
@@ -753,19 +753,19 @@ end
 
     @testset "ScaleBarLayer" begin
 
-        @testset "visible defaults to false for :vertexheights" begin
+        @testset "visible defaults to false for :nodeheights" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = scalebarlayer!(ax, geom, acc, :vertexheights)
+            plot_obj = scalebarlayer!(ax, geom, acc, :nodeheights)
             @test plot_obj[:resolved_visible][] == false
         end
 
         @testset "visible defaults to false for :edgelengths when label is empty" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths)
             @test plot_obj[:resolved_visible][] == false
@@ -774,25 +774,25 @@ end
         @testset "visible defaults to true for :edgelengths when label is present" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths; label = "1 unit")
             @test plot_obj[:resolved_visible][] == true
         end
 
-        @testset "explicit visible = true overrides :vertexheights default" begin
+        @testset "explicit visible = true overrides :nodeheights default" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = scalebarlayer!(ax, geom, acc, :vertexheights; scalebar_auto_visible = true)
+            plot_obj = scalebarlayer!(ax, geom, acc, :nodeheights; scalebar_auto_visible = true)
             @test plot_obj[:resolved_visible][] == true
         end
 
         @testset "scalebar_line_pts has exactly two endpoints when rendered" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths; label = "1 unit")
             colorbuffer(fig)
@@ -802,7 +802,7 @@ end
         @testset "visible defaults to true for :branchingtime and :coalescenceage when labelled" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
             p1 = scalebarlayer!(ax, geom, acc, :branchingtime; label = "1 unit")
             p2 = scalebarlayer!(ax, geom, acc, :coalescenceage; label = "1 unit")
@@ -819,7 +819,7 @@ end
         @testset "returns LineagePlot on plain Axis" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
             @test lp isa LineagePlot
         end
@@ -827,7 +827,7 @@ end
         @testset "computed_geom is a LineageGraphGeometry after construction" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
             @test lp[:computed_geom][] isa LineageGraphGeometry
         end
@@ -835,7 +835,7 @@ end
         @testset "computed_geom has correct leaf count" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
             @test length(lp[:computed_geom][].leaf_order) == 4
         end
@@ -843,39 +843,39 @@ end
         @testset "renders without error and produces non-empty colorbuffer" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             @test_nowarn begin
                 lineageplot!(ax, _LT_BALANCED_ROOT, acc)
                 colorbuffer(fig)
             end
         end
 
-        @testset "lineageunits = :vertexlevels accepted" begin
+        @testset "lineageunits = :nodelevels accepted" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
-            @test_nowarn lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :vertexlevels)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
+            @test_nowarn lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :nodelevels)
         end
 
-        @testset "resolved_lineageunits is :vertexheights for children-only accessor" begin
+        @testset "resolved_lineageunits is :nodeheights for children-only accessor" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
-            @test lp[:resolved_lineageunits][] === :vertexheights
+            @test lp[:resolved_lineageunits][] === :nodeheights
         end
 
         @testset "lineage_orientation = :radial triggers circular_layout" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineage_orientation = :radial)
             colorbuffer(fig)
             geom = lp[:computed_geom][]
             # All 4 leaves are at equal radius in a circular layout.
             leaf_radii = [
-                sqrt(geom.vertex_positions[v][1]^2 + geom.vertex_positions[v][2]^2)
-                for v in geom.leaf_order
+                sqrt(geom.node_positions[node][1]^2 + geom.node_positions[node][2]^2)
+                for node in geom.leaf_order
             ]
             @test all(r -> isapprox(r, leaf_radii[1]; atol = 1.0f-3), leaf_radii)
         end
@@ -883,7 +883,7 @@ end
         @testset "edge_color kwarg forwarded to EdgeLayer child" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; edge_color = :red)
             edge_children = filter(p -> p isa EdgeLayer, lp.plots)
             @test !isempty(edge_children)
@@ -893,7 +893,7 @@ end
         @testset "edge_visible = false forwarded to EdgeLayer child" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; edge_visible = false)
             edge_children = filter(p -> p isa EdgeLayer, lp.plots)
             @test !isempty(edge_children)
@@ -903,8 +903,8 @@ end
         @testset "leaf_label_func kwarg forwarded to LeafLabelLayer child" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
-            custom_tf = v -> "TEST"
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
+            custom_tf = node -> "TEST"
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; leaf_label_func = custom_tf)
             colorbuffer(fig)
             label_children = filter(p -> p isa LeafLabelLayer, lp.plots)
@@ -912,38 +912,38 @@ end
             @test all(s -> s == "TEST", label_children[1][:leaf_label_strings][])
         end
 
-        @testset "clade_vertices shared by CladeHighlightLayer and CladeLabelLayer" begin
+        @testset "clade_nodes shared by CladeHighlightLayer and CladeLabelLayer" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
-            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; clade_vertices = [_LT_BALANCED_ROOT])
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; clade_nodes = [_LT_BALANCED_ROOT])
             colorbuffer(fig)
             hl_children = filter(p -> p isa CladeHighlightLayer, lp.plots)
             cl_children = filter(p -> p isa CladeLabelLayer, lp.plots)
             @test !isempty(hl_children)
             @test !isempty(cl_children)
-            # Both sub-layers received the single MRCA vertex.
+            # Both sub-layers received the single MRCA node.
             @test length(hl_children[1][:highlight_rects][]) == 1
         end
 
-        @testset "scalebar_auto_visible = true overrides default for :vertexheights" begin
+        @testset "scalebar_auto_visible = true overrides default for :nodeheights" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             lp = lineageplot!(
                 ax, _LT_BALANCED_ROOT, acc;
-                lineageunits = :vertexheights, scalebar_auto_visible = true,
+                lineageunits = :nodeheights, scalebar_auto_visible = true,
             )
             scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
             @test !isempty(scalebar_children)
             @test scalebar_children[1][:resolved_visible][] == true
         end
 
-        @testset "scalebar is auto-hidden for :vertexheights by default" begin
+        @testset "scalebar is auto-hidden for :nodeheights by default" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
-            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :vertexheights)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :nodeheights)
             scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
             @test !isempty(scalebar_children)
             @test scalebar_children[1][:resolved_visible][] == false
@@ -954,8 +954,8 @@ end
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
-                children = n -> n.children,
-                edgelength = (u, v) -> 1.0,
+                children = node -> node.children,
+                edgelength = (src, dst) -> 1.0,
             )
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
             scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
@@ -968,8 +968,8 @@ end
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
-                children = n -> n.children,
-                edgelength = (u, v) -> 1.0,
+                children = node -> node.children,
+                edgelength = (src, dst) -> 1.0,
             )
             lp = lineageplot!(
                 ax,
@@ -986,13 +986,13 @@ end
         @testset "computed_geom updates reactively when lineageunits attribute changes" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
-            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :vertexheights)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :nodeheights)
             geom_before = lp[:computed_geom][]
-            lp.lineageunits = :vertexlevels
+            lp.lineageunits = :nodelevels
             geom_after = lp[:computed_geom][]
             # Both are valid geometries; bounding boxes differ because
-            # :vertexheights and :vertexlevels assign different x coordinates.
+            # :nodeheights and :nodelevels assign different x coordinates.
             @test geom_before !== geom_after
             @test geom_after isa LineageGraphGeometry
         end
@@ -1000,7 +1000,7 @@ end
         @testset "edge_color updates reactively when attribute Observable changes" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             color_obs = CairoMakie.Makie.Observable(:blue)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; edge_color = color_obs)
             edge_children = filter(p -> p isa EdgeLayer, lp.plots)
@@ -1013,7 +1013,7 @@ end
         @testset "lift on edge_color attribute tracks source Observable" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+            acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             c = CairoMakie.Makie.Observable(:black)
             lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc;
                 edge_color = CairoMakie.Makie.lift(x -> x, c))
@@ -1029,9 +1029,9 @@ end
     @testset "CladeHighlightLayer rects stay within the bounding box and remain clade-local" begin
         fig = Figure(; size = (400, 300))
         ax  = Axis(fig[1, 1])
-        acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
         lp  = lineageplot!(ax, _LT_BALANCED_ROOT, acc;
-                           clade_vertices = [_LT_NONROOT_CLADE])
+                           clade_nodes = [_LT_NONROOT_CLADE])
         colorbuffer(fig)
         chl = only(filter(p -> p isa CladeHighlightLayer, lp.plots))
         geom = lp[:computed_geom][]
@@ -1054,14 +1054,14 @@ end
         end
     end
 
-    @testset "vertex_label_threshold defaults to v -> false" begin
+    @testset "node_label_threshold defaults to node -> false" begin
         fig = Figure(; size = (400, 300))
         ax  = Axis(fig[1, 1])
-        acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = n -> n.children)
+        acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
         lp  = lineageplot!(ax, _LT_BALANCED_ROOT, acc)
-        vll = only(filter(p -> p isa VertexLabelLayer, lp.plots))
-        # With threshold = v -> false, no vertex passes → zero label positions.
-        @test isempty(vll[:vertex_label_positions][])
+        nll = only(filter(p -> p isa NodeLabelLayer, lp.plots))
+        # With threshold = node -> false, no node passes → zero label positions.
+        @test isempty(nll[:node_label_positions][])
     end
 
 end

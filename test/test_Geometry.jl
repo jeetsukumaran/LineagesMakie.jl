@@ -49,12 +49,12 @@ const GEO_POLYTOMY = TestNode("root", [
     TestNode("d", TestNode[]),
 ])
 
-# Single vertex: rootvertex is also the only leaf
+# Single node: rootnode is also the only leaf
 const GEO_SINGLE = TestNode("root", TestNode[])
 
 # Helper: build a LineageGraphAccessor with only children
-function _acc(rootvertex)
-    return lineagegraph_accessor(rootvertex; children = n -> n.children)
+function _acc(rootnode)
+    return lineagegraph_accessor(rootnode; children = node -> node.children)
 end
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
@@ -62,13 +62,13 @@ end
 @testset "Geometry" begin
 
     @testset "LineageGraphGeometry — struct fields and immutability" begin
-        vp   = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
-        ep   = Point2f[]
-        lo   = Any[GEO_SINGLE]
-        bb   = Rect2f(0, 0, 0, 0)
-        geom = LineageGraphGeometry(vp, ep, Tuple{Any,Any}[], lo, bb)
+        node_pos = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
+        ep       = Point2f[]
+        lo       = Any[GEO_SINGLE]
+        bb       = Rect2f(0, 0, 0, 0)
+        geom     = LineageGraphGeometry(node_pos, ep, Tuple{Any,Any}[], lo, bb)
         @test geom isa LineageGraphGeometry
-        @test geom.vertex_positions === vp
+        @test geom.node_positions === node_pos
         @test geom.edge_shapes === ep
         @test geom.leaf_order === lo
         @test geom.boundingbox === bb
@@ -76,89 +76,89 @@ end
     end
 
     @testset "boundingbox — delegates to stored field" begin
-        vp   = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
-        bb   = Rect2f(0, 0, 5, 3)
-        geom = LineageGraphGeometry(vp, Point2f[], Tuple{Any,Any}[], Any[GEO_SINGLE], bb)
+        node_pos = Dict{Any,Point2f}(GEO_SINGLE => Point2f(0, 1))
+        bb       = Rect2f(0, 0, 5, 3)
+        geom     = LineageGraphGeometry(node_pos, Point2f[], Tuple{Any,Any}[], Any[GEO_SINGLE], bb)
         @test boundingbox(geom) === bb
     end
 
-    # ── :vertexheights ──────────────────────────────────────────────────────────
+    # ── :nodeheights ────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :vertexheights — balanced (4 leaves)" begin
-        acc  = _acc(GEO_BALANCED)
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :vertexheights)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodeheights — balanced (4 leaves)" begin
+        acc      = _acc(GEO_BALANCED)
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodeheights)
+        node_pos = geom.node_positions
 
-        @test length(vp) == 7
+        @test length(node_pos) == 7
 
         ls = leaves(acc, GEO_BALANCED)
         @test length(ls) == 4
         for leaf in ls
-            @test vp[leaf][1] ≈ 0.0
+            @test node_pos[leaf][1] ≈ 0.0
         end
 
-        root_proc = vp[GEO_BALANCED][1]
-        @test root_proc == maximum(vp[v][1] for v in keys(vp))
+        root_proc = node_pos[GEO_BALANCED][1]
+        @test root_proc == maximum(node_pos[node][1] for node in keys(node_pos))
         @test root_proc > 0.0
     end
 
-    @testset "rectangular_layout :vertexheights — unbalanced (6 leaves)" begin
-        acc  = _acc(GEO_UNBALANCED)
-        geom = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :vertexheights)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodeheights — unbalanced (6 leaves)" begin
+        acc      = _acc(GEO_UNBALANCED)
+        geom     = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :nodeheights)
+        node_pos = geom.node_positions
 
         ls = leaves(acc, GEO_UNBALANCED)
         @test length(ls) == 6
         for leaf in ls
-            @test vp[leaf][1] ≈ 0.0
+            @test node_pos[leaf][1] ≈ 0.0
         end
-        @test vp[GEO_UNBALANCED][1] > 0.0
+        @test node_pos[GEO_UNBALANCED][1] > 0.0
     end
 
-    @testset "rectangular_layout :vertexheights — polytomy (4 leaves)" begin
-        acc  = _acc(GEO_POLYTOMY)
-        geom = rectangular_layout(GEO_POLYTOMY, acc; lineageunits = :vertexheights)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodeheights — polytomy (4 leaves)" begin
+        acc      = _acc(GEO_POLYTOMY)
+        geom     = rectangular_layout(GEO_POLYTOMY, acc; lineageunits = :nodeheights)
+        node_pos = geom.node_positions
 
         ls = leaves(acc, GEO_POLYTOMY)
         @test length(ls) == 4
         for leaf in ls
-            @test vp[leaf][1] ≈ 0.0
+            @test node_pos[leaf][1] ≈ 0.0
         end
-        @test vp[GEO_POLYTOMY][1] ≈ 1.0
+        @test node_pos[GEO_POLYTOMY][1] ≈ 1.0
     end
 
-    @testset "rectangular_layout :vertexheights — single leaf" begin
-        acc  = _acc(GEO_SINGLE)
-        geom = rectangular_layout(GEO_SINGLE, acc; lineageunits = :vertexheights)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodeheights — single leaf" begin
+        acc      = _acc(GEO_SINGLE)
+        geom     = rectangular_layout(GEO_SINGLE, acc; lineageunits = :nodeheights)
+        node_pos = geom.node_positions
 
-        @test length(vp) == 1
-        @test vp[GEO_SINGLE][1] ≈ 0.0
+        @test length(node_pos) == 1
+        @test node_pos[GEO_SINGLE][1] ≈ 0.0
     end
 
-    # ── :vertexlevels ───────────────────────────────────────────────────────────
+    # ── :nodelevels ─────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :vertexlevels — balanced (4 leaves)" begin
-        acc  = _acc(GEO_BALANCED)
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodelevels — balanced (4 leaves)" begin
+        acc      = _acc(GEO_BALANCED)
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodelevels)
+        node_pos = geom.node_positions
 
-        @test length(vp) == 7
-        @test vp[GEO_BALANCED][1] ≈ 0.0
+        @test length(node_pos) == 7
+        @test node_pos[GEO_BALANCED][1] ≈ 0.0
 
         ls        = leaves(acc, GEO_BALANCED)
-        max_level = maximum(vp[v][1] for v in keys(vp))
+        max_level = maximum(node_pos[node][1] for node in keys(node_pos))
         for leaf in ls
-            @test vp[leaf][1] ≈ max_level
+            @test node_pos[leaf][1] ≈ max_level
         end
         @test max_level > 0.0
     end
 
-    @testset "rectangular_layout :vertexlevels — unbalanced (6 leaves)" begin
-        acc  = _acc(GEO_UNBALANCED)
-        geom = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :vertexlevels)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodelevels — unbalanced (6 leaves)" begin
+        acc      = _acc(GEO_UNBALANCED)
+        geom     = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :nodelevels)
+        node_pos = geom.node_positions
 
         # GEO_UNBALANCED structure (levels):
         #   root  (0) → a (1), bc (1), def (1)
@@ -174,75 +174,75 @@ end
         ef   = def.children[2]
         e, f = ef.children[1], ef.children[2]
 
-        @test vp[root][1] ≈ 0.0
-        @test vp[a][1]   ≈ 1.0
-        @test vp[bc][1]  ≈ 1.0
-        @test vp[b][1]   ≈ 2.0
-        @test vp[c][1]   ≈ 2.0
-        @test vp[def][1] ≈ 1.0
-        @test vp[d][1]   ≈ 2.0
-        @test vp[ef][1]  ≈ 2.0
-        @test vp[e][1]   ≈ 3.0
-        @test vp[f][1]   ≈ 3.0
+        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[a][1]   ≈ 1.0
+        @test node_pos[bc][1]  ≈ 1.0
+        @test node_pos[b][1]   ≈ 2.0
+        @test node_pos[c][1]   ≈ 2.0
+        @test node_pos[def][1] ≈ 1.0
+        @test node_pos[d][1]   ≈ 2.0
+        @test node_pos[ef][1]  ≈ 2.0
+        @test node_pos[e][1]   ≈ 3.0
+        @test node_pos[f][1]   ≈ 3.0
     end
 
-    @testset "rectangular_layout :vertexlevels — polytomy" begin
-        acc  = _acc(GEO_POLYTOMY)
-        geom = rectangular_layout(GEO_POLYTOMY, acc; lineageunits = :vertexlevels)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodelevels — polytomy" begin
+        acc      = _acc(GEO_POLYTOMY)
+        geom     = rectangular_layout(GEO_POLYTOMY, acc; lineageunits = :nodelevels)
+        node_pos = geom.node_positions
 
-        @test vp[GEO_POLYTOMY][1] ≈ 0.0
+        @test node_pos[GEO_POLYTOMY][1] ≈ 0.0
         ls = leaves(acc, GEO_POLYTOMY)
         for leaf in ls
-            @test vp[leaf][1] ≈ 1.0
+            @test node_pos[leaf][1] ≈ 1.0
         end
     end
 
-    @testset "rectangular_layout :vertexlevels — single leaf" begin
-        acc  = _acc(GEO_SINGLE)
-        geom = rectangular_layout(GEO_SINGLE, acc; lineageunits = :vertexlevels)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodelevels — single leaf" begin
+        acc      = _acc(GEO_SINGLE)
+        geom     = rectangular_layout(GEO_SINGLE, acc; lineageunits = :nodelevels)
+        node_pos = geom.node_positions
 
-        @test length(vp) == 1
-        @test vp[GEO_SINGLE][1] ≈ 0.0
+        @test length(node_pos) == 1
+        @test node_pos[GEO_SINGLE][1] ≈ 0.0
     end
 
     # ── Equal-spacing invariant ─────────────────────────────────────────────────
 
     @testset "leaf_spacing :equal — balanced, adjacent gaps all 1.0" begin
-        acc     = _acc(GEO_BALANCED)
-        geom    = rectangular_layout(GEO_BALANCED, acc)
-        leaf_ys = sort([geom.vertex_positions[v][2] for v in geom.leaf_order])
+        acc      = _acc(GEO_BALANCED)
+        geom     = rectangular_layout(GEO_BALANCED, acc)
+        leaf_ys  = sort([geom.node_positions[node][2] for node in geom.leaf_order])
         @test all(diff(leaf_ys) .≈ 1.0)
     end
 
     @testset "leaf_spacing :equal — unbalanced, adjacent gaps all 1.0" begin
-        acc     = _acc(GEO_UNBALANCED)
-        geom    = rectangular_layout(GEO_UNBALANCED, acc)
-        leaf_ys = sort([geom.vertex_positions[v][2] for v in geom.leaf_order])
+        acc      = _acc(GEO_UNBALANCED)
+        geom     = rectangular_layout(GEO_UNBALANCED, acc)
+        leaf_ys  = sort([geom.node_positions[node][2] for node in geom.leaf_order])
         @test all(diff(leaf_ys) .≈ 1.0)
     end
 
     @testset "leaf_spacing :equal — polytomy, adjacent gaps all 1.0" begin
-        acc     = _acc(GEO_POLYTOMY)
-        geom    = rectangular_layout(GEO_POLYTOMY, acc)
-        leaf_ys = sort([geom.vertex_positions[v][2] for v in geom.leaf_order])
+        acc      = _acc(GEO_POLYTOMY)
+        geom     = rectangular_layout(GEO_POLYTOMY, acc)
+        leaf_ys  = sort([geom.node_positions[node][2] for node in geom.leaf_order])
         @test all(diff(leaf_ys) .≈ 1.0)
     end
 
     # ── Real leaf_spacing ───────────────────────────────────────────────────────
 
     @testset "leaf_spacing Float64 2.5 — adjacent gaps all 2.5" begin
-        acc     = _acc(GEO_BALANCED)
-        geom    = rectangular_layout(GEO_BALANCED, acc; leaf_spacing = 2.5)
-        leaf_ys = sort([geom.vertex_positions[v][2] for v in geom.leaf_order])
+        acc      = _acc(GEO_BALANCED)
+        geom     = rectangular_layout(GEO_BALANCED, acc; leaf_spacing = 2.5)
+        leaf_ys  = sort([geom.node_positions[node][2] for node in geom.leaf_order])
         @test all(diff(leaf_ys) .≈ 2.5)
     end
 
     @testset "leaf_spacing Int — accepted and converted to Float64" begin
-        acc     = _acc(GEO_BALANCED)
-        geom    = rectangular_layout(GEO_BALANCED, acc; leaf_spacing = 3)
-        leaf_ys = sort([geom.vertex_positions[v][2] for v in geom.leaf_order])
+        acc      = _acc(GEO_BALANCED)
+        geom     = rectangular_layout(GEO_BALANCED, acc; leaf_spacing = 3)
+        leaf_ys  = sort([geom.node_positions[node][2] for node in geom.leaf_order])
         @test all(diff(leaf_ys) .≈ 3.0)
     end
 
@@ -260,31 +260,31 @@ end
 
     # ── boundingbox containment ─────────────────────────────────────────────────
 
-    @testset "boundingbox contains all vertex_positions — balanced :vertexheights" begin
+    @testset "boundingbox contains all node_positions — balanced :nodeheights" begin
         acc  = _acc(GEO_BALANCED)
         geom = rectangular_layout(GEO_BALANCED, acc)
         bb   = geom.boundingbox
-        for (_, p) in geom.vertex_positions
+        for (_, p) in geom.node_positions
             @test bb.origin[1] <= p[1] <= bb.origin[1] + bb.widths[1]
             @test bb.origin[2] <= p[2] <= bb.origin[2] + bb.widths[2]
         end
     end
 
-    @testset "boundingbox contains all vertex_positions — unbalanced :vertexlevels" begin
+    @testset "boundingbox contains all node_positions — unbalanced :nodelevels" begin
         acc  = _acc(GEO_UNBALANCED)
-        geom = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :vertexlevels)
+        geom = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :nodelevels)
         bb   = geom.boundingbox
-        for (_, p) in geom.vertex_positions
+        for (_, p) in geom.node_positions
             @test bb.origin[1] <= p[1] <= bb.origin[1] + bb.widths[1]
             @test bb.origin[2] <= p[2] <= bb.origin[2] + bb.widths[2]
         end
     end
 
-    @testset "boundingbox contains all vertex_positions — polytomy" begin
+    @testset "boundingbox contains all node_positions — polytomy" begin
         acc  = _acc(GEO_POLYTOMY)
         geom = rectangular_layout(GEO_POLYTOMY, acc)
         bb   = geom.boundingbox
-        for (_, p) in geom.vertex_positions
+        for (_, p) in geom.node_positions
             @test bb.origin[1] <= p[1] <= bb.origin[1] + bb.widths[1]
             @test bb.origin[2] <= p[2] <= bb.origin[2] + bb.widths[2]
         end
@@ -293,7 +293,7 @@ end
     # ── Zero-leaf guard and unsupported lineageunits ────────────────────────────
     #
     # The zero-leaf ArgumentError guard in rectangular_layout is defensive: any
-    # acyclic tree traversed by leaves() yields at least one leaf (a vertex whose
+    # acyclic tree traversed by leaves() yields at least one leaf (a node whose
     # children iterable is empty is by definition a leaf). The boundary case —
     # exactly one leaf — exercises the guard correctly; it must not raise.
 
@@ -325,11 +325,11 @@ end
             ("cd", "d") => 3.0,
         )
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            edgelength = (u, v) -> el[(u.name, v.name)],
+            children = node -> node.children,
+            edgelength = (src, dst) -> el[(src.name, dst.name)],
         )
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgelengths)
-        vp = geom.vertex_positions
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgelengths)
+        node_pos = geom.node_positions
 
         root = GEO_BALANCED
         ab   = root.children[1]
@@ -337,30 +337,30 @@ end
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
 
-        @test vp[root][1] ≈ 0.0
-        @test vp[ab][1]   ≈ 1.0
-        @test vp[cd][1]   ≈ 1.0
-        @test vp[a][1]    ≈ 3.0
-        @test vp[b][1]    ≈ 3.0
-        @test vp[c][1]    ≈ 4.0
-        @test vp[d][1]    ≈ 4.0
+        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[ab][1]   ≈ 1.0
+        @test node_pos[cd][1]   ≈ 1.0
+        @test node_pos[a][1]    ≈ 3.0
+        @test node_pos[b][1]    ≈ 3.0
+        @test node_pos[c][1]    ≈ 4.0
+        @test node_pos[d][1]    ≈ 4.0
     end
 
     @testset "rectangular_layout :edgelengths — named-tuple (;value,units) return form" begin
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            edgelength = (u, v) -> (; value = 2.0, units = :ma),
+            children = node -> node.children,
+            edgelength = (src, dst) -> (; value = 2.0, units = :ma),
         )
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgelengths)
-        vp = geom.vertex_positions
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgelengths)
+        node_pos = geom.node_positions
 
         root = GEO_BALANCED
         ab   = root.children[1]
         a    = ab.children[1]
 
-        @test vp[root][1] ≈ 0.0
-        @test vp[ab][1]   ≈ 2.0
-        @test vp[a][1]    ≈ 4.0
+        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[ab][1]   ≈ 2.0
+        @test node_pos[a][1]    ≈ 4.0
     end
 
     @testset "rectangular_layout :edgelengths — missing edge length warns and falls back to 1.0" begin
@@ -369,20 +369,20 @@ end
         ab   = root.children[1]
         a    = ab.children[1]
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            edgelength = (u, v) -> (u === ab && v === a) ? nothing : 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> (src === ab && dst === a) ? nothing : 1.0,
         )
         geom = @test_warn r"fallback" rectangular_layout(
             GEO_BALANCED, acc; lineageunits = :edgelengths,
         )
         # ab→a fell back to 1.0, so a's process coord = ab's (1.0) + fallback (1.0) = 2.0
-        @test geom.vertex_positions[a][1] ≈ 2.0
+        @test geom.node_positions[a][1] ≈ 2.0
     end
 
     @testset "rectangular_layout :edgelengths — negative edge length raises ArgumentError" begin
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            edgelength = (u, v) -> -1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> -1.0,
         )
         @test_throws ArgumentError rectangular_layout(
             GEO_BALANCED, acc; lineageunits = :edgelengths,
@@ -406,14 +406,14 @@ end
         c, d = cd.children[1], cd.children[2]
         bt = Dict(root => 0.0, ab => 5.0, cd => 5.0, a => 10.0, b => 10.0, c => 12.0, d => 12.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            branchingtime = v -> bt[v],
+            children = node -> node.children,
+            branchingtime = node -> bt[node],
         )
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :branchingtime)
-        vp = geom.vertex_positions
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :branchingtime)
+        node_pos = geom.node_positions
 
-        for (v, expected) in bt
-            @test vp[v][1] ≈ expected
+        for (node, expected) in bt
+            @test node_pos[node][1] ≈ expected
         end
     end
 
@@ -424,12 +424,12 @@ end
         )
     end
 
-    # ── :vertexdepths ───────────────────────────────────────────────────────────
+    # ── :nodedepths ─────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :vertexdepths — root at 0, integer depths" begin
-        acc  = _acc(GEO_BALANCED)
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :vertexdepths)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodedepths — root at 0, integer depths" begin
+        acc      = _acc(GEO_BALANCED)
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodedepths)
+        node_pos = geom.node_positions
 
         root = GEO_BALANCED
         ab   = root.children[1]
@@ -437,35 +437,35 @@ end
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
 
-        @test vp[root][1] ≈ 0.0
-        @test vp[ab][1]   ≈ 1.0
-        @test vp[cd][1]   ≈ 1.0
-        @test vp[a][1]    ≈ 2.0
-        @test vp[b][1]    ≈ 2.0
-        @test vp[c][1]    ≈ 2.0
-        @test vp[d][1]    ≈ 2.0
+        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[ab][1]   ≈ 1.0
+        @test node_pos[cd][1]   ≈ 1.0
+        @test node_pos[a][1]    ≈ 2.0
+        @test node_pos[b][1]    ≈ 2.0
+        @test node_pos[c][1]    ≈ 2.0
+        @test node_pos[d][1]    ≈ 2.0
     end
 
-    @testset "rectangular_layout :vertexdepths — unbalanced tree, deepest leaf at max depth" begin
-        acc  = _acc(GEO_UNBALANCED)
-        geom = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :vertexdepths)
-        vp   = geom.vertex_positions
+    @testset "rectangular_layout :nodedepths — unbalanced tree, deepest leaf at max depth" begin
+        acc      = _acc(GEO_UNBALANCED)
+        geom     = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :nodedepths)
+        node_pos = geom.node_positions
 
         root = GEO_UNBALANCED
         a    = root.children[1]   # depth 1
         ef   = root.children[3].children[2]  # depth 3
         e    = ef.children[1]    # depth 3
 
-        @test vp[root][1] ≈ 0.0
-        @test vp[a][1]    ≈ 1.0
-        @test vp[e][1]    ≈ 3.0
+        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[a][1]    ≈ 1.0
+        @test node_pos[e][1]    ≈ 3.0
     end
 
     # ── :coalescenceage ─────────────────────────────────────────────────────────
 
     @testset "rectangular_layout :coalescenceage — ultrametric, leaves at 0" begin
         # GEO_BALANCED: all leaves have coalescenceage 0.
-        # Ultrametric: all children of each internal vertex share the same age.
+        # Ultrametric: all children of each internal node share the same age.
         root = GEO_BALANCED
         ab   = root.children[1]
         cd   = root.children[2]
@@ -473,16 +473,16 @@ end
         c, d = cd.children[1], cd.children[2]
         ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 0.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            coalescenceage = v -> ca[v],
+            children = node -> node.children,
+            coalescenceage = node -> ca[node],
         )
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :coalescenceage)
-        vp = geom.vertex_positions
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :coalescenceage)
+        node_pos = geom.node_positions
 
         for leaf in (a, b, c, d)
-            @test vp[leaf][1] ≈ 0.0
+            @test node_pos[leaf][1] ≈ 0.0
         end
-        @test vp[root][1] ≈ 3.0
+        @test node_pos[root][1] ≈ 3.0
     end
 
     @testset "rectangular_layout :coalescenceage — non-ultrametric, :error raises ArgumentError" begin
@@ -494,8 +494,8 @@ end
         # ab has children with ages 0.0 and 1.0 → non-ultrametric
         ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            coalescenceage = v -> ca[v],
+            children = node -> node.children,
+            coalescenceage = node -> ca[node],
         )
         @test_throws ArgumentError rectangular_layout(
             GEO_BALANCED, acc;
@@ -512,8 +512,8 @@ end
         c, d = cd.children[1], cd.children[2]
         ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            coalescenceage = v -> ca[v],
+            children = node -> node.children,
+            coalescenceage = node -> ca[node],
         )
         @test rectangular_layout(
             GEO_BALANCED, acc;
@@ -530,8 +530,8 @@ end
         c, d = cd.children[1], cd.children[2]
         ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            coalescenceage = v -> ca[v],
+            children = node -> node.children,
+            coalescenceage = node -> ca[node],
         )
         @test rectangular_layout(
             GEO_BALANCED, acc;
@@ -547,15 +547,15 @@ end
         )
     end
 
-    # ── :vertexcoords ───────────────────────────────────────────────────────────
+    # ── :nodecoords ─────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :vertexcoords — vertex_positions match accessor" begin
+    @testset "rectangular_layout :nodecoords — node_positions match accessor" begin
         root = GEO_BALANCED
         ab   = root.children[1]
         cd   = root.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
-        vc = Dict(
+        node_coords = Dict(
             root => Point2f(0, 2.5),
             ab => Point2f(1, 1.5),
             cd => Point2f(1, 3.5),
@@ -565,33 +565,33 @@ end
             d => Point2f(2, 4.0),
         )
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            vertexcoords = v -> vc[v],
+            children = node -> node.children,
+            nodecoords = node -> node_coords[node],
         )
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :vertexcoords)
-        vp = geom.vertex_positions
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodecoords)
+        node_pos = geom.node_positions
 
-        for (v, expected) in vc
-            @test vp[v] ≈ expected
+        for (node, expected) in node_coords
+            @test node_pos[node] ≈ expected
         end
     end
 
-    @testset "rectangular_layout :vertexcoords — missing accessor raises ArgumentError" begin
+    @testset "rectangular_layout :nodecoords — missing accessor raises ArgumentError" begin
         acc = _acc(GEO_BALANCED)
         @test_throws ArgumentError rectangular_layout(
-            GEO_BALANCED, acc; lineageunits = :vertexcoords,
+            GEO_BALANCED, acc; lineageunits = :nodecoords,
         )
     end
 
-    # ── :vertexpos ──────────────────────────────────────────────────────────────
+    # ── :nodepos ────────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :vertexpos — vertex_positions match accessor" begin
+    @testset "rectangular_layout :nodepos — node_positions match accessor" begin
         root = GEO_BALANCED
         ab   = root.children[1]
         cd   = root.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
-        vp_src = Dict(
+        node_pos_src = Dict(
             root => Point2f(0, 2.5),
             ab => Point2f(10, 15),
             cd => Point2f(10, 35),
@@ -601,21 +601,21 @@ end
             d => Point2f(20, 40),
         )
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            vertexpos = v -> vp_src[v],
+            children = node -> node.children,
+            nodepos = node -> node_pos_src[node],
         )
-        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :vertexpos)
-        vp = geom.vertex_positions
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodepos)
+        node_pos = geom.node_positions
 
-        for (v, expected) in vp_src
-            @test vp[v] ≈ expected
+        for (node, expected) in node_pos_src
+            @test node_pos[node] ≈ expected
         end
     end
 
-    @testset "rectangular_layout :vertexpos — missing accessor raises ArgumentError" begin
+    @testset "rectangular_layout :nodepos — missing accessor raises ArgumentError" begin
         acc = _acc(GEO_BALANCED)
         @test_throws ArgumentError rectangular_layout(
-            GEO_BALANCED, acc; lineageunits = :vertexpos,
+            GEO_BALANCED, acc; lineageunits = :nodepos,
         )
     end
 
@@ -623,27 +623,27 @@ end
 
     @testset "default lineageunits — edgelength present → :edgelengths (root at 0)" begin
         acc = lineagegraph_accessor(GEO_BALANCED;
-            children = n -> n.children,
-            edgelength = (u, v) -> 1.0,
+            children = node -> node.children,
+            edgelength = (src, dst) -> 1.0,
         )
-        geom = rectangular_layout(GEO_BALANCED, acc)  # no lineageunits kwarg
-        vp = geom.vertex_positions
-        @test vp[GEO_BALANCED][1] ≈ 0.0
+        geom     = rectangular_layout(GEO_BALANCED, acc)  # no lineageunits kwarg
+        node_pos = geom.node_positions
+        @test node_pos[GEO_BALANCED][1] ≈ 0.0
         ls = leaves(acc, GEO_BALANCED)
         for leaf in ls
-            @test vp[leaf][1] > 0.0  # leaves at max, not 0
+            @test node_pos[leaf][1] > 0.0  # leaves at max, not 0
         end
     end
 
-    @testset "default lineageunits — no edgelength → :vertexheights (leaves at 0)" begin
-        acc  = _acc(GEO_BALANCED)
-        geom = rectangular_layout(GEO_BALANCED, acc)  # no lineageunits kwarg
-        vp   = geom.vertex_positions
-        ls   = leaves(acc, GEO_BALANCED)
+    @testset "default lineageunits — no edgelength → :nodeheights (leaves at 0)" begin
+        acc      = _acc(GEO_BALANCED)
+        geom     = rectangular_layout(GEO_BALANCED, acc)  # no lineageunits kwarg
+        node_pos = geom.node_positions
+        ls       = leaves(acc, GEO_BALANCED)
         for leaf in ls
-            @test vp[leaf][1] ≈ 0.0
+            @test node_pos[leaf][1] ≈ 0.0
         end
-        @test vp[GEO_BALANCED][1] > 0.0
+        @test node_pos[GEO_BALANCED][1] > 0.0
     end
 
     # ── circular_layout ─────────────────────────────────────────────────────────
@@ -652,52 +652,52 @@ end
 
         @testset "equal angular spacing — 4-leaf balanced, gaps of π/2" begin
             acc  = _acc(GEO_BALANCED)
-            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :nodelevels)
             ls   = leaves(acc, GEO_BALANCED)
             @test length(ls) == 4
             # Recover angles via atan(y, x); leaves at radius 2 (levels: root=0, ab/cd=1, leaves=2)
-            angles = sort([atan(geom.vertex_positions[v][2], geom.vertex_positions[v][1]) for v in ls])
+            angles = sort([atan(geom.node_positions[node][2], geom.node_positions[node][1]) for node in ls])
             gaps = diff(angles)
             @test all(g -> isapprox(g, π / 2; atol = 1e-6), gaps)
         end
 
-        @testset ":vertexheights — leaves at radial distance 0.0" begin
+        @testset ":nodeheights — leaves at radial distance 0.0" begin
             acc  = _acc(GEO_BALANCED)
-            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexheights)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :nodeheights)
             ls   = leaves(acc, GEO_BALANCED)
             for leaf in ls
-                p = geom.vertex_positions[leaf]
+                p = geom.node_positions[leaf]
                 @test hypot(p[1], p[2]) ≈ 0.0 atol = 1e-8
             end
         end
 
-        @testset ":vertexlevels — rootvertex at radial distance 0.0" begin
+        @testset ":nodelevels — rootnode at radial distance 0.0" begin
             acc  = _acc(GEO_BALANCED)
-            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels)
-            p    = geom.vertex_positions[GEO_BALANCED]
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :nodelevels)
+            p    = geom.node_positions[GEO_BALANCED]
             @test hypot(p[1], p[2]) ≈ 0.0 atol = 1e-8
         end
 
-        @testset "boundingbox encloses all vertex_positions — balanced :vertexlevels" begin
+        @testset "boundingbox encloses all node_positions — balanced :nodelevels" begin
             acc  = _acc(GEO_BALANCED)
-            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :nodelevels)
             bb   = geom.boundingbox
-            # Use a small tolerance because circular vertex positions involve
+            # Use a small tolerance because circular node positions involve
             # trigonometric values (e.g. cos(π/2) ≈ 6e-17 in Float32) that can
             # fall just outside the Float32-precision bounding box.
             atol = 1.0f-6
-            for (_, p) in geom.vertex_positions
+            for (_, p) in geom.node_positions
                 @test bb.origin[1] - atol <= p[1] <= bb.origin[1] + bb.widths[1] + atol
                 @test bb.origin[2] - atol <= p[2] <= bb.origin[2] + bb.widths[2] + atol
             end
         end
 
-        @testset "boundingbox encloses all vertex_positions — unbalanced :vertexheights" begin
+        @testset "boundingbox encloses all node_positions — unbalanced :nodeheights" begin
             acc  = _acc(GEO_UNBALANCED)
-            geom = circular_layout(GEO_UNBALANCED, acc; lineageunits = :vertexheights)
+            geom = circular_layout(GEO_UNBALANCED, acc; lineageunits = :nodeheights)
             bb   = geom.boundingbox
             atol = 1.0f-6
-            for (_, p) in geom.vertex_positions
+            for (_, p) in geom.node_positions
                 @test bb.origin[1] - atol <= p[1] <= bb.origin[1] + bb.widths[1] + atol
                 @test bb.origin[2] - atol <= p[2] <= bb.origin[2] + bb.widths[2] + atol
             end
@@ -705,7 +705,7 @@ end
 
         @testset "chord edge shapes — all segment endpoints are finite Point2f" begin
             acc  = _acc(GEO_BALANCED)
-            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :vertexlevels,
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :nodelevels,
                 circular_edge_style = :chord)
             finite_pts = filter(p -> !isnan(p[1]) && !isnan(p[2]), geom.edge_shapes)
             @test !isempty(finite_pts)
@@ -717,10 +717,10 @@ end
             @test circular_layout(GEO_SINGLE, acc) isa LineageGraphGeometry
         end
 
-        @testset "polytomy (4 direct leaves) — root at radius 0 for :vertexlevels" begin
+        @testset "polytomy (4 direct leaves) — root at radius 0 for :nodelevels" begin
             acc  = _acc(GEO_POLYTOMY)
-            geom = circular_layout(GEO_POLYTOMY, acc; lineageunits = :vertexlevels)
-            p    = geom.vertex_positions[GEO_POLYTOMY]
+            geom = circular_layout(GEO_POLYTOMY, acc; lineageunits = :nodelevels)
+            p    = geom.node_positions[GEO_POLYTOMY]
             @test hypot(p[1], p[2]) ≈ 0.0 atol = 1e-8
             ls = leaves(acc, GEO_POLYTOMY)
             @test length(ls) == 4
@@ -733,14 +733,14 @@ end
             )
         end
 
-        @testset "non-regression: rectangular_layout :vertexheights still correct" begin
+        @testset "non-regression: rectangular_layout :nodeheights still correct" begin
             acc  = _acc(GEO_BALANCED)
-            geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :vertexheights)
+            geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodeheights)
             ls   = leaves(acc, GEO_BALANCED)
             for leaf in ls
-                @test geom.vertex_positions[leaf][1] ≈ 0.0
+                @test geom.node_positions[leaf][1] ≈ 0.0
             end
-            @test geom.vertex_positions[GEO_BALANCED][1] > 0.0
+            @test geom.node_positions[GEO_BALANCED][1] > 0.0
         end
 
     end # @testset "circular_layout"

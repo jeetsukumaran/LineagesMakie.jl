@@ -11,7 +11,7 @@ module CoordTransform
 # register_pixel_projection! follows the pattern established in
 #   GraphMakie.jl/src/recipes.jl:226–234:
 #   add_input! registers viewport and projectionview as ComputeGraph inputs;
-#   map! creates a derived :pixel_projection node as a reactive closure.
+#   map! creates a derived :pixel_projection computation cell as a reactive closure.
 
 using Makie: Scene, Point2f, Vec2f, project, to_world, add_input!, viewport, widths
 
@@ -150,11 +150,11 @@ end
 
 Register `scene.viewport` and `scene.camera.projectionview` as reactive inputs
 in the Makie `ComputeGraph` `plot_attrs`, and create a derived `:pixel_projection`
-node holding a closure `(Point2f) -> Point2f` for converting data coordinates
-to pixel coordinates.
+computation cell holding a closure `(Point2f) -> Point2f` for converting data
+coordinates to pixel coordinates.
 
 When `scene.viewport` changes (e.g., on window resize or figure layout change),
-the `:pixel_projection` node and any downstream `map!` computations that depend
+the `:pixel_projection` computation cell and any downstream `map!` computations that depend
 on it are automatically marked for recomputation. This is the correct way to make
 fixed-screen-size elements (markers, label offsets, padding) respond to resize
 events.
@@ -162,7 +162,7 @@ events.
 Pattern follows `GraphMakie.jl/src/recipes.jl:226–234`:
 `add_input!(plot_attrs, :viewport, scene.viewport)` and
 `add_input!(plot_attrs, :projectionview, scene.camera.projectionview)` register
-the reactive observables; `map!` creates the derived closure node.
+the reactive observables; `map!` creates the derived computation cell.
 
 Typical usage inside a Makie `@recipe` plot function:
 

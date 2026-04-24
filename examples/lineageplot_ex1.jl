@@ -32,7 +32,7 @@ const ROOT = MWENode("root", [
 
 # ── Accessor ──────────────────────────────────────────────────────────────────
 
-const ACC = lineagegraph_accessor(ROOT; children = n -> n.children)
+const ACC = lineagegraph_accessor(ROOT; children = node -> node.children)
 
 # ── Figure ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ plot_result = lineageplot(
     ACC;
     figure = (; size = (600, 400)),
     axis = (; title = "Lineage tree (MWE)"),
-    leaf_label_func = n -> n.label,
+    leaf_label_func = node -> node.label,
 )
 fig, lax, lp = plot_result
 

@@ -26,18 +26,18 @@ the design.
 
 The lineage graph-centric view concerns the combinatorial and geometric structure
 of the lineage graph itself. It answers: which direction is root-to-leaf? What
-scalar is attached to each vertex along its primary dimension? What branching
-structure (clade graph) connects the vertices?
+scalar is attached to each node along its primary dimension? What branching
+structure (clade graph) connects the nodes?
 
 This view is captured by the **`lineageunits`** selection and **accessor callables**:
 `edgelength`, `branchingtime`, `coalescenceage`, `children`. The resulting
 `process_coordinate` values (see controlled vocabulary) determine the position
-of each vertex along the lineage axis.
+of each node along the lineage axis.
 
 Two canonical process-coordinate types exist with opposite polarity:
-- `branchingtime` — cumulative edge length from rootvertex; root = 0, increases
+- `branchingtime` — cumulative edge length from rootnode; root = 0, increases
   toward leaves. The process moves forward from root to leaf.
-- `coalescenceage` — cumulative edge length from vertex to leaf; leaf = 0,
+- `coalescenceage` — cumulative edge length from node to leaf; leaf = 0,
   increases toward root. The process moves backward from leaf to root
   (coalescent model). Requires an ultrametric tree.
 
@@ -74,8 +74,8 @@ that any one view implies another.
 ## Input contract
 
 All input routes pass through a common set of callable keyword arguments
-(`children`, `edgelength`, `vertexvalue`, `branchingtime`, `coalescenceage`,
-`vertexcoords`, `vertexpos`). Adapters (AbstractTrees.jl, future Graphs.jl,
+(`children`, `edgelength`, `nodevalue`, `branchingtime`, `coalescenceage`,
+`nodecoords`, `nodepos`). Adapters (AbstractTrees.jl, future Graphs.jl,
 etc.) are thin shims that translate their source objects into these callables.
 The geometry and rendering modules depend only on the callables, never on the
 source type.
@@ -88,10 +88,10 @@ does not depend on any external lineage graph type.
 ### Clade graph layout (default)
 
 When no edge-length data is available, the default `lineageunits`
-(`:vertexheights`) produces a **clade graph layout** — the lineage graph
+(`:nodeheights`) produces a **clade graph layout** — the lineage graph
 rendered as a graph up to label-preserving isomorphism (the phylogenetic
 "topology"), with all
-leaves at x = 0 and internal vertices spaced by path distance (unweighted path
+leaves at x = 0 and internal nodes spaced by path distance (unweighted path
 distance from root; number of edges). This requires only a `children` function.
 
 ```julia
@@ -110,7 +110,7 @@ root = MyNode("root", [
 
 fig, ax, plt = lineageplot(
     root;
-    children = v -> v.children,
+    children = node -> node.children,
 )
 save("cladegraph.pdf", fig)
 ```
@@ -118,7 +118,7 @@ save("cladegraph.pdf", fig)
 ### Edge-length proportional layout
 
 Supply `edgelength` and the default `lineageunits` shifts to `:edgelengths`,
-placing vertices at x = cumulative edge length from the rootvertex
+placing nodes at x = cumulative edge length from the rootnode
 (`branchingtime`).
 
 ```julia
@@ -130,14 +130,14 @@ end
 
 fig, ax, plt = lineageplot(
     root;
-    children       = v -> v.children,
-    edgelength     = (u, v) -> v.branch_length,
-    vertexvalue    = v -> v.name,
+    children   = node -> node.children,
+    edgelength = (src, dst) -> dst.branch_length,
+    nodevalue  = node -> node.name,
 )
 ```
 
-The resulting layout places each vertex at its cumulative branch length from the
-root. The `vertexvalue` accessor drives the `LeafLabelLayer` text by default.
+The resulting layout places each node at its cumulative branch length from the
+root. The `nodevalue` accessor drives the `LeafLabelLayer` text by default.
 
 ### Pre-computed branching times
 
@@ -150,8 +150,8 @@ divergence_times = Dict(node_id => time_ma for ...)   # millions of years
 
 fig, ax, plt = lineageplot(
     root;
-    children       = v -> v.children,
-    branchingtime  = v -> divergence_times[v.id],
+    children       = node -> node.children,
+    branchingtime  = node -> divergence_times[node.id],
     lineageunits   = :branchingtime,
 )
 ```
@@ -170,16 +170,16 @@ root-to-leaf path lengths equal) or a `nonultrametric` policy must be specified.
 # Ultrametric coalescent lineage graph
 fig, ax, plt = lineageplot(
     root;
-    children       = v -> v.children,
-    coalescenceage = v -> v.coalescent_age,   # leaf = 0, root = maximum
+    children       = node -> node.children,
+    coalescenceage = node -> node.coalescent_age,   # leaf = 0, root = maximum
     lineageunits   = :coalescenceage,
 )
 
 # Non-ultrametric with fallback policy
 fig, ax, plt = lineageplot(
     root;
-    children          = v -> v.children,
-    coalescenceage    = v -> v.coalescent_age,
+    children          = node -> node.children,
+    coalescenceage    = node -> node.coalescent_age,
     lineageunits      = :coalescenceage,
     nonultrametric    = :maximum,             # use max over leaf paths
 )
@@ -187,7 +187,7 @@ fig, ax, plt = lineageplot(
 
 In the default `LineageAxis` configuration (`:left_to_right` orientation,
 `:standard` display polarity), leaves appear at x = 0 on the left and the
-rootvertex appears at the right. This matches the standard coalescent tree
+rootnode appears at the right. This matches the standard coalescent tree
 convention where the present is at the left and the past is at the right.
 
 ### AbstractTrees.jl input
@@ -209,8 +209,8 @@ AbstractTrees.nodevalue(t::NewickTree) = (name = t.label, brlen = t.branch_lengt
 
 fig, ax, plt = lineageplot(
     lineagegraph_root;
-    edgelength  = (u, v) -> AbstractTrees.nodevalue(v).brlen,
-    vertexvalue = v -> AbstractTrees.nodevalue(v).name,
+    edgelength = (src, dst) -> AbstractTrees.nodevalue(dst).brlen,
+    nodevalue  = node -> AbstractTrees.nodevalue(node).name,
 )
 ```
 
@@ -233,7 +233,7 @@ ax1 = LineageAxis(fig[1, 1];
     show_x_axis         = true,
     xlabel              = "Divergence time (Ma)",
 )
-lineageplot!(ax1, root; edgelength = (u, v) -> v.branch_length)
+lineageplot!(ax1, root; edgelength = (src, dst) -> dst.branch_length)
 
 # Same lineage graph, displayed right-to-left (paleontological convention: root at right)
 ax2 = LineageAxis(fig[1, 2];
@@ -242,7 +242,7 @@ ax2 = LineageAxis(fig[1, 2];
     show_x_axis         = true,
     xlabel              = "Time before present (Ma)",
 )
-lineageplot!(ax2, root; edgelength = (u, v) -> v.branch_length)
+lineageplot!(ax2, root; edgelength = (src, dst) -> dst.branch_length)
 
 # Coalescent lineage graph: axis_polarity = :backward; leaves appear at left by default
 ax3 = LineageAxis(fig[2, 1];
@@ -251,7 +251,7 @@ ax3 = LineageAxis(fig[2, 1];
     xlabel              = "Coalescence age",
 )
 lineageplot!(ax3, root;
-    coalescenceage = v -> v.coal_age,
+    coalescenceage = node -> node.coal_age,
     lineageunits   = :coalescenceage,
 )
 
@@ -263,7 +263,7 @@ ax4 = LineageAxis(fig[2, 2];
     show_x_axis         = true,
 )
 lineageplot!(ax4, root;
-    coalescenceage = v -> v.coal_age,
+    coalescenceage = node -> node.coal_age,
     lineageunits   = :coalescenceage,
 )
 
@@ -274,7 +274,7 @@ fig
 
 The `lineage_orientation` attribute controls which screen axis carries the
 process coordinate. A top-down dendrogram is a vertical rectangular embedding
-that places the rootvertex at the top with leaves descending:
+that places the rootnode at the top with leaves descending:
 
 ```julia
 fig = Figure()
@@ -284,7 +284,7 @@ ax = LineageAxis(fig[1, 1];
     show_grid           = true,
     ylabel              = "Branch length",
 )
-lineageplot!(ax, root; children = v -> v.children)
+lineageplot!(ax, root; children = node -> node.children)
 ```
 
 `show_x_axis` and `xlabel` are screen x-axis controls. `show_y_axis` and
@@ -304,8 +304,8 @@ using CairoMakie
 # Compute geometry once; reuse across layers
 geom = rectangular_layout(
     root;
-    children   = v -> v.children,
-    edgelength   = (u, v) -> v.branch_length,
+    children     = node -> node.children,
+    edgelength   = (src, dst) -> dst.branch_length,
     lineageunits = :edgelengths,
 )
 
@@ -321,24 +321,24 @@ leaflayer!(ax, geom;
     markersize = 6,
 )
 leaflabellayer!(ax, geom;
-    text_func = v -> v.name,
+    text_func = node -> node.name,
     italic    = true,
     offset    = 4.0,
 )
-vertexlabellayer!(ax, geom;
-    value_func = v -> v.bootstrap,
+nodelabellayer!(ax, geom;
+    value_func = node -> node.bootstrap,
     threshold  = x -> x >= 70,
     position   = :toward_parent,
 )
 cladehighlightlayer!(ax, geom;
-    clade_vertices = [mrca_node],
-    color          = (:tomato, 0.2),
-    padding        = 0.05,
+    clade_nodes = [mrca_node],
+    color       = (:tomato, 0.2),
+    padding     = 0.05,
 )
 cladelabellayer!(ax, geom;
-    clade_vertices = [mrca_node],
-    label_func     = v -> "Clade A",
-    offset         = 0.1,
+    clade_nodes = [mrca_node],
+    label_func  = node -> "Clade A",
+    offset      = 0.1,
 )
 scalebarlayer!(ax, geom;
     length   = 10.0,
@@ -351,19 +351,19 @@ fig
 
 ### Per-element aesthetic mapping
 
-Any attribute that varies per-edge or per-vertex accepts a callable as well as
+Any attribute that varies per-edge or per-node accepts a callable as well as
 a scalar. The callable is applied element-wise at render time and participates
 in Observable reactivity.
 
 ```julia
 # Edges colored by evolutionary rate; width by bootstrap support
 lineageplot!(ax, root;
-    edgelength    = (u, v) -> v.branch_length,
-    vertexvalue   = v -> v.bootstrap,
-    edge_color    = (u, v) -> rate_colormap(v.rate),
-    edge_linewidth = (u, v) -> v.support_weight,
-    vertex_color  = v -> support_colormap(v.bootstrap),
-    vertex_marker_size = v -> clamp(v.bootstrap / 10.0, 2.0, 12.0),
+    edgelength         = (src, dst) -> dst.branch_length,
+    nodevalue          = node -> node.bootstrap,
+    edge_color         = (src, dst) -> rate_colormap(dst.rate),
+    edge_linewidth     = (src, dst) -> dst.support_weight,
+    node_color         = node -> support_colormap(node.bootstrap),
+    node_markersize    = node -> clamp(node.bootstrap / 10.0, 2.0, 12.0),
 )
 ```
 
@@ -384,9 +384,9 @@ fig = Figure()
 ax  = LineageAxis(fig[1, 1]; show_x_axis = true)
 
 lineageplot!(ax, lineagegraph_obs;
-    edgelength = (u, v) -> v.branch_length,
+    edgelength = (src, dst) -> dst.branch_length,
     edge_color = lift(highlight_obs) do hs
-        (u, v) -> v ∈ hs ? :red : :gray40
+        (src, dst) -> dst ∈ hs ? :red : :gray40
     end,
 )
 
@@ -396,10 +396,10 @@ connect!(scale_obs, slider.value)
 
 # Mouse click toggles highlight
 on(events(fig).mouseclick) do event
-    v = pick_vertex(ax, event)
-    v === nothing && return
+    node = pick_node(ax, event)
+    node === nothing && return
     s = copy(highlight_obs[])
-    v ∈ s ? delete!(s, v) : push!(s, v)
+    node ∈ s ? delete!(s, node) : push!(s, node)
     highlight_obs[] = s
 end
 
@@ -420,8 +420,8 @@ work with all layout geometries.
 fig, ax, plt = lineageplot(
     root;
     layout     = :circular,
-    edgelength = (u, v) -> v.branch_length,
-    vertexvalue = v -> v.name,
+    edgelength = (src, dst) -> dst.branch_length,
+    nodevalue  = node -> node.name,
 )
 ```
 
