@@ -527,7 +527,14 @@ end
             fig = Figure(; size = (1000, 800))
             lax1 = LineageAxis(fig[1, 1]; title = "Forward", show_x_axis = true, xlabel = "distance")
             lax2 = LineageAxis(fig[1, 2]; title = "Backward", show_x_axis = true, xlabel = "height")
-            lax3 = LineageAxis(fig[2, 1]; title = "Right-to-left", lineage_orientation = :right_to_left, show_x_axis = true)
+            lax3 = LineageAxis(
+                fig[2, 1];
+                title = "Top-to-bottom",
+                lineage_orientation = :top_to_bottom,
+                show_y_axis = true,
+                show_grid = true,
+                ylabel = "distance",
+            )
             lax4 = LineageAxis(fig[2, 2]; title = "Radial", lineage_orientation = :radial)
 
             @test_nowarn lineageplot!(
@@ -573,7 +580,7 @@ end
             for (lax, title_text) in [
                 (lax1, "Forward"),
                 (lax2, "Backward"),
-                (lax3, "Right-to-left"),
+                (lax3, "Top-to-bottom"),
                 (lax4, "Radial"),
             ]
                 @test title_text in _it_visible_blockscene_strings(lax)
@@ -581,7 +588,8 @@ end
 
             @test !isempty(lax1._xaxis_tick_segments[])
             @test !isempty(lax2._xaxis_tick_segments[])
-            @test !isempty(lax3._xaxis_tick_segments[])
+            @test !isempty(lax3._yaxis_tick_segments[])
+            @test !isempty(lax3._grid_segments[])
             @test isempty(lax4._xaxis_tick_segments[])
         finally
             isfile(tmpfile) && rm(tmpfile)

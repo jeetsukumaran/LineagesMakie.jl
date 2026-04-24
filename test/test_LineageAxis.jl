@@ -138,6 +138,18 @@ end
         @test proj[2, 2] < 0
     end
 
+    @testset "axis-owned vertical orientation propagates into computed geometry" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :top_to_bottom)
+        lp = lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = :vertexlevels)
+        geom = lp[:computed_geom][]
+        leaf_positions = [geom.vertex_positions[v] for v in geom.leaf_order]
+        leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
+        leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
+        @test lp[:lineage_orientation][] === :top_to_bottom
+        @test length(leaf_ys) == 1
+        @test length(leaf_xs) > 1
+    end
+
     @testset "lineage_orientation :radial produces equal x and y extents" begin
         fig, lax, _ = _plotted_lax(; lineage_orientation = :radial)
         proj = Makie.camera(lax.scene).projection[]

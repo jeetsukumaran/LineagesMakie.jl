@@ -1702,7 +1702,10 @@ function lineageplot!(
     end
     # Caller-supplied kwargs take precedence over orientation defaults.
     merged_kwargs = merge(
-        (rectangular_orientation_owner = :lineageaxis,),
+        (
+            lineage_orientation = lo,
+            rectangular_orientation_owner = :lineageaxis,
+        ),
         orientation_defaults,
         user_kwargs,
     )
