@@ -5,7 +5,7 @@ using AbstractTrees: children as abstracttrees_children
 # ── LineageGraphAccessor ────────────────────────────────────────────────────────
 
 """
-    LineageGraphAccessor{C, E, V, B, CA, VC, VP}
+    LineageGraphAccessor{C, E, NodeT, B, CA, NC, NP}
 
 The fundamental accessor protocol for LineagesMakie. Holds seven callable fields
 that together describe how to navigate and query a lineage graph. All
@@ -13,18 +13,18 @@ downstream modules (Geometry, Layers, LineageAxis) accept a
 `LineageGraphAccessor` and never depend on the source type.
 
 Fields:
-- `children::C`                        — required; callable `vertex -> iterable-of-children`.
-- `edgelength::Union{Nothing, E}`      — optional; `(fromvertex, tovertex) -> Float64`
-  or `(fromvertex, tovertex) -> (; value::Float64, units::Symbol)`.
-- `vertexvalue::Union{Nothing, V}`     — optional; `vertex -> Any`; per-vertex data
+- `children::C`                        — required; callable `node -> iterable-of-children`.
+- `edgelength::Union{Nothing, E}`      — optional; `(src, dst) -> Float64`
+  or `(src, dst) -> (; value::Float64, units::Symbol)`.
+- `nodevalue::Union{Nothing, NodeT}`   — optional; `node -> Any`; per-node data
   for labels and color mapping.
-- `branchingtime::Union{Nothing, B}`   — optional; `vertex -> Float64`; pre-computed
-  cumulative edge-length sum from the rootvertex.
-- `coalescenceage::Union{Nothing, CA}` — optional; `vertex -> Float64`; pre-computed
+- `branchingtime::Union{Nothing, B}`   — optional; `node -> Float64`; pre-computed
+  cumulative edge-length sum from the rootnode.
+- `coalescenceage::Union{Nothing, CA}` — optional; `node -> Float64`; pre-computed
   coalescence age (leaf = 0, increases toward root).
-- `vertexcoords::Union{Nothing, VC}`   — optional; `vertex -> Point2f`; user-supplied
+- `nodecoords::Union{Nothing, NC}`     — optional; `node -> Point2f`; user-supplied
   data coordinates.
-- `vertexpos::Union{Nothing, VP}`      — optional; `vertex -> Point2f`; user-supplied
+- `nodepos::Union{Nothing, NP}`        — optional; `node -> Point2f`; user-supplied
   pixel coordinates.
 
 Every field is concretely typed at instantiation via type parameters. When an
@@ -33,39 +33,39 @@ field is typed `Nothing`. When a callable is supplied, the parameter resolves to
 that callable's concrete singleton type. This ensures full compiler
 specialisation with no dynamic dispatch on accessor calls.
 """
-struct LineageGraphAccessor{C, E, V, B, CA, VC, VP}
+struct LineageGraphAccessor{C, E, NodeT, B, CA, NC, NP}
     children::C
     edgelength::E
-    vertexvalue::V
+    nodevalue::NodeT
     branchingtime::B
     coalescenceage::CA
-    vertexcoords::VC
-    vertexpos::VP
+    nodecoords::NC
+    nodepos::NP
 end
 
 """
-    lineagegraph_accessor(rootvertex; children, edgelength=nothing, vertexvalue=nothing,
+    lineagegraph_accessor(rootnode; children, edgelength=nothing, nodevalue=nothing,
                           branchingtime=nothing, coalescenceage=nothing,
-                          vertexcoords=nothing, vertexpos=nothing) -> LineageGraphAccessor
+                          nodecoords=nothing, nodepos=nothing) -> LineageGraphAccessor
 
 Construct a `LineageGraphAccessor` from explicit keyword callables.
 
-The `rootvertex` argument is accepted for dispatch and type-inference purposes
+The `rootnode` argument is accepted for dispatch and type-inference purposes
 but is not stored. All accessor keyword arguments are stored as fields.
 
 # Arguments
-- `_` (rootvertex): the root of the lineage graph; not stored; accepted only for
+- `_` (rootnode): the root of the lineage graph; not stored; accepted only for
   API symmetry with `abstracttrees_accessor`.
-- `children`: required callable `vertex -> iterable`; the only mandatory field.
-- `edgelength`: optional callable `(fromvertex, tovertex) -> value`.
-- `vertexvalue`: optional callable `vertex -> Any`.
-- `branchingtime`: optional callable `vertex -> Float64`.
-- `coalescenceage`: optional callable `vertex -> Float64`.
-- `vertexcoords`: optional callable `vertex -> Point2f`.
-- `vertexpos`: optional callable `vertex -> Point2f`.
+- `children`: required callable `node -> iterable`; the only mandatory field.
+- `edgelength`: optional callable `(src, dst) -> value`.
+- `nodevalue`: optional callable `node -> Any`.
+- `branchingtime`: optional callable `node -> Float64`.
+- `coalescenceage`: optional callable `node -> Float64`.
+- `nodecoords`: optional callable `node -> Point2f`.
+- `nodepos`: optional callable `node -> Point2f`.
 
 # Returns
-A fully parameterised `LineageGraphAccessor{C, E, V, B, CA, VC, VP}` whose type
+A fully parameterised `LineageGraphAccessor{C, E, NodeT, B, CA, NC, NP}` whose type
 parameters are the concrete types of each supplied callable (or `Nothing` for
 omitted optionals).
 
@@ -73,36 +73,36 @@ omitted optionals).
 - `ArgumentError` if `children` is not callable.
 """
 function lineagegraph_accessor(
-        rootvertex;
+        rootnode;
         children,
         edgelength = nothing,
-        vertexvalue = nothing,
+        nodevalue = nothing,
         branchingtime = nothing,
         coalescenceage = nothing,
-        vertexcoords = nothing,
-        vertexpos = nothing,
+        nodecoords = nothing,
+        nodepos = nothing,
     )::LineageGraphAccessor
     isa(children, Base.Callable) || throw(
         ArgumentError(
-            "children must be callable for a lineage graph rooted at $(typeof(rootvertex)); " *
+            "children must be callable for a lineage graph rooted at $(typeof(rootnode)); " *
                 "got $(typeof(children)): $(repr(children))",
         ),
     )
     return LineageGraphAccessor(
         children,
         edgelength,
-        vertexvalue,
+        nodevalue,
         branchingtime,
         coalescenceage,
-        vertexcoords,
-        vertexpos,
+        nodecoords,
+        nodepos,
     )
 end
 
 # ── AbstractTrees adapter ──────────────────────────────────────────────────────
 
 """
-    abstracttrees_accessor(rootvertex; edgelength=nothing, vertexvalue=nothing,
+    abstracttrees_accessor(rootnode; edgelength=nothing, nodevalue=nothing,
                            branchingtime=nothing, coalescenceage=nothing) -> LineageGraphAccessor
 
 Construct a `LineageGraphAccessor` by wrapping `AbstractTrees.children` as the
@@ -110,30 +110,30 @@ Construct a `LineageGraphAccessor` by wrapping `AbstractTrees.children` as the
 has no dependency on AbstractTrees; the AbstractTrees dependency is confined to
 this function.
 
-The `rootvertex` argument is not stored. `AbstractTrees.children` has a
+The `rootnode` argument is not stored. `AbstractTrees.children` has a
 universal fallback that returns `()` for any type, so no interface check is
 performed: any value is accepted and types with no explicit `children` method
 will produce a single-leaf lineage graph.
 
 # Arguments
-- `rootvertex`: not stored; accepted for API symmetry with `lineagegraph_accessor`.
-- `edgelength`, `vertexvalue`, `branchingtime`, `coalescenceage`: same
+- `rootnode`: not stored; accepted for API symmetry with `lineagegraph_accessor`.
+- `edgelength`, `nodevalue`, `branchingtime`, `coalescenceage`: same
   semantics as in `lineagegraph_accessor`.
 
 # Returns
 A `LineageGraphAccessor` whose `children` field is `AbstractTrees.children`.
 """
 function abstracttrees_accessor(
-        rootvertex;
+        rootnode;
         edgelength = nothing,
-        vertexvalue = nothing,
+        nodevalue = nothing,
         branchingtime = nothing,
         coalescenceage = nothing,
     )::LineageGraphAccessor
     return LineageGraphAccessor(
         abstracttrees_children,
         edgelength,
-        vertexvalue,
+        nodevalue,
         branchingtime,
         coalescenceage,
         nothing,
@@ -144,89 +144,89 @@ end
 # ── Predicates ─────────────────────────────────────────────────────────────────
 
 """
-    is_leaf(accessor::LineageGraphAccessor, vertex) -> Bool
+    is_leaf(accessor::LineageGraphAccessor, node) -> Bool
 
-Return `true` when `accessor.children(vertex)` yields an empty iterable, i.e.,
-the vertex has no children and is therefore a leaf.
+Return `true` when `accessor.children(node)` yields an empty iterable, i.e.,
+the node has no children and is therefore a leaf.
 """
-function is_leaf(accessor::LineageGraphAccessor, vertex)::Bool
-    return isempty(accessor.children(vertex))
+function is_leaf(accessor::LineageGraphAccessor, node)::Bool
+    return isempty(accessor.children(node))
 end
 
 # ── Traversals ─────────────────────────────────────────────────────────────────
 
 """
-    leaves(accessor::LineageGraphAccessor, rootvertex) -> Vector{Any}
+    leaves(accessor::LineageGraphAccessor, rootnode) -> Vector{Any}
 
-Return all leaf vertices reachable from `rootvertex` in a deterministic
+Return all leaf nodes reachable from `rootnode` in a deterministic
 depth-first order.
 
-Cycle detection is performed at every step. If any vertex is encountered more
+Cycle detection is performed at every step. If any node is encountered more
 than once, `ArgumentError` is raised immediately before any partial result is
 returned.
 
 # Throws
 - `ArgumentError` if a cycle is detected in the lineage graph.
 """
-function leaves(accessor::LineageGraphAccessor, rootvertex)::Vector{Any}
+function leaves(accessor::LineageGraphAccessor, rootnode)::Vector{Any}
     result = Vector{Any}()
     visited = Set{Any}()
-    _collect_leaves!(result, visited, accessor, rootvertex)
+    _collect_leaves!(result, visited, accessor, rootnode)
     return result
 end
 
 """
-    preorder(accessor::LineageGraphAccessor, rootvertex) -> Vector{Any}
+    preorder(accessor::LineageGraphAccessor, rootnode) -> Vector{Any}
 
-Return all vertices reachable from `rootvertex` in preorder (parent before
+Return all nodes reachable from `rootnode` in preorder (parent before
 children), depth-first, deterministic.
 
-Cycle detection is performed at every step. If any vertex is encountered more
+Cycle detection is performed at every step. If any node is encountered more
 than once, `ArgumentError` is raised immediately before any partial result is
 returned.
 
 # Throws
 - `ArgumentError` if a cycle is detected in the lineage graph.
 """
-function preorder(accessor::LineageGraphAccessor, rootvertex)::Vector{Any}
+function preorder(accessor::LineageGraphAccessor, rootnode)::Vector{Any}
     result = Vector{Any}()
     visited = Set{Any}()
-    _collect_preorder!(result, visited, accessor, rootvertex)
+    _collect_preorder!(result, visited, accessor, rootnode)
     return result
 end
 
 # ── Internal traversal helpers ─────────────────────────────────────────────────
 
-function _check_cycle!(visited::Set, vertex)::Nothing
+function _check_cycle!(visited::Set, node)::Nothing
     # Shared ancestry (reticulation) is not yet supported; acyclicity is required.
-    vertex ∈ visited && throw(
+    node ∈ visited && throw(
         ArgumentError(
-            "cycle detected in lineage graph: vertex $(repr(vertex)) was encountered " *
+            "cycle detected in lineage graph: node $(repr(node)) was encountered " *
                 "more than once during traversal; the lineage graph must be acyclic",
         ),
     )
-    push!(visited, vertex)
+    push!(visited, node)
     return nothing
 end
 
-function _collect_leaves!(result, visited, accessor, vertex)::Nothing
-    _check_cycle!(visited, vertex)
-    ch = accessor.children(vertex)
-    if isempty(ch)
-        push!(result, vertex)
+function _collect_leaves!(result, visited, accessor, node)::Nothing
+    _check_cycle!(visited, node)
+    child_collection = accessor.children(node)
+    if isempty(child_collection)
+        push!(result, node)
     else
-        for c in ch
-            _collect_leaves!(result, visited, accessor, c)
+        for child in child_collection
+            _collect_leaves!(result, visited, accessor, child)
         end
     end
     return nothing
 end
 
-function _collect_preorder!(result, visited, accessor, vertex)::Nothing
-    _check_cycle!(visited, vertex)
-    push!(result, vertex)
-    for c in accessor.children(vertex)
-        _collect_preorder!(result, visited, accessor, c)
+function _collect_preorder!(result, visited, accessor, node)::Nothing
+    _check_cycle!(visited, node)
+    push!(result, node)
+    for child in accessor.children(node)
+        _collect_preorder!(result, visited, accessor, child)
     end
     return nothing
 end

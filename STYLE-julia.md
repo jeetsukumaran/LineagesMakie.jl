@@ -1228,6 +1228,127 @@ age(record)              # get age field
 age!(record, 65.0)       # set age field
 ```
 
+### 2.4 Identifier length and abbreviation rules
+
+> Identifiers must be long enough to be unambiguous in context. Single-letter
+> names are almost always too short; full words are often the right length.
+
+#### Proscription of single-letter and ultra-short identifiers
+
+Single-letter variable names are **proscribed** outside of two narrow exceptions:
+
+1. **Numeric loop indices**: `i`, `j`, `k` in tightly scoped numeric loops
+   where the index is purely positional and carries no domain meaning.
+2. **Mathematical convention**: `x`, `y`, `z` as coordinate components where
+   the convention is established (e.g., `Point2f(x, y)`).
+
+All other single-letter names — loop variables, type parameters, function
+parameters, local bindings — must use a domain-meaningful identifier of
+sufficient length.
+
+#### Minimum length and abbreviation quality
+
+The minimum is **3 characters for an abbreviation**, but a full word is always
+preferred when the word is short or when no abbreviation clearly beats it. The
+guiding question: *is the abbreviated form unambiguously recognizable to a reader
+unfamiliar with the variable?*
+
+If two different concepts could produce the same abbreviation, the abbreviation
+is too short.
+
+| Wrong form | Right form | Reason |
+|---|---|---|
+| `n` (a node) | `node` | 4-letter word is fully readable; `n` is ambiguous |
+| `nd` (a node) | `node` | not a recognizable abbreviation; use the full word |
+| `e` (an edge) | `edge` | same |
+| `ed` (an edge) | `edge` | same; full word is clear |
+| `t` (a taxon) | `taxon` | unambiguous full word |
+| `tx` (a taxon) | `taxon` | not a recognized abbreviation |
+| `n1`, `n2` (two nodes) | `node1`, `node2` | indexed single-letter is doubly ambiguous |
+| `e1`, `e2` (two edges) | `edge1`, `edge2` | same |
+
+When an abbreviation is justified (3+ characters, widely recognized in context),
+prefer the form that best preserves the consonant skeleton or phonetic structure
+of the full word:
+
+| Preferred | Rejected alternatives | Reason |
+|---|---|---|
+| `idx` | `i`, `id`, `indx` | 3 chars; conventional index abbreviation |
+| `pos` | `p`, `ps`, `pstn` | 3 chars; unambiguous |
+| `acc` | `a`, `ac`, `acsr` | 3 chars; unambiguous |
+| `src` | `s`, `sr`, `sorc` | 3 chars; conventional (Graphs.jl) |
+| `dst` | `d`, `ds`, `dest` | 3 chars; conventional (Graphs.jl) |
+
+#### Type-parameter naming: `<Name>T`
+
+Julia type parameters in parametric structs and `where`-clauses must follow the
+`<Name>T` convention: the canonical name (or recognized abbreviation) of the
+represented concept, followed by the letter `T`.
+
+This makes the role of the type parameter immediately legible and avoids
+collision with value-carrying identifiers:
+
+```julia
+# Wrong: opaque single-letter type parameter
+struct Graph{V}
+    root::V
+end
+
+# Correct: `NodeT` — type parameter for the node identity type
+struct Graph{NodeT}
+    root::NodeT
+end
+
+# Additional examples
+struct Mapping{KeyT, ValueT}   # correct
+    data::Dict{KeyT, ValueT}
+end
+
+struct Edge{NodeT}             # correct — both endpoints share the same node type
+    src::NodeT
+    dst::NodeT
+end
+```
+
+In `where`-clauses, use the same convention:
+
+```julia
+# Wrong
+function depth(graph::Graph{V}) where {V}
+
+# Correct
+function depth(graph::Graph{NodeT}) where {NodeT}
+```
+
+#### Count variable naming: `n_concept`
+
+Variables holding the count of a domain concept follow the `n_concept` pattern:
+a lowercase `n` prefix followed by the concept name, separated by underscore
+(consistent with the snake_case convention for Julia local variables).
+
+```julia
+n_nodes  = length(node_positions)   # number of nodes
+n_edges  = length(edges)            # number of edges
+n_taxa   = length(leaf_order)       # number of taxa (leaves)
+n_bins   = length(time_bins)        # number of time bins
+```
+
+Do not use `count`, `num`, `number_of`, or camelCase after `n`:
+
+| Wrong | Right |
+|---|---|
+| `n` (count of nodes) | `n_nodes` |
+| `nNodes` | `n_nodes` (snake_case, not camelCase) |
+| `num_nodes` | `n_nodes` |
+| `count` (unqualified) | use `n_concept` form |
+
+#### Cross-reference
+
+Project-specific vocabulary mappings — which concepts map to which canonical
+identifier names — are defined in `STYLE-vocabulary.md`. The conventions above
+govern the **form** of identifiers; the vocabulary document governs the
+**lexemes**.
+
 ---
 
 ## 3. General coding conventions

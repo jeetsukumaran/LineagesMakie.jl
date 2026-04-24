@@ -28,7 +28,7 @@ segment to the child.
   `rectangular_layout` or `circular_layout`.
 
 # Keyword attributes
-- `color`: uniform Makie color, or a `(fromvertex, tovertex) -> color` function
+- `color`: uniform Makie color, or a `(src, dst) -> color` function
   for per-edge colors. Default `:black`.
 - `linewidth`: line width in pixels. Default `1.0`.
 - `linestyle`: Makie line style (`:solid`, `:dash`, `:dot`, etc.). Default `:solid`.
@@ -62,8 +62,8 @@ function Makie.plot!(p::EdgeLayer)
         color isa Function || return color
         n = length(geom.edges)
         result = Vector{Any}(undef, 4 * n)
-        for (i, (u, v)) in enumerate(geom.edges)
-            c = color(u, v)
+        for (i, (src, dst)) in enumerate(geom.edges)
+            c = color(src, dst)
             base = (i - 1) * 4
             result[base + 1] = c
             result[base + 2] = c
@@ -84,27 +84,27 @@ function Makie.plot!(p::EdgeLayer)
     return p
 end
 
-# ── VertexLayer ───────────────────────────────────────────────────────────────
+# ── NodeLayer ─────────────────────────────────────────────────────────────────
 
 """
-    vertexlayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> VertexLayer
+    nodelayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> NodeLayer
 
-Render markers at internal (non-leaf) vertex positions on axis `ax`.
+Render markers at internal (non-leaf) node positions on axis `ax`.
 
 Markers are drawn in pixel space (`markerspace = :pixel`) so they remain
 fixed-size regardless of axis scale or figure resize. The
 `CoordTransform.register_pixel_projection!` call ensures the data↔pixel
 mapping is reactive to viewport changes.
 
-Internal vertices are those for which `Accessors.is_leaf(accessor, vertex)`
-returns `false`. The derived attribute `:vertex_pos_data` holds the filtered
-`Vector{Point2f}` and is accessible as `plot_obj[:vertex_pos_data][]`.
+Internal nodes are those for which `Accessors.is_leaf(accessor, node)`
+returns `false`. The derived attribute `:node_pos_data` holds the filtered
+`Vector{Point2f}` and is accessible as `plot_obj[:node_pos_data][]`.
 
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry from
   `rectangular_layout` or `circular_layout`.
 - `accessor::LineageGraphAccessor`: used to identify leaf versus internal
-  vertices via `Accessors.is_leaf`.
+  nodes via `Accessors.is_leaf`.
 
 # Keyword attributes
 - `marker`: Makie marker symbol. Default `:circle`.
@@ -116,7 +116,7 @@ returns `false`. The derived attribute `:vertex_pos_data` holds the filtered
 - `alpha`: transparency multiplier in `[0, 1]`. Default `1.0`.
 - `visible`: whether the layer is rendered. Default `true`.
 """
-@recipe VertexLayer (geom, accessor) begin
+@recipe NodeLayer (geom, accessor) begin
     marker = :circle
     color = :black
     markersize = 8
@@ -127,12 +127,12 @@ returns `false`. The derived attribute `:vertex_pos_data` holds the filtered
     visible = true
 end
 
-function Makie.plot!(p::VertexLayer)
+function Makie.plot!(p::NodeLayer)
     sc = parent_scene(p)
     register_pixel_projection!(p.attributes, sc)
 
-    map!(p.attributes, [:geom, :accessor], :vertex_pos_data) do geom, accessor
-        return [pos for (v, pos) in geom.vertex_positions if !is_leaf(accessor, v)]
+    map!(p.attributes, [:geom, :accessor], :node_pos_data) do geom, accessor
+        return [pos for (node, pos) in geom.node_positions if !is_leaf(accessor, node)]
     end
 
     map!(p.attributes, [:color, :render_fill], :resolved_fill_color) do color, render_fill
@@ -145,7 +145,7 @@ function Makie.plot!(p::VertexLayer)
 
     scatter!(
         p,
-        p[:vertex_pos_data];
+        p[:node_pos_data];
         marker = p[:marker],
         color = p[:resolved_fill_color],
         markersize = p[:markersize],
@@ -161,25 +161,25 @@ end
 """
     leaflayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> LeafLayer
 
-Render markers at leaf vertex positions on axis `ax`.
+Render markers at leaf node positions on axis `ax`.
 
 Markers are drawn in pixel space (`markerspace = :pixel`) so they remain
 fixed-size regardless of axis scale or figure resize. The
 `CoordTransform.register_pixel_projection!` call ensures the data↔pixel
 mapping is reactive to viewport changes.
 
-Leaf vertices are those for which `Accessors.is_leaf(accessor, vertex)`
+Leaf nodes are those for which `Accessors.is_leaf(accessor, node)`
 returns `true`. The derived attribute `:leaf_pos_data` holds the filtered
 `Vector{Point2f}` and is accessible as `plot_obj[:leaf_pos_data][]`.
 
-This layer is independently composable from `VertexLayer`: setting
+This layer is independently composable from `NodeLayer`: setting
 `visible = false` on one does not affect the other.
 
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry from
   `rectangular_layout` or `circular_layout`.
 - `accessor::LineageGraphAccessor`: used to identify leaf versus internal
-  vertices via `Accessors.is_leaf`.
+  nodes via `Accessors.is_leaf`.
 
 # Keyword attributes
 - `marker`: Makie marker symbol. Default `:circle`.
@@ -203,7 +203,7 @@ function Makie.plot!(p::LeafLayer)
     register_pixel_projection!(p.attributes, sc)
 
     map!(p.attributes, [:geom, :accessor], :leaf_pos_data) do geom, accessor
-        return [pos for (v, pos) in geom.vertex_positions if is_leaf(accessor, v)]
+        return [pos for (node, pos) in geom.node_positions if is_leaf(accessor, node)]
     end
 
     scatter!(
@@ -224,7 +224,7 @@ end
 """
     leaflabellayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> LeafLabelLayer
 
-Render text labels at leaf vertex positions on axis `ax`.
+Render text labels at leaf node positions on axis `ax`.
 
 Leaf labels are rendered in `Makie.parent(parent_scene(p))` (the blockscene /
 decoration layer) so they can sit beyond the data viewport without being
@@ -247,12 +247,12 @@ guarantees that label strings and positions share the same index mapping.
 - `geom::LineageGraphGeometry`: pre-computed layout geometry from
   `rectangular_layout` or `circular_layout`.
 - `accessor::LineageGraphAccessor`: used to resolve the default `text_func`
-  when `accessor.vertexvalue` is present.
+  when `accessor.nodevalue` is present.
 
 # Keyword attributes
-- `text_func`: a callable `vertex -> String` for label text. When `nothing`
-  (default), uses `string(accessor.vertexvalue(v))` if `accessor.vertexvalue`
-  is present, otherwise `string(v)`.
+- `text_func`: a callable `node -> String` for label text. When `nothing`
+  (default), uses `string(accessor.nodevalue(node))` if `accessor.nodevalue`
+  is present, otherwise `string(node)`.
 - `font`: Makie font. Default `:regular`. Overridden by `italic = true`.
 - `fontsize`: label font size in points. Default `12`.
 - `color`: label color. Default `:black`.
@@ -268,7 +268,7 @@ guarantees that label strings and positions share the same index mapping.
 - `visible`: whether the layer is rendered. Default `true`.
 """
 @recipe LeafLabelLayer (geom, accessor) begin
-    "Callable `vertex -> String` for label text; `nothing` → vertexvalue or string(v)."
+    "Callable `node -> String` for label text; `nothing` → nodevalue or string(node)."
     text_func = nothing
     font = :regular
     fontsize = 12
@@ -297,15 +297,15 @@ function Makie.plot!(p::LeafLabelLayer)::LeafLabelLayer
     # Compute label strings in leaf_order for stable index correspondence.
     map!(p.attributes, [:geom, :accessor, :text_func], :leaf_label_strings) do geom, accessor, text_func
         resolved_tf = if text_func === nothing
-            if accessor.vertexvalue !== nothing
-                v -> string(accessor.vertexvalue(v))
+            if accessor.nodevalue !== nothing
+                node -> string(accessor.nodevalue(node))
             else
-                v -> string(v)
+                node -> string(node)
             end
         else
             text_func
         end
-        return String[resolved_tf(v) for v in geom.leaf_order]
+        return String[resolved_tf(node) for node in geom.leaf_order]
     end
 
     # Compute blockscene pixel positions and per-label alignments. Depends on
@@ -343,21 +343,21 @@ function Makie.plot!(p::LeafLabelLayer)::LeafLabelLayer
     return p
 end
 
-# ── VertexLabelLayer ──────────────────────────────────────────────────────────
+# ── NodeLabelLayer ────────────────────────────────────────────────────────────
 
 """
-    vertexlabellayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> VertexLabelLayer
+    nodelabellayer!(ax, geom::LineageGraphGeometry, accessor::LineageGraphAccessor; kwargs...) -> NodeLabelLayer
 
-Render data-driven text labels at vertex positions on axis `ax`, with a
-threshold predicate to control which vertices are labelled.
+Render data-driven text labels at node positions on axis `ax`, with a
+threshold predicate to control which nodes are labelled.
 
-At plot time (when `vertexlabellayer!` is called), every vertex that passes
+At plot time (when `nodelabellayer!` is called), every node that passes
 `threshold` is checked: if `value_func` returns a value that is not an
 `AbstractString`, `Number`, or `Symbol`, an `ArgumentError` is raised
-immediately, identifying the vertex and the returned type.
+immediately, identifying the node and the returned type.
 
 Position mode `:toward_parent` shifts the label slightly toward the parent
-vertex along the transverse axis, separating the label from the vertex marker.
+node along the transverse axis, separating the label from the node marker.
 
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry.
@@ -365,41 +365,41 @@ vertex along the transverse axis, separating the label from the vertex marker.
   directly in this layer's core logic.
 
 # Keyword attributes
-- `value_func`: a callable `vertex -> Any` supplying the label value. Must
-  return `AbstractString`, `Number`, or `Symbol` for every vertex that passes
+- `value_func`: a callable `node -> Any` supplying the label value. Must
+  return `AbstractString`, `Number`, or `Symbol` for every node that passes
   `threshold`; otherwise `ArgumentError` is raised at plot time. Default:
-  `v -> ""` (empty string — labels exist but render invisibly at zero width).
-- `threshold`: a predicate `vertex -> Bool` selecting which vertices to label.
-  Default: `v -> false` (show no vertices; opt-in).
-- `position`: `:vertex` places the label at the vertex data position;
-  `:toward_parent` shifts the label slightly (3 px) toward the parent vertex
-  along the transverse axis. Default `:vertex`.
+  `node -> ""` (empty string — labels exist but render invisibly at zero width).
+- `threshold`: a predicate `node -> Bool` selecting which nodes to label.
+  Default: `node -> false` (show no nodes; opt-in).
+- `position`: `:node` places the label at the node data position;
+  `:toward_parent` shifts the label slightly (3 px) toward the parent node
+  along the transverse axis. Default `:node`.
 - `font`: Makie font. Default `:regular`.
 - `fontsize`: label font size in points. Default `10`.
 - `color`: label color. Default `:gray50`.
 - `visible`: whether the layer is rendered. Default `true`.
 """
-@recipe VertexLabelLayer (geom, accessor) begin
-    "Callable `vertex -> Any` supplying label values; must return AbstractString, Number, or Symbol."
-    value_func = (v -> "")
-    "Predicate `vertex -> Bool`; only vertices returning true are labelled. Default: none (opt-in)."
-    threshold = (v -> false)
-    "Label position: `:vertex` or `:toward_parent`."
-    position = :vertex
+@recipe NodeLabelLayer (geom, accessor) begin
+    "Callable `node -> Any` supplying label values; must return AbstractString, Number, or Symbol."
+    value_func = (node -> "")
+    "Predicate `node -> Bool`; only nodes returning true are labelled. Default: none (opt-in)."
+    threshold = (node -> false)
+    "Label position: `:node` or `:toward_parent`."
+    position = :node
     font = :regular
     fontsize = 10
     color = :gray50
     visible = true
 end
 
-function Makie.plot!(p::VertexLabelLayer)::VertexLabelLayer
+function Makie.plot!(p::NodeLabelLayer)::NodeLabelLayer
     sc = parent_scene(p)
     register_pixel_projection!(p.attributes, sc)
 
-    # Build (position, string) pairs for every vertex passing the threshold.
+    # Build (position, string) pairs for every node passing the threshold.
     # The type check is performed here: since Makie 0.24's ComputeGraph runs
     # map! closures immediately during plot!, an ArgumentError raised here
-    # propagates directly from vertexlabellayer!, satisfying the "at plot time"
+    # propagates directly from nodelabellayer!, satisfying the "at plot time"
     # requirement without accessing positional args via p.geom[] (which has an
     # opaque type in the ComputeGraph and confuses JET's type inference).
     # Depends on :pixel_projection so this reruns on viewport change (needed
@@ -407,24 +407,24 @@ function Makie.plot!(p::VertexLabelLayer)::VertexLabelLayer
     map!(
         p.attributes,
         [:geom, :value_func, :threshold, :position, :pixel_projection],
-        :vertex_label_raw,
+        :node_label_raw,
     ) do geom, value_func, threshold, position, _
-        parent_of = Dict{Any, Any}(tovertex => fromvertex for (fromvertex, tovertex) in geom.edges)
+        parent_of = Dict{Any, Any}(dst => src for (src, dst) in geom.edges)
         entries = Tuple{Point2f, String}[]
-        for (v, pos) in geom.vertex_positions
-            threshold(v) || continue
-            val = value_func(v)
+        for (node, pos) in geom.node_positions
+            threshold(node) || continue
+            val = value_func(node)
             if !isa(val, Union{AbstractString, Number, Symbol})
                 throw(
                     ArgumentError(
-                        "value_func returned a value of type $(typeof(val)) for vertex $(v), " *
+                        "value_func returned a value of type $(typeof(val)) for node $(node), " *
                         "which cannot be rendered as text; " *
                         "expected AbstractString, Number, or Symbol",
                     ),
                 )
             end
-            label_pos = if position === :toward_parent && haskey(parent_of, v)
-                parent_pos = geom.vertex_positions[parent_of[v]]
+            label_pos = if position === :toward_parent && haskey(parent_of, node)
+                parent_pos = geom.node_positions[parent_of[node]]
                 dy = parent_pos[2] - pos[2]
                 delta = pixel_offset_to_data_delta(sc, pos, Vec2f(0, 3 * sign(dy)))
                 pos + Point2f(delta)
@@ -436,18 +436,18 @@ function Makie.plot!(p::VertexLabelLayer)::VertexLabelLayer
         return entries
     end
 
-    map!(p.attributes, [:vertex_label_raw], :vertex_label_positions) do entries
+    map!(p.attributes, [:node_label_raw], :node_label_positions) do entries
         return Point2f[pos for (pos, _) in entries]
     end
 
-    map!(p.attributes, [:vertex_label_raw], :vertex_label_strings) do entries
+    map!(p.attributes, [:node_label_raw], :node_label_strings) do entries
         return String[str for (_, str) in entries]
     end
 
     text!(
         p,
-        p[:vertex_label_positions];
-        text = p[:vertex_label_strings],
+        p[:node_label_positions];
+        text = p[:node_label_strings],
         font = p[:font],
         fontsize = p[:fontsize],
         color = p[:color],
@@ -512,8 +512,8 @@ function _leaf_label_data(
         if side in (:left, :right)
             shared_align = annotation_layout.leaf_label_align
             anchor_x = annotation_layout.leaf_label_anchor_x
-            for v in geom.leaf_order
-                anchor = geom.vertex_positions[v]
+            for node in geom.leaf_order
+                anchor = geom.node_positions[node]
                 block_anchor = _to_blockscene_pixel(sc, anchor)
                 push!(entries, (Point2f(anchor_x, block_anchor[2]), shared_align))
             end
@@ -521,8 +521,8 @@ function _leaf_label_data(
         elseif side in (:top, :bottom)
             shared_align = annotation_layout.leaf_label_align
             anchor_y = annotation_layout.leaf_label_anchor_y
-            for v in geom.leaf_order
-                anchor = geom.vertex_positions[v]
+            for node in geom.leaf_order
+                anchor = geom.node_positions[node]
                 block_anchor = _to_blockscene_pixel(sc, anchor)
                 push!(entries, (Point2f(block_anchor[1], anchor_y), shared_align))
             end
@@ -537,8 +537,8 @@ function _leaf_label_data(
         else
             offset[1]
         end
-        for v in geom.leaf_order
-            anchor = geom.vertex_positions[v]
+        for node in geom.leaf_order
+            anchor = geom.node_positions[node]
             outward = _normalized_or_default(
                 Vec2f(anchor[1] - center[1], anchor[2] - center[2]),
                 Vec2f(1, 0),
@@ -553,8 +553,8 @@ function _leaf_label_data(
     end
 
     resolved_align = (align[1], align[2])
-    for v in geom.leaf_order
-        anchor = geom.vertex_positions[v]
+    for node in geom.leaf_order
+        anchor = geom.node_positions[node]
         block_anchor = _to_blockscene_pixel(sc, anchor)
         push!(entries, (block_anchor + Point2f(offset), resolved_align))
     end
@@ -570,7 +570,7 @@ function _shared_bracket_pixel_shapes(
         sc,
         geom::LineageGraphGeometry,
         accessor::LineageGraphAccessor,
-        clade_vertices,
+        clade_nodes,
         annotation_layout,
     )::Vector{Point2f}
     !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
@@ -580,8 +580,8 @@ function _shared_bracket_pixel_shapes(
     pts = Point2f[]
     nan = Point2f(NaN, NaN)
 
-    for mrca in clade_vertices
-        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
+    for mrca in clade_nodes
+        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
         isempty(leaf_pts) && continue
         leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
         xs = [q[1] for q in leaf_px]
@@ -620,14 +620,14 @@ function _shared_bracket_label_pixel_positions(
         sc,
         geom::LineageGraphGeometry,
         accessor::LineageGraphAccessor,
-        clade_vertices,
+        clade_nodes,
         annotation_layout,
     )::Vector{Point2f}
     !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
 
     positions = Point2f[]
-    for mrca in clade_vertices
-        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
+    for mrca in clade_nodes
+        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
         isempty(leaf_pts) && continue
         leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
         xs = [q[1] for q in leaf_px]
@@ -650,10 +650,10 @@ Uses `Accessors.leaves` so cycle detection is inherited automatically.
 function _subtree_leaf_positions(
         accessor::LineageGraphAccessor,
         mrca,
-        vertex_positions::Dict,
+        node_positions::Dict,
     )::Vector{Point2f}
     subtree_leaves = leaves(accessor, mrca)
-    return Point2f[vertex_positions[v] for v in subtree_leaves if haskey(vertex_positions, v)]
+    return Point2f[node_positions[node] for node in subtree_leaves if haskey(node_positions, node)]
 end
 
 """
@@ -787,7 +787,7 @@ function _resolve_lineageunits_stub(
         accessor::LineageGraphAccessor,
     )::Symbol
     lineageunits === nothing || return lineageunits
-    return accessor.edgelength !== nothing ? :edgelengths : :vertexheights
+    return accessor.edgelength !== nothing ? :edgelengths : :nodeheights
 end
 
 # ── CladeHighlightLayer ───────────────────────────────────────────────────────
@@ -798,8 +798,8 @@ end
 
 Render filled rectangular highlight regions behind subtrees on axis `ax`.
 
-For each MRCA vertex in `clade_vertices`, the layer collects the positions of
-all descendant leaves (via `Accessors.leaves`) plus the MRCA vertex itself,
+For each MRCA node in `clade_nodes`, the layer collects the positions of
+all descendant leaves (via `Accessors.leaves`) plus the MRCA node itself,
 computes the axis-aligned bounding box of those positions, expands the box by
 `padding` (pixel space, converted to data units via
 `CoordTransform.pixel_offset_to_data_delta`) only when the owning plot scene's
@@ -816,7 +816,7 @@ reruns whenever the scene is resized.
   traverse each subtree via `Accessors.leaves`.
 
 # Keyword attributes
-- `clade_vertices`: `Vector` of MRCA vertices whose subtrees should be
+- `clade_nodes`: `Vector` of MRCA nodes whose subtrees should be
   highlighted. Default `Any[]` (no highlights).
 - `color`: fill color, including alpha channel. Default
   `Makie.RGBAf(0.2, 0.6, 1.0, 0.15)`.
@@ -827,7 +827,7 @@ reruns whenever the scene is resized.
 - `visible`: whether the layer is rendered. Default `true`.
 """
 @recipe CladeHighlightLayer (geom, accessor) begin
-    clade_vertices = Any[]
+    clade_nodes = Any[]
     color = Makie.RGBAf(0.2f0, 0.6f0, 1.0f0, 0.15f0)
     alpha = 0.15
     "Pixel-space expansion of the clade bounding box. Default: 4 px on each side."
@@ -849,13 +849,13 @@ function Makie.plot!(p::CladeHighlightLayer)::CladeHighlightLayer
     # Depends on :pixel_projection so padding recomputes on viewport change.
     map!(
         p.attributes,
-        [:geom, :accessor, :clade_vertices, :padding, :pixel_projection],
+        [:geom, :accessor, :clade_nodes, :padding, :pixel_projection],
         :highlight_rects,
-    ) do geom, accessor, clade_vertices, padding, _
+    ) do geom, accessor, clade_nodes, padding, _
         rects = Rect2f[]
-        for mrca in clade_vertices
-            leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
-            mrca_pt = get(geom.vertex_positions, mrca, nothing)
+        for mrca in clade_nodes
+            leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
+            mrca_pt = get(geom.node_positions, mrca, nothing)
             mrca_pt === nothing && continue
             all_pts = push!(copy(leaf_pts), mrca_pt)
             isempty(all_pts) && continue
@@ -923,7 +923,7 @@ end
 
 Render bracket annotations with text labels for named clades on axis `ax`.
 
-For each MRCA vertex in `clade_vertices`, the layer draws a vertical bracket at
+For each MRCA node in `clade_nodes`, the layer draws a vertical bracket at
 the right extent of the clade's leaf span (plus `offset` in pixel space), with
 two small horizontal tick marks at the top and bottom ends, and a text label at
 the bracket midpoint. This is the standard phylogenetic clade-bracket annotation.
@@ -946,9 +946,9 @@ the scene viewport or camera changes.
   traverse each subtree via `Accessors.leaves`.
 
 # Keyword attributes
-- `clade_vertices`: `Vector` of MRCA vertices to annotate. Default `Any[]`.
+- `clade_nodes`: `Vector` of MRCA nodes to annotate. Default `Any[]`.
 - `label_func`: callable `mrca -> String` producing the bracket label.
-  Default `v -> ""` (invisible empty labels).
+  Default `node -> ""` (invisible empty labels).
 - `color`: line and text color. Default `:black`.
 - `fontsize`: label font size in points. Default `11`.
 - `offset`: pixel-space offset from the leaf span toward the bracket bar.
@@ -960,9 +960,9 @@ the scene viewport or camera changes.
 - `visible`: whether the layer is rendered. Default `true`.
 """
 @recipe CladeLabelLayer (geom, accessor) begin
-    clade_vertices = Any[]
+    clade_nodes = Any[]
     "Callable `mrca -> String` producing the bracket label."
-    label_func = (v -> "")
+    label_func = (node -> "")
     color = :black
     fontsize = 11
     "Pixel-space offset from the leaf span toward the bracket bar."
@@ -982,12 +982,12 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     # transposed horizontal version for vertical embeddings.
     map!(
         p.attributes,
-        [:geom, :accessor, :clade_vertices, :offset, :pixel_projection, :side],
+        [:geom, :accessor, :clade_nodes, :offset, :pixel_projection, :side],
         :bracket_shapes,
-    ) do geom, accessor, clade_vertices, offset, _, side
+    ) do geom, accessor, clade_nodes, offset, _, side
         pts = Point2f[]
-        for mrca in clade_vertices
-            leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
+        for mrca in clade_nodes
+            leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
             isempty(leaf_pts) && continue
 
             xs    = [q[1] for q in leaf_pts]
@@ -1051,12 +1051,12 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     # Label (position, string, align) triples — one per MRCA.
     map!(
         p.attributes,
-        [:geom, :accessor, :clade_vertices, :label_func, :offset, :pixel_projection, :side],
+        [:geom, :accessor, :clade_nodes, :label_func, :offset, :pixel_projection, :side],
         :bracket_label_data,
-    ) do geom, accessor, clade_vertices, label_func, offset, _, side
+    ) do geom, accessor, clade_nodes, label_func, offset, _, side
         entries = Tuple{Point2f, String, Tuple{Symbol, Symbol}}[]
-        for mrca in clade_vertices
-            leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
+        for mrca in clade_nodes
+            leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
             isempty(leaf_pts) && continue
 
             xs    = [q[1] for q in leaf_pts]
@@ -1127,11 +1127,11 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     # Depends on :pixel_projection so this reruns whenever viewport or camera changes.
     map!(
         p.attributes,
-        [:geom, :accessor, :clade_vertices, :bracket_shapes, :annotation_layout, :pixel_projection],
+        [:geom, :accessor, :clade_nodes, :bracket_shapes, :annotation_layout, :pixel_projection],
         :bracket_pixel_shapes,
-    ) do geom, accessor, clade_vertices, shapes, annotation_layout, _
+    ) do geom, accessor, clade_nodes, shapes, annotation_layout, _
         if _shared_clade_annotation_active(annotation_layout)
-            return _shared_bracket_pixel_shapes(sc, geom, accessor, clade_vertices, annotation_layout)
+            return _shared_bracket_pixel_shapes(sc, geom, accessor, clade_nodes, annotation_layout)
         end
 
         sc_vp = Makie.viewport(sc)[]
@@ -1154,15 +1154,15 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     # Depends on :pixel_projection so this reruns whenever viewport or camera changes.
     map!(
         p.attributes,
-        [:geom, :accessor, :clade_vertices, :bracket_label_positions, :annotation_layout, :pixel_projection],
+        [:geom, :accessor, :clade_nodes, :bracket_label_positions, :annotation_layout, :pixel_projection],
         :bracket_label_pixel_positions,
-    ) do geom, accessor, clade_vertices, positions, annotation_layout, _
+    ) do geom, accessor, clade_nodes, positions, annotation_layout, _
         if _shared_clade_annotation_active(annotation_layout)
             return _shared_bracket_label_pixel_positions(
                 sc,
                 geom,
                 accessor,
-                clade_vertices,
+                clade_nodes,
                 annotation_layout,
             )
         end
@@ -1220,8 +1220,8 @@ The scale bar is visible by default only when both of the following are true:
   `:coalescenceage` — values that carry physical units.
 - `label` is non-empty after trimming whitespace.
 
-For topological layouts (`:vertexheights`, `:vertexlevels`, `:vertexdepths`,
-`:vertexcoords`, `:vertexpos`) or unlabeled bars, the scale bar defaults to
+For topological layouts (`:nodeheights`, `:nodelevels`, `:nodedepths`,
+`:nodecoords`, `:nodepos`) or unlabeled bars, the scale bar defaults to
 invisible. This default can be overridden by passing
 `scalebar_auto_visible = true` or `scalebar_auto_visible = false` explicitly.
 
@@ -1413,33 +1413,33 @@ end
 # ── LineagePlot composite recipe ──────────────────────────────────────────────
 
 """
-    lineageplot!(ax, rootvertex, accessor::LineageGraphAccessor; kwargs...) -> LineagePlot
+    lineageplot!(ax, rootnode, accessor::LineageGraphAccessor; kwargs...) -> LineagePlot
 
 Composite entry point. Computes a rectangular or circular layout from
-`rootvertex` and `accessor` and renders all visual layers: `EdgeLayer`,
-`VertexLayer`, `LeafLayer`, `LeafLabelLayer`, `VertexLabelLayer`,
+`rootnode` and `accessor` and renders all visual layers: `EdgeLayer`,
+`NodeLayer`, `LeafLayer`, `LeafLabelLayer`, `NodeLabelLayer`,
 `CladeHighlightLayer`, `CladeLabelLayer`, and `ScaleBarLayer`.
 
 `lineageunits` selects how process coordinates are computed (see
 `Geometry.rectangular_layout` for all values). `nothing` (default) detects
 the appropriate value automatically: `:edgelengths` when an `edgelength`
-accessor is present, `:vertexheights` otherwise.
+accessor is present, `:nodeheights` otherwise.
 
 `lineage_orientation = :radial` selects `Geometry.circular_layout`; all other
 values use `Geometry.rectangular_layout`, followed by owner-level rectangular
 embedding repair for vertical orientations.
 
 All layer attributes are exposed as namespaced keyword arguments (e.g.,
-`edge_color`, `leaf_label_func`, `vertex_label_threshold`). All are Observable-
+`edge_color`, `leaf_label_func`, `node_label_threshold`). All are Observable-
 native: updating `lp.edge_color = :red` changes the rendered edge color without
-re-calling `lineageplot!`. The `rootvertex` argument may be a plain value or an
+re-calling `lineageplot!`. The `rootnode` argument may be a plain value or an
 `Observable`; Makie wraps plain values in Observables automatically.
 
 # Arguments
 - `ax`: any Makie axis or scene.
-- `rootvertex`: the root vertex of the lineage graph.
+- `rootnode`: the root node of the lineage graph.
 - `accessor::LineageGraphAccessor`: accessor callables supplying `children`
-  and optional `edgelength`, `vertexvalue`, etc.
+  and optional `edgelength`, `nodevalue`, etc.
 
 # Keyword attributes
 - `lineageunits`: `nothing` or a `Symbol`; see `Geometry.rectangular_layout`.
@@ -1448,17 +1448,17 @@ re-calling `lineageplot!`. The `rootvertex` argument may be a plain value or an
   `circular_layout`.
 - `edge_color`, `edge_linewidth`, `edge_linestyle`, `edge_alpha`,
   `edge_visible`: forwarded to `EdgeLayer`.
-- `vertex_marker`, `vertex_color`, `vertex_markersize`, `vertex_strokecolor`,
-  `vertex_alpha`, `vertex_visible`: forwarded to `VertexLayer`.
+- `node_marker`, `node_color`, `node_markersize`, `node_strokecolor`,
+  `node_alpha`, `node_visible`: forwarded to `NodeLayer`.
 - `leaf_marker`, `leaf_color`, `leaf_markersize`, `leaf_strokecolor`,
   `leaf_alpha`, `leaf_visible`: forwarded to `LeafLayer`.
 - `leaf_label_func`, `leaf_label_font`, `leaf_label_fontsize`,
   `leaf_label_color`, `leaf_label_offset`, `leaf_label_italic`,
   `leaf_label_align`, `leaf_label_visible`: forwarded to `LeafLabelLayer`.
-- `vertex_label_func`, `vertex_label_threshold`, `vertex_label_position`,
-  `vertex_label_font`, `vertex_label_fontsize`, `vertex_label_color`,
-  `vertex_label_visible`: forwarded to `VertexLabelLayer`.
-- `clade_vertices`: vector of MRCA vertices shared by `CladeHighlightLayer`
+- `node_label_func`, `node_label_threshold`, `node_label_position`,
+  `node_label_font`, `node_label_fontsize`, `node_label_color`,
+  `node_label_visible`: forwarded to `NodeLabelLayer`.
+- `clade_nodes`: vector of MRCA nodes shared by `CladeHighlightLayer`
   and `CladeLabelLayer`. Default `Any[]`.
 - `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`,
   `clade_highlight_visible`: forwarded to `CladeHighlightLayer`.
@@ -1480,7 +1480,7 @@ For the non-mutating convenience entry point that creates a `Figure` and
 - `lp[:computed_geom][]` — current `LineageGraphGeometry`.
 - `lp[:resolved_lineageunits][]` — resolved `lineageunits` `Symbol`.
 """
-@recipe LineagePlot (rootvertex, accessor) begin
+@recipe LineagePlot (rootnode, accessor) begin
     "How the lineage axis is embedded in the 2D scene: :left_to_right, :right_to_left, :bottom_to_top, :top_to_bottom, or :radial."
     lineage_orientation = :left_to_right
     "Selects how process coordinates are computed. nothing triggers auto-detection."
@@ -1490,20 +1490,20 @@ For the non-mutating convenience entry point that creates a `Figure` and
     rectangular_orientation_owner = :plot
 
     # ── EdgeLayer ─────────────────────────────────────────────────────────────
-    "Edge color; uniform Makie color or (fromvertex, tovertex) -> color function."
+    "Edge color; uniform Makie color or (src, dst) -> color function."
     edge_color = :black
     edge_linewidth = 1.0
     edge_linestyle = :solid
     edge_alpha = 1.0
     edge_visible = true
 
-    # ── VertexLayer ───────────────────────────────────────────────────────────
-    vertex_marker = :circle
-    vertex_color = :black
-    vertex_markersize = 8
-    vertex_strokecolor = :black
-    vertex_alpha = 1.0
-    vertex_visible = true
+    # ── NodeLayer ─────────────────────────────────────────────────────────────
+    node_marker = :circle
+    node_color = :black
+    node_markersize = 8
+    node_strokecolor = :black
+    node_alpha = 1.0
+    node_visible = true
 
     # ── LeafLayer ─────────────────────────────────────────────────────────────
     leaf_marker = :circle
@@ -1514,7 +1514,7 @@ For the non-mutating convenience entry point that creates a `Figure` and
     leaf_visible = true
 
     # ── LeafLabelLayer ────────────────────────────────────────────────────────
-    "Callable vertex -> String for leaf labels; nothing uses vertexvalue or string(v)."
+    "Callable node -> String for leaf labels; nothing uses nodevalue or string(node)."
     leaf_label_func = nothing
     leaf_label_font = :regular
     leaf_label_fontsize = 12
@@ -1525,21 +1525,21 @@ For the non-mutating convenience entry point that creates a `Figure` and
     leaf_label_align = (:left, :center)
     leaf_label_visible = true
 
-    # ── VertexLabelLayer ──────────────────────────────────────────────────────
-    "Callable vertex -> Any supplying vertex label values."
-    vertex_label_func = (v -> "")
-    "Predicate vertex -> Bool; only vertices returning true are labelled. Default: none (opt-in)."
-    vertex_label_threshold = (v -> false)
-    "Label position: :vertex or :toward_parent."
-    vertex_label_position = :vertex
-    vertex_label_font = :regular
-    vertex_label_fontsize = 10
-    vertex_label_color = :gray50
-    vertex_label_visible = true
+    # ── NodeLabelLayer ────────────────────────────────────────────────────────
+    "Callable node -> Any supplying node label values."
+    node_label_func = (node -> "")
+    "Predicate node -> Bool; only nodes returning true are labelled. Default: none (opt-in)."
+    node_label_threshold = (node -> false)
+    "Label position: :node or :toward_parent."
+    node_label_position = :node
+    node_label_font = :regular
+    node_label_fontsize = 10
+    node_label_color = :gray50
+    node_label_visible = true
 
-    # ── CladeHighlightLayer (shares clade_vertices with CladeLabelLayer) ──────
-    "Vector of MRCA vertices whose subtrees are highlighted and labelled."
-    clade_vertices = Any[]
+    # ── CladeHighlightLayer (shares clade_nodes with CladeLabelLayer) ─────────
+    "Vector of MRCA nodes whose subtrees are highlighted and labelled."
+    clade_nodes = Any[]
     clade_highlight_color = Makie.RGBAf(0.2f0, 0.6f0, 1.0f0, 0.15f0)
     clade_highlight_alpha = 0.15
     "Pixel-space expansion of clade bounding box on each side."
@@ -1548,7 +1548,7 @@ For the non-mutating convenience entry point that creates a `Figure` and
 
     # ── CladeLabelLayer ───────────────────────────────────────────────────────
     "Callable mrca -> String producing the bracket label."
-    clade_label_func = (v -> "")
+    clade_label_func = (node -> "")
     clade_label_color = :black
     clade_label_fontsize = 11
     "Pixel-space offset from the leaf span toward the bracket bar."
@@ -1576,7 +1576,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     # _initial_lu captures the first run's value for use as ScaleBarLayer's
     # non-reactive third positional arg. Ref{Symbol} gives JET a concrete type,
     # avoiding the union-typed `lp.lineageunits[]` / `lp.accessor[]` pattern.
-    _initial_lu = Ref{Symbol}(:vertexheights)
+    _initial_lu = Ref{Symbol}(:nodeheights)
     map!(lp.attributes, [:lineageunits, :accessor], :resolved_lineageunits) do lu, acc
         sym = _resolve_lineageunits_stub(lu, acc)::Symbol
         _initial_lu[] = sym
@@ -1591,12 +1591,12 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     # compute-plots.jl:394: `attr[sym].value = RefValue{Any}(arg)`). The
     # type assertion `acc::LineageGraphAccessor` narrows the type for dispatch.
     # This is a justified exception to STYLE-julia.md §1.12 (existential
-    # parametricity): the accessor type parameters C,E,V,B,CA,VC,VP are
+    # parametricity): the accessor type parameters C,E,NodeT,B,CA,NC,NP are
     # determined at call time and cannot be known at recipe definition time.
     # Same pattern as LineageAxis.last_geom::Observable{Any}.
     map!(
         lp.attributes,
-        [:rootvertex, :accessor, :resolved_lineageunits, :lineage_orientation, :rectangular_orientation_owner],
+        [:rootnode, :accessor, :resolved_lineageunits, :lineage_orientation, :rectangular_orientation_owner],
         :computed_geom,
     ) do rv, acc, lu, lo, orientation_owner
         resolved_acc = acc::LineageGraphAccessor
@@ -1639,7 +1639,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     # as positional arguments where possible.
     #
     # Reactive chain:
-    #   rootvertex changes
+    #   rootnode changes
     #     → :computed_geom recomputes
     #       → each sub-layer's map! on [:geom, ...] reruns
     #         → render updates
@@ -1652,26 +1652,26 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
 
     cladehighlightlayer!(
         lp, lp[:computed_geom], lp[:accessor];
-        clade_vertices = lp[:clade_vertices],
+        clade_nodes = lp[:clade_nodes],
         color = lp[:clade_highlight_color],
         alpha = lp[:clade_highlight_alpha],
         padding = lp[:clade_highlight_padding],
         visible = lp[:clade_highlight_visible],
     )
 
-    # Internal vertex markers are rendered in two passes so the marker fill can
+    # Internal node markers are rendered in two passes so the marker fill can
     # sit under the branches while the outline remains visible on top. This
     # preserves junction continuity without discarding marker styling.
-    vertexlayer!(
+    nodelayer!(
         lp, lp[:computed_geom], lp[:accessor];
-        marker = lp[:vertex_marker],
-        color = lp[:vertex_color],
-        markersize = lp[:vertex_markersize],
-        strokecolor = lp[:vertex_strokecolor],
-        alpha = lp[:vertex_alpha],
+        marker = lp[:node_marker],
+        color = lp[:node_color],
+        markersize = lp[:node_markersize],
+        strokecolor = lp[:node_strokecolor],
+        alpha = lp[:node_alpha],
         render_fill = true,
         render_stroke = false,
-        visible = lp[:vertex_visible],
+        visible = lp[:node_visible],
     )
 
     edgelayer!(
@@ -1683,16 +1683,16 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         visible = lp[:edge_visible],
     )
 
-    vertexlayer!(
+    nodelayer!(
         lp, lp[:computed_geom], lp[:accessor];
-        marker = lp[:vertex_marker],
-        color = lp[:vertex_color],
-        markersize = lp[:vertex_markersize],
-        strokecolor = lp[:vertex_strokecolor],
-        alpha = lp[:vertex_alpha],
+        marker = lp[:node_marker],
+        color = lp[:node_color],
+        markersize = lp[:node_markersize],
+        strokecolor = lp[:node_strokecolor],
+        alpha = lp[:node_alpha],
         render_fill = false,
         render_stroke = true,
-        visible = lp[:vertex_visible],
+        visible = lp[:node_visible],
     )
 
     leaflayer!(
@@ -1718,20 +1718,20 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         visible = lp[:leaf_label_visible],
     )
 
-    vertexlabellayer!(
+    nodelabellayer!(
         lp, lp[:computed_geom], lp[:accessor];
-        value_func = lp[:vertex_label_func],
-        threshold = lp[:vertex_label_threshold],
-        position = lp[:vertex_label_position],
-        font = lp[:vertex_label_font],
-        fontsize = lp[:vertex_label_fontsize],
-        color = lp[:vertex_label_color],
-        visible = lp[:vertex_label_visible],
+        value_func = lp[:node_label_func],
+        threshold = lp[:node_label_threshold],
+        position = lp[:node_label_position],
+        font = lp[:node_label_font],
+        fontsize = lp[:node_label_fontsize],
+        color = lp[:node_label_color],
+        visible = lp[:node_label_visible],
     )
 
     cladelabellayer!(
         lp, lp[:computed_geom], lp[:accessor];
-        clade_vertices = lp[:clade_vertices],
+        clade_nodes = lp[:clade_nodes],
         label_func = lp[:clade_label_func],
         color = lp[:clade_label_color],
         fontsize = lp[:clade_label_fontsize],
@@ -1766,14 +1766,14 @@ export LineagePlot,
     lineageplot!,
     EdgeLayer,
     edgelayer!,
-    VertexLayer,
-    vertexlayer!,
+    NodeLayer,
+    nodelayer!,
     LeafLayer,
     leaflayer!,
     LeafLabelLayer,
     leaflabellayer!,
-    VertexLabelLayer,
-    vertexlabellayer!,
+    NodeLabelLayer,
+    nodelabellayer!,
     CladeHighlightLayer,
     cladehighlightlayer!,
     CladeLabelLayer,

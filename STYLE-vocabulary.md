@@ -1,6 +1,6 @@
 ---
 date-created: 2026-04-18T23:01:00
-date-revised: 2026-04-19T00:00:00
+date-revised: 2026-04-24T00:00:00
 status: ratified
 ---
 
@@ -37,11 +37,11 @@ and the direction of the modeled process. Has two values:
 
 - `:forward` — increasing process coordinates move in the root-to-leaf
   direction (forward time). `lineageunits` values `:edgelengths`,
-  `:branchingtime`, `:vertexdepths`, and `:vertexlevels` produce forward
-  process coordinates (rootvertex = 0, increases toward leaves).
+  `:branchingtime`, `:nodedepths`, and `:nodelevels` produce forward
+  process coordinates (rootnode = 0, increases toward leaves).
 - `:backward` — increasing process coordinates move in the leaf-to-root
   direction (backward time, as in coalescent models). `lineageunits` values
-  `:coalescenceage` and `:vertexheights` produce backward process coordinates
+  `:coalescenceage` and `:nodeheights` produce backward process coordinates
   (leaves = 0, increases toward root).
 
 `axis_polarity` is a property of the data and the active `lineageunits` value,
@@ -63,7 +63,7 @@ semantic documentation.
 **Part of speech:** noun (geometry concept); identifier
 
 **Definition:** The smallest axis-aligned rectangle that encloses all
-`vertex_positions` in a layout. Returned by `boundingbox(::LineageGraphGeometry)`.
+`node_positions` in a layout. Returned by `boundingbox(::LineageGraphGeometry)`.
 Written as one word without underscore.
 
 **Proscribed alternates:** `bounding_box`, `extent`, `limits`, `bounds`.
@@ -75,32 +75,32 @@ Written as one word without underscore.
 **Part of speech:** noun (data concept); accessor name
 
 **Definition (concept):** The cumulative sum of `edgelength` values on the
-directed path from `rootvertex` to a given vertex. Represents the total
+directed path from `rootnode` to a given node. Represents the total
 evolutionary or temporal distance accumulated since the root. Also called
 "divergence time" in phylogenetic prose.
 
-- `branchingtime(rootvertex) = 0` by definition.
+- `branchingtime(rootnode) = 0` by definition.
 - `branchingtime(child) = branchingtime(parent) + edgelength(parent, child)`.
 - Polarity: increases in the forward-time direction (root → leaves), i.e., the
   x-axis reads left = past, right = present for a standard chronogram.
 
-**Definition (as accessor):** The callable `branchingtime(vertex) -> Float64`
-returning a pre-computed branching time for a vertex. Supplied as a keyword
+**Definition (as accessor):** The callable `branchingtime(node) -> Float64`
+returning a pre-computed branching time for a node. Supplied as a keyword
 argument when `lineageunits = :branchingtime`, for cases where the user has a
 vector of pre-computed divergence times and does not want to re-derive them
 from per-edge lengths.
 
 **Relationship to `lineageunits = :edgelengths`:** The `:edgelengths`
 `lineageunits` value computes `branchingtime` on the fly by summing the
-`edgelength` accessor along the path from `rootvertex`. The `:branchingtime`
+`edgelength` accessor along the path from `rootnode`. The `:branchingtime`
 `lineageunits` value bypasses that traversal and reads the value directly from
 the `branchingtime` accessor. Both `lineageunits` values produce identical
-vertex x-coordinates when the supplied times are consistent with the edge
+node x-coordinates when the supplied times are consistent with the edge
 lengths.
 
 **Relationship to `coalescenceage`:** `branchingtime` and `coalescenceage` have
 opposite polarity. For a strictly ultrametric tree:
-`branchingtime(v) + coalescenceage(v) = branchingtime(deepest_leaf)`.
+`branchingtime(node) + coalescenceage(node) = branchingtime(deepest_leaf)`.
 
 **Proscribed alternates:** `depth`, `distance_from_root`, `divergence_time`
 (acceptable in prose only), `node_age` (different concept).
@@ -111,9 +111,9 @@ opposite polarity. For a strictly ultrametric tree:
 
 **Part of speech:** noun (accessor name)
 
-**Definition:** The callable accessor `children(vertex) -> iterable` that
-returns zero or more child vertices of the given vertex. The only required
-accessor in the LineagesMakie input contract. A vertex for which `children`
+**Definition:** The callable accessor `children(node) -> iterable` that
+returns zero or more child nodes of the given node. The only required
+accessor in the LineagesMakie input contract. A node for which `children`
 returns an empty iterable is a leaf.
 
 **Proscribed alternates:** `child_func`, `get_children`, `offspring`,
@@ -175,9 +175,9 @@ always qualify: the phylogenetic `"topology"` (in quotation marks).
 
 **Part of speech:** noun (data concept); accessor name
 
-**Definition (concept):** The distance from a given vertex to the leaves,
+**Definition (concept):** The distance from a given node to the leaves,
 measured in cumulative `edgelength` units. Represents the elapsed time since
-the evolutionary or coalescent event at that vertex. Also called "coalescent
+the evolutionary or coalescent event at that node. Also called "coalescent
 age" or "backward time" in phylogenetic prose.
 
 - `coalescenceage(leaf) = 0` by definition; a leaf at the present has age zero.
@@ -189,7 +189,7 @@ age" or "backward time" in phylogenetic prose.
   when `lineageunits = :coalescenceage`.
 
 **Ultrametricity assumption:** `coalescenceage` is well-defined only for
-ultrametric trees (all paths from any vertex to any of its leaf descendants have
+ultrametric trees (all paths from any node to any of its leaf descendants have
 equal total `edgelength`). For non-ultrametric trees, three policies are
 available via a `nonultrametric` keyword argument:
 - `:minimum` — use the minimum over all descendant paths to a leaf.
@@ -198,18 +198,18 @@ available via a `nonultrametric` keyword argument:
   inconsistent values.
 
 **Computation from edge lengths:** Can be computed in a post-order traversal:
-leaves are assigned 0; each internal vertex is assigned
-`edgelength(v, c) + coalescenceage(c)` for any child `c` (or resolved via
+leaves are assigned 0; each internal node is assigned
+`edgelength(parent, child) + coalescenceage(child)` for any child (or resolved via
 the `nonultrametric` policy).
 
-**Definition (as accessor):** The callable `coalescenceage(vertex) -> Float64`
-returning the pre-computed coalescence age for a vertex. Supplied as a keyword
+**Definition (as accessor):** The callable `coalescenceage(node) -> Float64`
+returning the pre-computed coalescence age for a node. Supplied as a keyword
 argument when `lineageunits = :coalescenceage`.
 
 **Relationship to `branchingtime`:** See the `branchingtime` entry.
 
-**Proscribed alternates:** `age` (as an identifier), `vertexage`,
-`node_age`, `vertex_age`, `age_func`, `divergence_time` (different concept).
+**Proscribed alternates:** `age` (as an identifier), `node_age`,
+`vertex_age`, `vertexage`, `age_func`, `divergence_time` (different concept).
 
 ---
 
@@ -236,11 +236,11 @@ along the lineage axis. Has two values:
 - `:standard` (default) — increasing process coordinates map to increasing
   screen position along `lineage_orientation` (right in `:left_to_right`
   orientation, up in `:bottom_to_top`). With forward axis polarity, this places
-  the rootvertex at the left and leaves at the right.
+  the rootnode at the left and leaves at the right.
 - `:reversed` — increasing process coordinates map to decreasing screen
   position. Allows, for example, a forward-time tree to be drawn root-at-right
   (paleontological or stratigraphic convention), or a `:coalescenceage` tree to
-  be drawn with the rootvertex at the left and leaves at the right.
+  be drawn with the rootnode at the left and leaves at the right.
 
 `display_polarity` is independent of `axis_polarity`. The combination of the
 two determines how the biological direction of the process maps to the screen.
@@ -254,7 +254,7 @@ two determines how the biological direction of the process maps to the screen.
 
 **Part of speech:** noun (structural concept)
 
-**Definition:** A directed connection from `fromvertex` to `tovertex`. In all
+**Definition:** A directed connection from `src` to `dst`. In all
 code identifiers, the term `edge` is used exclusively. In biological prose,
 "branch" is acceptable but should not appear in any identifier, keyword
 argument, type name, or symbol.
@@ -271,14 +271,14 @@ argument, type name, or symbol.
 edge. Represents evolutionary distance, time span, or any analogous
 non-negative quantity. Written as one word without underscore.
 
-**Definition (as accessor):** The callable `edgelength(fromvertex, tovertex)`,
+**Definition (as accessor):** The callable `edgelength(src, dst)`,
 which returns either:
 - a `Float64` value in data units, or
 - a named tuple `(; value::Float64, units::Symbol)` with an explicit unit
   for conversion.
 
 When `edgelength` is not supplied, layout defaults to
-`lineageunits = :vertexheights` (leaf-aligned clade graph plot).
+`lineageunits = :nodeheights` (leaf-aligned clade graph plot).
 
 **Proscribed alternates:** `branch_length`, `edge_length` (underscored),
 `weight`, `len`, `w`.
@@ -301,15 +301,16 @@ this concept), `paths` (unqualified, proscribed for this concept),
 
 ---
 
-### `fromvertex`
+### `src`
 
 **Part of speech:** noun (accessor argument)
 
-**Definition:** The source (parent) vertex in a directed edge. First positional
-argument of `edgelength(fromvertex, tovertex)` and any other edge-level
-accessor. Written as one word without underscore.
+**Definition:** The source (parent) node in a directed edge. First positional
+argument of `edgelength(src, dst)` and any other edge-level accessor.
+Follows the `Graphs.jl` ecosystem convention.
 
-**Proscribed alternates:** `parent`, `v1`, `src`, `from_vertex`.
+**Proscribed alternates:** `fromnode`, `fromvertex`, `parent`, `v1`, `s`,
+`from_node`, `from_vertex`.
 
 ---
 
@@ -321,10 +322,10 @@ accessor. Written as one word without underscore.
 tree, equivalently the `branchingtime` of the deepest leaf. For an ultrametric
 tree, equals the `coalescenceage` of the `rootvertex`.
 
-**Definition (per-vertex):** The path distance (number of edges, ignoring
-`edgelength` values) from a given vertex to its farthest descendant leaf. Used
-by the `:vertexheights` `lineageunits` value: all leaves have height = 0, and
-each internal vertex has height = max(heights of children) + 1. This naturally
+**Definition (per-node):** The path distance (number of edges, ignoring
+`edgelength` values) from a given node to its farthest descendant leaf. Used
+by the `:nodeheights` `lineageunits` value: all leaves have height = 0, and
+each internal node has height = max(heights of children) + 1. This naturally
 aligns all leaves at the same x-coordinate (the classic cladogram appearance).
 `height` is the clade graph (unweighted edge) analogue of `coalescenceage`.
 
@@ -360,12 +361,12 @@ here to reserve it and prevent incompatible uses in earlier tiers.
 
 **Part of speech:** noun (role)
 
-**Definition:** A vertex for which `children` returns an empty iterable. The
-terminal/outermost vertex in a tree. In code, `leaf` (singular) and `leaves`
+**Definition:** A node for which `children` returns an empty iterable. The
+terminal/outermost node in a tree. In code, `leaf` (singular) and `leaves`
 (plural or iterator). The AbstractTrees.jl interface uses the same term
 (`Leaves`, `isleaf`), which confirms this choice.
 
-There is no assumed biological sense. A "leaf" is simply a vertex with no
+There is no assumed biological sense. A "leaf" is simply a node with no
 children.
 
 **Proscribed alternates:** `tip` (proscribed in all contexts — code,
@@ -445,27 +446,27 @@ this keyword selects the unit and direction of the primary lineage axis.
 
 The value of `lineageunits` determines which accessor is consulted to compute
 the process coordinate (x in rectangular layouts, radial in circular) of each
-vertex, and what `axis_polarity` `LineageAxis` infers:
+node, and what `axis_polarity` `LineageAxis` infers:
 
-- `:edgelengths` — cumulative edge lengths from rootvertex; requires `edgelength`
+- `:edgelengths` — cumulative edge lengths from rootnode; requires `edgelength`
   accessor; `:forward` polarity.
 - `:branchingtime` — pre-supplied branching times; requires `branchingtime`
   accessor; `:forward` polarity.
 - `:coalescenceage` — pre-supplied coalescence ages; requires `coalescenceage`
   accessor; leaf = 0, increases toward root; `:backward` polarity.
-- `:vertexdepths` — cumulative path distance (edge count) from rootvertex; no
+- `:nodedepths` — cumulative path distance (edge count) from rootnode; no
   accessor required; `:forward` polarity.
-- `:vertexheights` — edge count to farthest leaf; leaves at 0; default when no
+- `:nodeheights` — edge count to farthest leaf; leaves at 0; default when no
   `edgelength` accessor is supplied; `:backward` polarity.
-- `:vertexlevels` — integer level from rootvertex; equal inter-level spacing;
+- `:nodelevels` — integer level from rootnode; equal inter-level spacing;
   no accessor required; `:forward` polarity.
-- `:vertexcoords` — user-supplied data coordinates; requires `vertexcoords`
+- `:nodecoords` — user-supplied data coordinates; requires `nodecoords`
   accessor; polarity is user-defined.
-- `:vertexpos` — user-supplied pixel coordinates; requires `vertexpos` accessor;
+- `:nodepos` — user-supplied pixel coordinates; requires `nodepos` accessor;
   polarity is user-defined.
 
 Default selection: `:edgelengths` if an `edgelength` accessor is supplied;
-`:vertexheights` otherwise.
+`:nodeheights` otherwise.
 
 Written as one word without underscore, consistent with `edgelength`,
 `coalescenceage`, `branchingtime`.
@@ -485,9 +486,9 @@ corresponds to the transverse (leaf-spacing) dimension.
 
 Values:
 - `:left_to_right` (default for rectangular layouts) — the lineage axis runs
-  along the x-axis; the transverse axis is y; rootvertex is at the left by
+  along the x-axis; the transverse axis is y; rootnode is at the left by
   default.
-- `:right_to_left` — lineage axis runs along x, transverse is y; rootvertex
+- `:right_to_left` — lineage axis runs along x, transverse is y; rootnode
   is at the right by default (use with `:standard` `display_polarity` and a
   leaf-relative `lineageunits` such as `:coalescenceage`, or with `:reversed`
   `display_polarity` and a root-relative `lineageunits` value).
@@ -522,12 +523,12 @@ acceptable synonym; in code, `marker` is the only permitted term.
 
 **Part of speech:** noun (conceptual / documentation term)
 
-**Definition:** The scalar value that positions a vertex along the lineage axis.
+**Definition:** The scalar value that positions a node along the lineage axis.
 In any given plot, the process coordinate is determined by the active
 `lineageunits` value: `branchingtime` values for `lineageunits = :branchingtime`
 or `:edgelengths`, `coalescenceage` values for `lineageunits = :coalescenceage`,
-path distances (edge counts) for `:vertexlevels` / `:vertexdepths` / `:vertexheights`,
-or user-supplied coordinates for `:vertexcoords` / `:vertexpos`.
+path distances (edge counts) for `:nodelevels` / `:nodedepths` / `:nodeheights`,
+or user-supplied coordinates for `:nodecoords` / `:nodepos`.
 
 This is a documentation and design term that unifies all `lineageunits` values
 under a single concept. It does not appear as a code identifier (there is no
@@ -543,29 +544,30 @@ process-coordinate values; `display_polarity` describes their screen direction.
 
 ---
 
-### `rootvertex`
+### `rootnode`
 
-**Part of speech:** noun (role); keyword argument name
+**Part of speech:** noun (role); positional argument name
 
-**Definition:** The unique vertex with no parent; the starting point of tree
+**Definition:** The unique node with no parent; the starting point of tree
 traversal. Passed as the first positional argument to `lineageplot`,
 `rectangular_layout`, `circular_layout`, and related functions. Written as one
 word without underscore.
 
-**Proscribed alternates:** `root`, `root_vertex`, `seed`, `seed_vertex`,
-`source`, `origin`.
+**Proscribed alternates:** `root`, `rootvertex`, `root_node`, `root_vertex`,
+`seed`, `seed_node`, `source`, `origin`.
 
 ---
 
-### `tovertex`
+### `dst`
 
 **Part of speech:** noun (accessor argument)
 
-**Definition:** The destination (child) vertex in a directed edge. Second
-positional argument of `edgelength(fromvertex, tovertex)` and any other
-edge-level accessor. Written as one word without underscore.
+**Definition:** The destination (child) node in a directed edge. Second
+positional argument of `edgelength(src, dst)` and any other edge-level accessor.
+Follows the `Graphs.jl` ecosystem convention.
 
-**Proscribed alternates:** `child`, `v2`, `dst`, `to_vertex`.
+**Proscribed alternates:** `tonode`, `tovertex`, `child`, `v2`, `d`,
+`to_node`, `to_vertex`.
 
 ---
 
@@ -587,44 +589,45 @@ layout types. It does not appear as a code identifier.
 
 ---
 
-### `vertex` / `vertices`
+### `node` / `nodes`
 
 **Part of speech:** noun (structural concept)
 
-**Definition:** Any element of the graph: the `rootvertex`, any internal
-vertex, or any `leaf`. The generic term for a graph element. `vertices` is
+**Definition:** Any element of the graph: the `rootnode`, any internal
+node, or any `leaf`. The generic term for a graph element. `nodes` is
 the plural. In compound role-specific names, use the role term directly
-(`leaf`, `rootvertex`, `internal vertex` in prose) rather than `node`.
+(`leaf`, `rootnode`, `internal node` in prose) rather than repeating `node`
+where the role already implies it.
 
-**Proscribed alternates (as a generic term):** `node`. The word `node` must not
-appear as a generic synonym for `vertex` in any identifier, field name, keyword,
-type name, or symbol.
+**Proscribed alternates (as a generic term):** `vertex`, `vertices`. The words
+`vertex` / `vertices` must not appear as generic synonyms for `node` in any
+identifier, field name, keyword, type name, or symbol.
 
 ---
 
-### `vertex_positions`
+### `node_positions`
 
 **Part of speech:** noun (geometry)
 
-**Definition:** A `Dict` (or equivalent) mapping each vertex to its 2D
+**Definition:** A `Dict` (or equivalent) mapping each node to its 2D
 coordinate `Point2f` in layout space. A field of `LineageGraphGeometry`. Written with
 underscore (multi-word field name).
 
-**Proscribed alternates:** `node_positions`, `positions` (unqualified),
+**Proscribed alternates:** `vertex_positions`, `positions` (unqualified),
 `coords`.
 
 ---
 
-### `vertexvalue`
+### `nodevalue`
 
 **Part of speech:** noun (accessor name)
 
-**Definition:** The callable `vertexvalue(vertex) -> Any` returning arbitrary
-per-vertex data: bootstrap support, posterior probability, taxon name, age, or
+**Definition:** The callable `nodevalue(node) -> Any` returning arbitrary
+per-node data: bootstrap support, posterior probability, taxon name, age, or
 any domain value. Used by label and color-mapping layers. Written as one word
 without underscore.
 
-**Proscribed alternates:** `nodevalue`, `node_value`, `vertex_value`
+**Proscribed alternates:** `vertexvalue`, `vertex_value`, `node_value`
 (underscored), `get_node_data`.
 
 ---
@@ -833,10 +836,10 @@ required artifact set.
 | Canonical recipe type | Canonical function | Former name (proscribed) |
 |---|---|---|
 | `EdgeLayer` | `edgelayer!` | `BranchLayer`, `branchlayer!` |
-| `VertexLayer` | `vertexlayer!` | `NodeLayer`, `nodelayer!` |
+| `NodeLayer` | `nodelayer!` | `VertexLayer`, `vertexlayer!` |
 | `LeafLayer` | `leaflayer!` | `TipLayer`, `tiplayer!` |
 | `LeafLabelLayer` | `leaflabellayer!` | `TipLabelLayer`, `tiplabellayer!` |
-| `VertexLabelLayer` | `vertexlabellayer!` | `NodeLabelLayer`, `nodelabellayer!` |
+| `NodeLabelLayer` | `nodelabellayer!` | `VertexLabelLayer`, `vertexlabellayer!` |
 | `CladeHighlightLayer` | `cladehighlightlayer!` | — |
 | `CladeLabelLayer` | `cladelabellayer!` | — |
 | `ScaleBarLayer` | `scalebarlayer!` | — |
@@ -846,38 +849,61 @@ required artifact set.
 
 | Symbol | Accessor required | x-coordinate source | Polarity | `axis_polarity` |
 |---|---|---|---|---|
-| `:edgelengths` | `edgelength` | Cumulative `edgelength(fromvertex, tovertex)` from `rootvertex`; computes `branchingtime` on the fly | Root = 0, increases toward leaves | `:forward` |
-| `:branchingtime` | `branchingtime` | `branchingtime(vertex)` directly; user pre-supplies divergence times | Root = 0, increases toward leaves | `:forward` |
-| `:coalescenceage` | `coalescenceage` | `coalescenceage(vertex)`; requires ultrametric tree (or `nonultrametric` policy) | Leaf = 0, increases toward root | `:backward` |
-| `:vertexdepths` | none | Cumulative path distance (edge count) from `rootvertex` (all edge weights = 1) | Root = 0, increases toward leaves | `:forward` |
-| `:vertexheights` | none | Per-vertex height (path distance to farthest leaf); all leaves at x = 0; clade graph (unweighted) analogue of `:coalescenceage` | Leaf = 0, increases toward root | `:backward` |
-| `:vertexlevels` | none | Integer level = edge count from `rootvertex`; equal spacing between levels; clade graph (unweighted) analogue of `:branchingtime` | Root = 0, increases toward leaves | `:forward` |
-| `:vertexcoords` | `vertexcoords` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
-| `:vertexpos` | `vertexpos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
+| `:edgelengths` | `edgelength` | Cumulative `edgelength(src, dst)` from `rootnode`; computes `branchingtime` on the fly | Root = 0, increases toward leaves | `:forward` |
+| `:branchingtime` | `branchingtime` | `branchingtime(node)` directly; user pre-supplies divergence times | Root = 0, increases toward leaves | `:forward` |
+| `:coalescenceage` | `coalescenceage` | `coalescenceage(node)`; requires ultrametric tree (or `nonultrametric` policy) | Leaf = 0, increases toward root | `:backward` |
+| `:nodedepths` | none | Cumulative path distance (edge count) from `rootnode` (all edge weights = 1) | Root = 0, increases toward leaves | `:forward` |
+| `:nodeheights` | none | Per-node height (path distance to farthest leaf); all leaves at x = 0; clade graph (unweighted) analogue of `:coalescenceage` | Leaf = 0, increases toward root | `:backward` |
+| `:nodelevels` | none | Integer level = edge count from `rootnode`; equal spacing between levels; clade graph (unweighted) analogue of `:branchingtime` | Root = 0, increases toward leaves | `:forward` |
+| `:nodecoords` | `nodecoords` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
+| `:nodepos` | `nodepos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
 
 **Default `lineageunits`:** `:edgelengths` if an `edgelength` accessor is
-supplied; `:vertexheights` otherwise.
+supplied; `:nodeheights` otherwise.
 
 **Polarity summary:** `lineageunits` values that are root-relative
-(`:edgelengths`, `:branchingtime`, `:vertexdepths`, `:vertexlevels`) have
+(`:edgelengths`, `:branchingtime`, `:nodedepths`, `:nodelevels`) have
 `:forward` `axis_polarity` and assign the root x = 0 increasing toward the
 leaves. `lineageunits` values that are leaf-relative (`:coalescenceage`,
-`:vertexheights`) have `:backward` `axis_polarity` and assign leaves x = 0
+`:nodeheights`) have `:backward` `axis_polarity` and assign leaves x = 0
 increasing toward the root. With the default `display_polarity = :standard`
 and `lineage_orientation = :left_to_right`, forward `lineageunits` values
 place leaves at the right; backward `lineageunits` values place the
-rootvertex at the right.
+rootnode at the right.
 
 ## Compound-word naming convention
 
 Compound accessor names and domain-specific identifiers in this package are
 written without underscores when the compound reads naturally as a single
-concept: `edgelength`, `vertexvalue`, `coalescenceage`, `branchingtime`,
-`fromvertex`, `tovertex`, `rootvertex`, `boundingbox`, `lineageunits`. This is
-consistent with
+concept: `edgelength`, `nodevalue`, `coalescenceage`, `branchingtime`,
+`rootnode`, `boundingbox`, `lineageunits`. This is consistent with
 STYLE-julia.md §2.1, which permits omitting underscores when the name is not
 hard to read.
 
-Multi-word field names on structs retain underscores: `vertex_positions`,
+Edge-endpoint parameters `src` and `dst` are short conventional forms (3
+characters each) following the `Graphs.jl` ecosystem; they are an approved
+exception to the "full word preferred" rule in STYLE-julia.md §2.4.
+
+Multi-word field names on structs retain underscores: `node_positions`,
 `edge_shapes`, `leaf_order`, `leaf_spacing`, `axis_polarity`, `display_polarity`,
 `lineage_orientation`, `interval_schema`.
+
+## Project-specific short-form canonical table
+
+The table below records this project's canonical identifier forms for each
+domain concept, governed jointly by STYLE-julia.md §2.4 (identifier form rules)
+and this document (lexeme choices). All proscribed forms in the right column
+must not appear in any identifier, field name, keyword, type name, or symbol.
+
+| Concept | Canonical form | Type-param form | Proscribed short forms |
+|---|---|---|---|
+| A generic graph node | `node` (full word) | `NodeT` | `n`, `nd`, `v`, `V` |
+| Root node | `rootnode` (one word) | — | `root`, `rootvertex`, `root_node` |
+| Edge source (parent node) | `src` | — | `fromnode`, `fromvertex`, `s`, `from_node` |
+| Edge destination (child node) | `dst` | — | `tonode`, `tovertex`, `d`, `to_node` |
+| Indexed nodes | `node1`, `node2` | — | `n1`, `n2`, `v1`, `v2` |
+| Child node (loop variable) | `child` | — | `c`, `ch` (when meaning child node) |
+| Children collection (local var) | `child_collection` | — | `ch`, `children` (collision with `AbstractTrees.children`) |
+| Node identity type parameter | — | `NodeT` | `V`, `N`, `T` |
+| Collection of all nodes | `all_nodes` | — | `all_vertices`, `vs` |
+| Node data accessor | `nodecoords` / `nodepos` | `NC` / `NP` | `vertexcoords`, `vertexpos`, `vc`, `vp` |

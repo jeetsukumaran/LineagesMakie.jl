@@ -15,12 +15,12 @@ using ..Accessors: LineageGraphAccessor, is_leaf, leaves, preorder
 # ── LineageGraphGeometry ────────────────────────────────────────────────────────
 
 """
-    LineageGraphGeometry{V}
+    LineageGraphGeometry{NodeT}
 
 Immutable struct holding the computed 2D layout of a lineage graph.
 
-`V` is the vertex identity type. In generic use `V` is `Any`; callers that
-work with a uniform vertex type may instantiate a more specific `V` for
+`NodeT` is the node identity type. In generic use `NodeT` is `Any`; callers that
+work with a uniform node type may instantiate a more specific `NodeT` for
 better type-inference downstream.
 
 Coordinate convention: the first component of each `Point2f` is the process
@@ -29,25 +29,25 @@ coordinate (primary lineage axis); the second is the transverse coordinate
 coordinate is on the x-axis and the transverse coordinate is on the y-axis.
 
 Fields:
-- `vertex_positions::Dict{V,Point2f}`: maps each vertex to its `Point2f` position.
+- `node_positions::Dict{NodeT,Point2f}`: maps each node to its `Point2f` position.
 - `edge_shapes::Vector{Point2f}`: all edge polylines concatenated into a single
   vector with `Point2f(NaN, NaN)` separators between shapes. Each edge occupies
   exactly 4 entries (3 geometry points + 1 NaN separator). Suitable for a single
   `lines!` call.
-- `edges::Vector{Tuple{V,V}}`: `(fromvertex, tovertex)` pairs in the same
+- `edges::Vector{Tuple{NodeT,NodeT}}`: `(src, dst)` pairs in the same
   traversal order as `edge_shapes`. `edges[i]` corresponds to the i-th
   NaN-terminated group of 4 points in `edge_shapes`. Used by rendering layers
   to expand per-edge attribute functions without re-traversing the source tree.
-- `leaf_order::Vector{V}`: leaves in the order they appear along the transverse
+- `leaf_order::Vector{NodeT}`: leaves in the order they appear along the transverse
   axis (preorder depth-first traversal order).
 - `boundingbox::Rect2f`: smallest axis-aligned rectangle enclosing all entries
-  in `vertex_positions`.
+  in `node_positions`.
 """
-struct LineageGraphGeometry{V}
-    vertex_positions::Dict{V, Point2f}
+struct LineageGraphGeometry{NodeT}
+    node_positions::Dict{NodeT, Point2f}
     edge_shapes::Vector{Point2f}
-    edges::Vector{Tuple{V, V}}
-    leaf_order::Vector{V}
+    edges::Vector{Tuple{NodeT, NodeT}}
+    leaf_order::Vector{NodeT}
     boundingbox::Rect2f
 end
 
@@ -56,7 +56,7 @@ end
 """
     boundingbox(geom::LineageGraphGeometry) -> Rect2f
 
-Return the smallest axis-aligned rectangle enclosing all `vertex_positions`
+Return the smallest axis-aligned rectangle enclosing all `node_positions`
 in `geom`. The value is computed at layout time and returned directly.
 """
 function boundingbox(geom::LineageGraphGeometry)::Rect2f
@@ -66,7 +66,7 @@ end
 # ── rectangular_layout ─────────────────────────────────────────────────────────
 
 """
-    rectangular_layout(rootvertex, accessor::LineageGraphAccessor;
+    rectangular_layout(rootnode, accessor::LineageGraphAccessor;
                        leaf_spacing=:equal,
                        lineageunits::Union{Nothing,Symbol}=nothing,
                        nonultrametric::Symbol=:error) -> LineageGraphGeometry
@@ -75,44 +75,44 @@ Compute a rectangular (right-angle) layout for a rooted lineage graph.
 
 Process coordinates (first `Point2f` component) are determined by `lineageunits`:
 
-- `:edgelengths` — cumulative `edgelength(fromvertex, tovertex)` from
-  `rootvertex`; requires `edgelength` accessor; `rootvertex` = 0, increases
+- `:edgelengths` — cumulative `edgelength(src, dst)` from
+  `rootnode`; requires `edgelength` accessor; `rootnode` = 0, increases
   toward leaves. Missing edge lengths emit `@warn` and fall back to 1.0;
   negative edge lengths raise `ArgumentError`.
-- `:branchingtime` — per-vertex branching time read directly from
-  `branchingtime(vertex)`; requires `branchingtime` accessor; `rootvertex` = 0.
-- `:coalescenceage` — per-vertex coalescence age read from
-  `coalescenceage(vertex)`; requires `coalescenceage` accessor; leaves = 0,
+- `:branchingtime` — per-node branching time read directly from
+  `branchingtime(node)`; requires `branchingtime` accessor; `rootnode` = 0.
+- `:coalescenceage` — per-node coalescence age read from
+  `coalescenceage(node)`; requires `coalescenceage` accessor; leaves = 0,
   increases toward root. Non-ultrametric inputs are controlled by `nonultrametric`.
-- `:vertexdepths` — integer edge count from `rootvertex`; `rootvertex` = 0,
+- `:nodedepths` — integer edge count from `rootnode`; `rootnode` = 0,
   increases by 1 per edge. No accessor required.
-- `:vertexheights` — per-vertex height: edge count to the farthest descendant
+- `:nodeheights` — per-node height: edge count to the farthest descendant
   leaf. Leaves = 0, root = maximum. No accessor required.
-- `:vertexlevels` — edge count from `rootvertex`: root = 0, leaves = maximum.
+- `:nodelevels` — edge count from `rootnode`: root = 0, leaves = maximum.
   Equal inter-level spacing. No accessor required.
-- `:vertexcoords` — user-supplied `Point2f` data coordinates read from
-  `vertexcoords(vertex)`; requires `vertexcoords` accessor. Bypasses layout
+- `:nodecoords` — user-supplied `Point2f` data coordinates read from
+  `nodecoords(node)`; requires `nodecoords` accessor. Bypasses layout
   computation entirely; both process and transverse coordinates come from the
   accessor.
-- `:vertexpos` — user-supplied `Point2f` pixel coordinates read from
-  `vertexpos(vertex)`; requires `vertexpos` accessor. Same geometry-layer
-  behaviour as `:vertexcoords`; the semantic distinction (data vs pixel space)
+- `:nodepos` — user-supplied `Point2f` pixel coordinates read from
+  `nodepos(node)`; requires `nodepos` accessor. Same geometry-layer
+  behaviour as `:nodecoords`; the semantic distinction (data vs pixel space)
   is documented here but not enforced at the geometry layer.
 
 **Default detection:** if `lineageunits` is not supplied (or `nothing`), the
 default is `:edgelengths` when an `edgelength` accessor is present; otherwise
-`:vertexheights`.
+`:nodeheights`.
 
 Transverse coordinates (second `Point2f` component) place leaves at equal
 intervals by default (`leaf_spacing = :equal`). The `leaf_order` field records
 the leaf sequence.
 
-Each edge `fromvertex → tovertex` contributes a right-angle polyline:
-  `(x_from, y_from) → (x_from, y_to) → (x_to, y_to)`
+Each edge `src → dst` contributes a right-angle polyline:
+  `(x_src, y_src) → (x_src, y_dst) → (x_dst, y_dst)`
 followed by a `Point2f(NaN, NaN)` separator.
 
 # Arguments
-- `rootvertex`: root of the lineage graph; first positional argument.
+- `rootnode`: root of the lineage graph; first positional argument.
 - `accessor::LineageGraphAccessor`: supplies the `children` callable and
   optional accessor fields.
 - `leaf_spacing`: `:equal` (default) for unit inter-leaf spacing, or a
@@ -137,7 +137,7 @@ A `LineageGraphGeometry` with fully populated fields.
   and `nonultrametric = :error`.
 """
 function rectangular_layout(
-        rootvertex,
+        rootnode,
         accessor::LineageGraphAccessor;
         leaf_spacing = :equal,
         lineageunits::Union{Nothing, Symbol} = nothing,
@@ -146,43 +146,43 @@ function rectangular_layout(
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
     step = _validate_leaf_spacing(leaf_spacing)
 
-    leaf_list = leaves(accessor, rootvertex)
+    leaf_list = leaves(accessor, rootnode)
     isempty(leaf_list) && throw(
         ArgumentError(
-            "lineage graph rooted at $(repr(rootvertex)) has zero leaves; " *
+            "lineage graph rooted at $(repr(rootnode)) has zero leaves; " *
                 "a layout requires at least one leaf",
         ),
     )
 
-    all_vertices = preorder(accessor, rootvertex)
+    all_nodes = preorder(accessor, rootnode)
 
     # Bypass modes: both process and transverse coordinates come from the accessor.
-    if lineageunits === :vertexcoords || lineageunits === :vertexpos
-        accessor_fn = lineageunits === :vertexcoords ? accessor.vertexcoords : accessor.vertexpos
+    if lineageunits === :nodecoords || lineageunits === :nodepos
+        accessor_fn = lineageunits === :nodecoords ? accessor.nodecoords : accessor.nodepos
         accessor_fn === nothing && throw(
             ArgumentError(
                 "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
                     "but none was supplied",
             ),
         )
-        vertex_positions = Dict{Any, Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
-        pc = Dict{Any, Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
-        tc = Dict{Any, Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
-        edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
-        edges = _build_edge_list(all_vertices, accessor)
-        bb = _compute_boundingbox(vertex_positions)
-        return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
+        node_positions = Dict{Any, Point2f}(node => Point2f(accessor_fn(node)) for node in all_nodes)
+        pc = Dict{Any, Float64}(node => Float64(node_positions[node][1]) for node in all_nodes)
+        tc = Dict{Any, Float64}(node => Float64(node_positions[node][2]) for node in all_nodes)
+        edge_shapes = _build_edge_shapes(all_nodes, accessor, pc, tc)
+        edges = _build_edge_list(all_nodes, accessor)
+        bb = _compute_boundingbox(node_positions)
+        return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coords = _process_coords(rootvertex, accessor, lineageunits, all_vertices, nonultrametric)
-    transverse_coords = _assign_transverse(leaf_list, accessor, all_vertices, step)
+    process_coords = _process_coords(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
+    transverse_coords = _assign_transverse(leaf_list, accessor, all_nodes, step)
 
-    vertex_positions = _build_vertex_positions(all_vertices, process_coords, transverse_coords)
-    edge_shapes = _build_edge_shapes(all_vertices, accessor, process_coords, transverse_coords)
-    edges = _build_edge_list(all_vertices, accessor)
-    bb = _compute_boundingbox(vertex_positions)
+    node_positions = _build_node_positions(all_nodes, process_coords, transverse_coords)
+    edge_shapes = _build_edge_shapes(all_nodes, accessor, process_coords, transverse_coords)
+    edges = _build_edge_list(all_nodes, accessor)
+    bb = _compute_boundingbox(node_positions)
 
-    return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
+    return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
 end
 
 # ── Internal: default lineageunits detection ───────────────────────────────────
@@ -194,14 +194,14 @@ Resolve the `lineageunits` sentinel `nothing` to the appropriate default.
 
 If `lineageunits` is not `nothing`, it is returned unchanged. Otherwise:
 - `:edgelengths` if `accessor.edgelength` is not `nothing`.
-- `:vertexheights` otherwise.
+- `:nodeheights` otherwise.
 """
 function _resolve_lineageunits(
         lineageunits::Union{Nothing, Symbol},
         accessor::LineageGraphAccessor,
     )::Symbol
     lineageunits !== nothing && return lineageunits
-    return accessor.edgelength !== nothing ? :edgelengths : :vertexheights
+    return accessor.edgelength !== nothing ? :edgelengths : :nodeheights
 end
 
 # ── Internal: leaf spacing validation ─────────────────────────────────────────
@@ -229,16 +229,16 @@ end
 # ── Internal: process coordinate computation ───────────────────────────────────
 
 function _process_coords(
-        rootvertex,
+        rootnode,
         accessor::LineageGraphAccessor,
         lineageunits::Symbol,
-        all_vertices::Vector,
+        all_nodes::Vector,
         nonultrametric::Symbol,
     )::Dict{Any, Float64}
-    if lineageunits === :vertexheights
-        return _vertexheights(all_vertices, accessor)
-    elseif lineageunits === :vertexlevels
-        return _vertexlevels(rootvertex, all_vertices, accessor)
+    if lineageunits === :nodeheights
+        return _nodeheights(all_nodes, accessor)
+    elseif lineageunits === :nodelevels
+        return _nodelevels(rootnode, all_nodes, accessor)
     elseif lineageunits === :edgelengths
         accessor.edgelength === nothing && throw(
             ArgumentError(
@@ -247,10 +247,10 @@ function _process_coords(
             ),
         )
         return _cumulative_preorder(
-            rootvertex,
-            all_vertices,
+            rootnode,
+            all_nodes,
             accessor,
-            (u, v) -> _safe_edgelength(accessor, u, v),
+            (src, dst) -> _safe_edgelength(accessor, src, dst),
         )
     elseif lineageunits === :branchingtime
         accessor.branchingtime === nothing && throw(
@@ -261,13 +261,13 @@ function _process_coords(
         )
         bt = accessor.branchingtime
         return _cumulative_preorder(
-            rootvertex,
-            all_vertices,
+            rootnode,
+            all_nodes,
             accessor,
-            (u, v) -> bt(v) - bt(u),
+            (src, dst) -> bt(dst) - bt(src),
         )
-    elseif lineageunits === :vertexdepths
-        return _vertex_depths(rootvertex, all_vertices, accessor)
+    elseif lineageunits === :nodedepths
+        return _node_depths(rootnode, all_nodes, accessor)
     elseif lineageunits === :coalescenceage
         accessor.coalescenceage === nothing && throw(
             ArgumentError(
@@ -275,14 +275,14 @@ function _process_coords(
                     "but none was supplied",
             ),
         )
-        return _validate_ultrametric(accessor, all_vertices, nonultrametric)
+        return _validate_ultrametric(accessor, all_nodes, nonultrametric)
     else
         throw(
             ArgumentError(
                 "unsupported lineageunits value: $(repr(lineageunits)); " *
-                    "rectangular_layout supports :vertexheights, :vertexlevels, " *
-                    ":edgelengths, :branchingtime, :vertexdepths, :coalescenceage, " *
-                    ":vertexcoords, :vertexpos",
+                    "rectangular_layout supports :nodeheights, :nodelevels, " *
+                    ":edgelengths, :branchingtime, :nodedepths, :coalescenceage, " *
+                    ":nodecoords, :nodepos",
             ),
         )
     end
@@ -291,7 +291,7 @@ end
 # ── Internal: safe edge-length extraction ─────────────────────────────────────
 
 """
-    _safe_edgelength(accessor, fromvertex, tovertex) -> Float64
+    _safe_edgelength(accessor, src, dst) -> Float64
 
 Extract a non-negative `Float64` edge length from `accessor.edgelength`.
 
@@ -309,21 +309,21 @@ Handles all documented return forms of the `edgelength` accessor:
 """
 function _safe_edgelength(
         accessor::LineageGraphAccessor,
-        fromvertex,
-        tovertex,
+        src,
+        dst,
     )::Float64
-    raw = accessor.edgelength(fromvertex, tovertex)
+    raw = accessor.edgelength(src, dst)
     val = (raw isa NamedTuple && haskey(raw, :value)) ? raw.value : raw
     if val === nothing || ismissing(val)
-        @warn "edgelength returned $(repr(val)) for edge $(repr(fromvertex)) → " *
-            "$(repr(tovertex)); using fallback of 1.0"
+        @warn "edgelength returned $(repr(val)) for edge $(repr(src)) → " *
+            "$(repr(dst)); using fallback of 1.0"
         return 1.0
     end
     fval = Float64(val)
     fval < 0.0 && throw(
         ArgumentError(
             "edgelength returned negative value $(fval) for edge " *
-                "$(repr(fromvertex)) → $(repr(tovertex)); edge lengths must be non-negative",
+                "$(repr(src)) → $(repr(dst)); edge lengths must be non-negative",
         ),
     )
     return fval
@@ -332,101 +332,101 @@ end
 # ── Internal: shared preorder cumulative-sum traversal ────────────────────────
 
 """
-    _cumulative_preorder(rootvertex, all_vertices, accessor, edge_increment) -> Dict{Any,Float64}
+    _cumulative_preorder(rootnode, all_nodes, accessor, edge_increment) -> Dict{Any,Float64}
 
 Preorder cumulative-sum traversal used by both `:edgelengths` and `:branchingtime`.
 
-Seeds `rootvertex` at 0.0. For each vertex `v` in preorder order, sets each child
-`c`'s coordinate to:
+Seeds `rootnode` at 0.0. For each node in preorder order, sets each child's
+coordinate to:
 
-    coords[c] = coords[v] + edge_increment(v, c)
+    coords[child] = coords[node] + edge_increment(node, child)
 
-`edge_increment` is a callable `(fromvertex, tovertex) -> Float64` that returns
+`edge_increment` is a callable `(src, dst) -> Float64` that returns
 the additive increment for each directed edge:
 - For `:edgelengths`: the edge length via `_safe_edgelength`.
-- For `:branchingtime`: `branchingtime(c) - branchingtime(v)`, which yields
-  `coords[c] = branchingtime(c)` — i.e., the accessor value is used directly.
+- For `:branchingtime`: `branchingtime(dst) - branchingtime(src)`, which yields
+  `coords[dst] = branchingtime(dst)` — i.e., the accessor value is used directly.
 
 The caller is responsible for ensuring that `edge_increment` returns non-negative
 values where required.
 """
 function _cumulative_preorder(
-        rootvertex,
-        all_vertices::Vector,
+        rootnode,
+        all_nodes::Vector,
         accessor::LineageGraphAccessor,
         edge_increment,
     )::Dict{Any, Float64}
     coords = Dict{Any, Float64}()
-    coords[rootvertex] = 0.0
-    for v in all_vertices
-        cv = coords[v]
-        for c in accessor.children(v)
-            coords[c] = cv + edge_increment(v, c)
+    coords[rootnode] = 0.0
+    for node in all_nodes
+        coord = coords[node]
+        for child in accessor.children(node)
+            coords[child] = coord + edge_increment(node, child)
         end
     end
     return coords
 end
 
-# ── Internal: :vertexheights — postorder, leaf = 0, internal = max(children) + 1
+# ── Internal: :nodeheights — postorder, leaf = 0, internal = max(children) + 1
 
-function _vertexheights(all_vertices::Vector, accessor::LineageGraphAccessor)::Dict{Any, Float64}
+function _nodeheights(all_nodes::Vector, accessor::LineageGraphAccessor)::Dict{Any, Float64}
     heights = Dict{Any, Float64}()
     # Reversing a preorder traversal yields a valid postorder (children before
     # parents), because in preorder every parent precedes all its descendants.
-    for v in Iterators.reverse(all_vertices)
-        ch = accessor.children(v)
-        if isempty(ch)
-            heights[v] = 0.0
+    for node in Iterators.reverse(all_nodes)
+        child_collection = accessor.children(node)
+        if isempty(child_collection)
+            heights[node] = 0.0
         else
-            heights[v] = maximum(heights[c] for c in ch) + 1.0
+            heights[node] = maximum(heights[child] for child in child_collection) + 1.0
         end
     end
     return heights
 end
 
-# ── Internal: :vertexlevels — preorder, root = 0, each child = parent + 1
+# ── Internal: :nodelevels — preorder, root = 0, each child = parent + 1
 
-function _vertexlevels(
-        rootvertex,
-        all_vertices::Vector,
+function _nodelevels(
+        rootnode,
+        all_nodes::Vector,
         accessor::LineageGraphAccessor,
     )::Dict{Any, Float64}
     levels = Dict{Any, Float64}()
-    levels[rootvertex] = 0.0
-    for v in all_vertices
-        lv = levels[v]
-        for c in accessor.children(v)
-            levels[c] = lv + 1.0
+    levels[rootnode] = 0.0
+    for node in all_nodes
+        level = levels[node]
+        for child in accessor.children(node)
+            levels[child] = level + 1.0
         end
     end
     return levels
 end
 
-# ── Internal: :vertexdepths — preorder, root = 0, each child = parent + 1 ─────
+# ── Internal: :nodedepths — preorder, root = 0, each child = parent + 1 ───────
 
 """
-    _vertex_depths(rootvertex, all_vertices, accessor) -> Dict{Any,Float64}
+    _node_depths(rootnode, all_nodes, accessor) -> Dict{Any,Float64}
 
-Compute per-vertex integer edge-count depths from `rootvertex` in a preorder pass.
+Compute per-node integer edge-count depths from `rootnode` in a preorder pass.
 
-`rootvertex` is assigned depth 0. Each child's depth is its parent's depth plus 1.
+`rootnode` is assigned depth 0. Each child's depth is its parent's depth plus 1.
 The result is always integer-valued (stored as `Float64`).
 
-This is distinct from `_vertexlevels` (which assigns equal inter-level spacing for
-display) in that `_vertex_depths` records the raw edge count along the path from
-`rootvertex` with no further transformation.
+This is distinct from `_nodelevels` (which assigns equal inter-level spacing for
+display) in that `_node_depths` records the raw edge count along the path from
+`rootnode` with no further transformation.
 """
-function _vertex_depths(
-        rootvertex,
-        all_vertices::Vector,
+function _node_depths(
+        rootnode,
+        all_nodes::Vector,
         accessor::LineageGraphAccessor,
     )::Dict{Any, Float64}
     depths = Dict{Any, Float64}()
-    depths[rootvertex] = 0.0
-    for v in all_vertices
-        dv = depths[v]
-        for c in accessor.children(v)
-            depths[c] = dv + 1.0
+    depths[rootnode] = 0.0
+    for node in all_nodes
+        depth = depths[node]
+        for child in accessor.children(node)
+            depths[child] = depth + 1.0
         end
     end
     return depths
@@ -435,51 +435,51 @@ end
 # ── Internal: :coalescenceage — validation and postorder resolution ────────────
 
 """
-    _validate_ultrametric(accessor, all_vertices, nonultrametric) -> Dict{Any,Float64}
+    _validate_ultrametric(accessor, all_nodes, nonultrametric) -> Dict{Any,Float64}
 
 Validate the ultrametricity of accessor-supplied `coalescenceage` values and
-return a `Dict` mapping each vertex to its process coordinate.
+return a `Dict` mapping each node to its process coordinate.
 
-In a postorder traversal, for each internal vertex `v`, collects the
+In a postorder traversal, for each internal node, collects the
 `coalescenceage` values of all its children from `accessor.coalescenceage`. For a
-strictly ultrametric tree, all children of any given internal vertex share the
+strictly ultrametric tree, all children of any given internal node share the
 same coalescence age (since the implied edge lengths sum to the same total
-distance from any child path to a leaf). If any two children of `v` disagree
+distance from any child path to a leaf). If any two children disagree
 beyond a floating-point tolerance of `1e-9`, the `nonultrametric` policy is
 applied:
 
-- `:error` (default) — raises `ArgumentError` naming the vertex and the
+- `:error` (default) — raises `ArgumentError` naming the node and the
   conflicting minimum and maximum child values.
 - `:minimum` — suppresses the error and accepts the inconsistency.
 - `:maximum` — suppresses the error and accepts the inconsistency.
 
-All vertex coordinates in the returned dict are `accessor.coalescenceage(v)` as
+All node coordinates in the returned dict are `accessor.coalescenceage(node)` as
 supplied. The `:minimum` and `:maximum` policies do not modify the accessor-supplied
 values; they only suppress the error, allowing the caller to accept a
 non-ultrametric set of coordinates.
 
 # Throws
-- `ArgumentError` if `nonultrametric = :error` and any internal vertex has
+- `ArgumentError` if `nonultrametric = :error` and any internal node has
   children with inconsistent coalescenceage values.
 """
 function _validate_ultrametric(
         accessor::LineageGraphAccessor,
-        all_vertices::Vector,
+        all_nodes::Vector,
         nonultrametric::Symbol,
     )::Dict{Any, Float64}
     coords = Dict{Any, Float64}()
-    for v in Iterators.reverse(all_vertices)  # postorder: children before parents
-        coords[v] = accessor.coalescenceage(v)
-        ch = accessor.children(v)
-        isempty(ch) && continue
-        child_ages = [accessor.coalescenceage(c) for c in ch]
+    for node in Iterators.reverse(all_nodes)  # postorder: children before parents
+        coords[node] = accessor.coalescenceage(node)
+        child_collection = accessor.children(node)
+        isempty(child_collection) && continue
+        child_ages = [accessor.coalescenceage(child) for child in child_collection]
         mn = minimum(child_ages)
         mx = maximum(child_ages)
         if mx - mn > 1.0e-9
             if nonultrametric === :error
                 throw(
                     ArgumentError(
-                        "non-ultrametric lineage graph: children of vertex $(repr(v)) " *
+                        "non-ultrametric lineage graph: children of node $(repr(node)) " *
                             "have inconsistent coalescenceage values " *
                             "(min=$(mn), max=$(mx)); pass nonultrametric = :minimum or " *
                             ":maximum to rectangular_layout to resolve",
@@ -495,82 +495,81 @@ end
 # ── Internal: transverse coordinate assignment ─────────────────────────────────
 
 # Leaves get equally spaced transverse positions (1*step, 2*step, …).
-# Internal vertices are placed at the mean of their children's transverse
+# Internal nodes are placed at the mean of their children's transverse
 # positions. Reverse preorder (≈ postorder) ensures children are assigned
 # before their parents.
 function _assign_transverse(
         leaf_list::Vector,
         accessor::LineageGraphAccessor,
-        all_vertices::Vector,
+        all_nodes::Vector,
         step::Float64,
     )::Dict{Any, Float64}
     transverse = Dict{Any, Float64}()
     for (i, leaf) in enumerate(leaf_list)
         transverse[leaf] = i * step
     end
-    for v in Iterators.reverse(all_vertices)
-        haskey(transverse, v) && continue
-        n = 0
-        s = 0.0
-        for c in accessor.children(v)
-            n += 1
-            s += transverse[c]
+    for node in Iterators.reverse(all_nodes)
+        haskey(transverse, node) && continue
+        n_children = 0
+        transverse_sum = 0.0
+        for child in accessor.children(node)
+            n_children += 1
+            transverse_sum += transverse[child]
         end
-        transverse[v] = s / n
+        transverse[node] = transverse_sum / n_children
     end
     return transverse
 end
 
 # ── Internal: geometry assembly ────────────────────────────────────────────────
 
-# Build the ordered list of (fromvertex, tovertex) pairs.
-# Iterates all_vertices in preorder and loops over accessor.children(v) in the
+# Build the ordered list of (src, dst) pairs.
+# Iterates all_nodes in preorder and loops over accessor.children(node) in the
 # same inner order as _build_edge_shapes, so edges[i] corresponds to the i-th
 # NaN-terminated group of 4 points in edge_shapes.
 function _build_edge_list(
-        all_vertices::Vector,
+        all_nodes::Vector,
         accessor::LineageGraphAccessor,
     )::Vector{Tuple{Any, Any}}
     edges = Tuple{Any, Any}[]
-    for v in all_vertices
-        for c in accessor.children(v)
-            push!(edges, (v, c))
+    for node in all_nodes
+        for child in accessor.children(node)
+            push!(edges, (node, child))
         end
     end
     return edges
 end
 
-function _build_vertex_positions(
-        all_vertices::Vector,
+function _build_node_positions(
+        all_nodes::Vector,
         process_coords::Dict{Any, Float64},
         transverse_coords::Dict{Any, Float64},
     )::Dict{Any, Point2f}
     pos = Dict{Any, Point2f}()
-    for v in all_vertices
-        pos[v] = Point2f(process_coords[v], transverse_coords[v])
+    for node in all_nodes
+        pos[node] = Point2f(process_coords[node], transverse_coords[node])
     end
     return pos
 end
 
 # Each edge produces three points forming a right-angle shape, plus a NaN
-# separator. For an edge fromvertex → tovertex with coordinates (xp, yp)
-# and (xc, yc):
+# separator. For an edge src → dst with coordinates (xp, yp) and (xc, yc):
 #   (xp, yp) → (xp, yc) → (xc, yc) → (NaN, NaN)
 # The first segment is parallel to the transverse axis (changes y at fixed x).
 # The second segment is parallel to the lineage axis (changes x at fixed y).
 function _build_edge_shapes(
-        all_vertices::Vector,
+        all_nodes::Vector,
         accessor::LineageGraphAccessor,
         process_coords::Dict{Any, Float64},
         transverse_coords::Dict{Any, Float64},
     )::Vector{Point2f}
     shapes = Point2f[]
-    for v in all_vertices
-        xp = process_coords[v]
-        yp = transverse_coords[v]
-        for c in accessor.children(v)
-            xc = process_coords[c]
-            yc = transverse_coords[c]
+    for node in all_nodes
+        xp = process_coords[node]
+        yp = transverse_coords[node]
+        for child in accessor.children(node)
+            xc = process_coords[child]
+            yc = transverse_coords[child]
             push!(
                 shapes,
                 Point2f(xp, yp),
@@ -583,12 +582,12 @@ function _build_edge_shapes(
     return shapes
 end
 
-function _compute_boundingbox(vertex_positions::Dict{Any, Point2f})::Rect2f
-    isempty(vertex_positions) && return Rect2f(0.0f0, 0.0f0, 0.0f0, 0.0f0)
-    first_p = first(values(vertex_positions))
+function _compute_boundingbox(node_positions::Dict{Any, Point2f})::Rect2f
+    isempty(node_positions) && return Rect2f(0.0f0, 0.0f0, 0.0f0, 0.0f0)
+    first_p = first(values(node_positions))
     xmin = xmax = first_p[1]
     ymin = ymax = first_p[2]
-    for p in values(vertex_positions)
+    for p in values(node_positions)
         x, y = p[1], p[2]
         x < xmin && (xmin = x)
         x > xmax && (xmax = x)
@@ -601,7 +600,7 @@ end
 # ── circular_layout ────────────────────────────────────────────────────────────
 
 """
-    circular_layout(rootvertex, accessor::LineageGraphAccessor;
+    circular_layout(rootnode, accessor::LineageGraphAccessor;
                     leaf_spacing=:equal,
                     lineageunits::Union{Nothing,Symbol}=nothing,
                     nonultrametric::Symbol=:error,
@@ -612,7 +611,7 @@ Compute a circular (radial) layout for a rooted lineage graph.
 
 Process coordinates (radial distances from the origin) are determined by `lineageunits`
 using the same rules as `rectangular_layout`. Leaves are placed at equal angular
-spacing by default; internal vertices are placed at the mean angle of their children.
+spacing by default; internal nodes are placed at the mean angle of their children.
 
 **Angular leaf placement:** with `leaf_spacing = :equal` the angular step is
 `2π / n_leaves`. A positive `Float64` `leaf_spacing` sets an explicit angular step
@@ -626,11 +625,11 @@ chord segment at the parent's radial distance spanning the child's angular posit
 followed by a radial segment from that connector point to the child's position. The
 `:arc` style (Tier 2) is not implemented.
 
-**Bypass modes:** `lineageunits = :vertexcoords` and `:vertexpos` use the accessor
+**Bypass modes:** `lineageunits = :nodecoords` and `:nodepos` use the accessor
 coordinates directly, bypassing angular computation (same as `rectangular_layout`).
 
 # Arguments
-- `rootvertex`: root of the lineage graph.
+- `rootnode`: root of the lineage graph.
 - `accessor::LineageGraphAccessor`: supplies the `children` callable and optional
   accessor fields.
 - `leaf_spacing`: `:equal` (default) or a positive `Float64` angular step in radians.
@@ -643,9 +642,9 @@ coordinates directly, bypassing angular computation (same as `rectangular_layout
   a floor such as `2π/360` (one degree) to prevent illegibly dense layouts.
 
 # Returns
-A `LineageGraphGeometry` with `vertex_positions` storing Cartesian `(x, y)` from
+A `LineageGraphGeometry` with `node_positions` storing Cartesian `(x, y)` from
 polar coordinates, `edge_shapes` using the chord representation, `leaf_order` in
-preorder traversal order, and `boundingbox` enclosing all vertex positions.
+preorder traversal order, and `boundingbox` enclosing all node positions.
 
 # Throws
 - `ArgumentError` if the lineage graph has zero leaves.
@@ -658,7 +657,7 @@ preorder traversal order, and `boundingbox` enclosing all vertex positions.
   and `nonultrametric = :error`.
 """
 function circular_layout(
-        rootvertex,
+        rootnode,
         accessor::LineageGraphAccessor;
         leaf_spacing = :equal,
         lineageunits::Union{Nothing, Symbol} = nothing,
@@ -675,51 +674,51 @@ function circular_layout(
 
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
 
-    leaf_list = leaves(accessor, rootvertex)
+    leaf_list = leaves(accessor, rootnode)
     isempty(leaf_list) && throw(
         ArgumentError(
-            "lineage graph rooted at $(repr(rootvertex)) has zero leaves; " *
+            "lineage graph rooted at $(repr(rootnode)) has zero leaves; " *
                 "a layout requires at least one leaf",
         ),
     )
 
-    all_vertices = preorder(accessor, rootvertex)
+    all_nodes = preorder(accessor, rootnode)
 
     # Bypass modes: both coordinates come from the accessor; no angular computation.
-    if lineageunits === :vertexcoords || lineageunits === :vertexpos
-        accessor_fn = lineageunits === :vertexcoords ? accessor.vertexcoords : accessor.vertexpos
+    if lineageunits === :nodecoords || lineageunits === :nodepos
+        accessor_fn = lineageunits === :nodecoords ? accessor.nodecoords : accessor.nodepos
         accessor_fn === nothing && throw(
             ArgumentError(
                 "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
                     "but none was supplied",
             ),
         )
-        vertex_positions = Dict{Any, Point2f}(v => Point2f(accessor_fn(v)) for v in all_vertices)
-        pc = Dict{Any, Float64}(v => Float64(vertex_positions[v][1]) for v in all_vertices)
-        tc = Dict{Any, Float64}(v => Float64(vertex_positions[v][2]) for v in all_vertices)
-        edge_shapes = _build_edge_shapes(all_vertices, accessor, pc, tc)
-        edges = _build_edge_list(all_vertices, accessor)
-        bb = _compute_boundingbox(vertex_positions)
-        return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
+        node_positions = Dict{Any, Point2f}(node => Point2f(accessor_fn(node)) for node in all_nodes)
+        pc = Dict{Any, Float64}(node => Float64(node_positions[node][1]) for node in all_nodes)
+        tc = Dict{Any, Float64}(node => Float64(node_positions[node][2]) for node in all_nodes)
+        edge_shapes = _build_edge_shapes(all_nodes, accessor, pc, tc)
+        edges = _build_edge_list(all_nodes, accessor)
+        bb = _compute_boundingbox(node_positions)
+        return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coords = _process_coords(rootvertex, accessor, lineageunits, all_vertices, nonultrametric)
+    process_coords = _process_coords(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
 
     θ_step = _angular_leaf_step(leaf_spacing, length(leaf_list), min_leaf_angle)
-    angles = _angular_positions(leaf_list, all_vertices, accessor, θ_step)
+    angles = _angular_positions(leaf_list, all_nodes, accessor, θ_step)
 
-    vertex_positions = Dict{Any, Point2f}()
-    for v in all_vertices
-        r = process_coords[v]
-        θ = angles[v]
-        vertex_positions[v] = Point2f(r * cos(θ), r * sin(θ))
+    node_positions = Dict{Any, Point2f}()
+    for node in all_nodes
+        r = process_coords[node]
+        θ = angles[node]
+        node_positions[node] = Point2f(r * cos(θ), r * sin(θ))
     end
 
-    edge_shapes = _build_circular_edge_shapes(all_vertices, accessor, process_coords, angles)
-    edges = _build_edge_list(all_vertices, accessor)
-    bb = _compute_boundingbox(vertex_positions)
+    edge_shapes = _build_circular_edge_shapes(all_nodes, accessor, process_coords, angles)
+    edges = _build_edge_list(all_nodes, accessor)
+    bb = _compute_boundingbox(node_positions)
 
-    return LineageGraphGeometry(vertex_positions, edge_shapes, edges, leaf_list, bb)
+    return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
 end
 
 # ── Internal: angular leaf step computation ────────────────────────────────────
@@ -768,18 +767,18 @@ end
 # ── Internal: angular position assignment ─────────────────────────────────────
 
 """
-    _angular_positions(leaf_list, all_vertices, accessor, θ_step) -> Dict{Any,Float64}
+    _angular_positions(leaf_list, all_nodes, accessor, θ_step) -> Dict{Any,Float64}
 
-Assign an angular position (radians) to every vertex.
+Assign an angular position (radians) to every node.
 
 Leaves receive evenly spaced angles starting at 0: `θ_i = (i-1) * θ_step` for the
-i-th leaf in `leaf_list` (1-indexed). Internal vertices receive the mean of their
+i-th leaf in `leaf_list` (1-indexed). Internal nodes receive the mean of their
 children's angles, computed in reverse-preorder so children are assigned before
 their parents.
 """
 function _angular_positions(
         leaf_list::Vector,
-        all_vertices::Vector,
+        all_nodes::Vector,
         accessor::LineageGraphAccessor,
         θ_step::Float64,
     )::Dict{Any, Float64}
@@ -787,15 +786,15 @@ function _angular_positions(
     for (i, leaf) in enumerate(leaf_list)
         angles[leaf] = (i - 1) * θ_step
     end
-    for v in Iterators.reverse(all_vertices)
-        haskey(angles, v) && continue
-        n = 0
-        s = 0.0
-        for c in accessor.children(v)
-            n += 1
-            s += angles[c]
+    for node in Iterators.reverse(all_nodes)
+        haskey(angles, node) && continue
+        n_children = 0
+        angle_sum = 0.0
+        for child in accessor.children(node)
+            n_children += 1
+            angle_sum += angles[child]
         end
-        angles[v] = s / n
+        angles[node] = angle_sum / n_children
     end
     return angles
 end
@@ -803,44 +802,44 @@ end
 # ── Internal: circular chord edge shape construction ──────────────────────────
 
 """
-    _build_circular_edge_shapes(all_vertices, accessor, process_coords, angles) -> Vector{Point2f}
+    _build_circular_edge_shapes(all_nodes, accessor, process_coords, angles) -> Vector{Point2f}
 
 Build the chord-style edge shape vector for a circular layout.
 
-For each directed edge `fromvertex → tovertex` the path consists of three Cartesian
+For each directed edge `src → dst` the path consists of three Cartesian
 points followed by a `Point2f(NaN, NaN)` separator (four points total per edge),
 matching the convention used by `_build_edge_shapes` for rectangular layouts:
 
-1. Parent Cartesian: `(r_from * cos(θ_from), r_from * sin(θ_from))`
-2. Chord connector: `(r_from * cos(θ_to), r_from * sin(θ_to))` — at parent radius,
-   child angle
-3. Child Cartesian: `(r_to * cos(θ_to), r_to * sin(θ_to))`
+1. Parent Cartesian: `(r_parent * cos(θ_parent), r_parent * sin(θ_parent))`
+2. Chord connector: `(r_parent * cos(θ_child), r_parent * sin(θ_child))` — at
+   parent radius, child angle
+3. Child Cartesian: `(r_child * cos(θ_child), r_child * sin(θ_child))`
 4. `Point2f(NaN, NaN)` separator
 """
 function _build_circular_edge_shapes(
-        all_vertices::Vector,
+        all_nodes::Vector,
         accessor::LineageGraphAccessor,
         process_coords::Dict{Any, Float64},
         angles::Dict{Any, Float64},
     )::Vector{Point2f}
     shapes = Point2f[]
-    for v in all_vertices
-        r_v = process_coords[v]
-        θ_v = angles[v]
-        x_v = r_v * cos(θ_v)
-        y_v = r_v * sin(θ_v)
-        for c in accessor.children(v)
-            r_c = process_coords[c]
-            θ_c = angles[c]
-            x_conn = r_v * cos(θ_c)
-            y_conn = r_v * sin(θ_c)
-            x_c = r_c * cos(θ_c)
-            y_c = r_c * sin(θ_c)
+    for node in all_nodes
+        r_parent = process_coords[node]
+        θ_parent = angles[node]
+        x_parent = r_parent * cos(θ_parent)
+        y_parent = r_parent * sin(θ_parent)
+        for child in accessor.children(node)
+            r_child = process_coords[child]
+            θ_child = angles[child]
+            x_conn = r_parent * cos(θ_child)
+            y_conn = r_parent * sin(θ_child)
+            x_child = r_child * cos(θ_child)
+            y_child = r_child * sin(θ_child)
             push!(
                 shapes,
-                Point2f(x_v, y_v),
+                Point2f(x_parent, y_parent),
                 Point2f(x_conn, y_conn),
-                Point2f(x_c, y_c),
+                Point2f(x_child, y_child),
                 Point2f(NaN, NaN),
             )
         end
