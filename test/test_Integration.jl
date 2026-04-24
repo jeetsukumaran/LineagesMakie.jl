@@ -7,6 +7,10 @@
 import CairoMakie
 using CairoMakie: Figure, Axis, save
 
+if !isdefined(@__MODULE__, :_rt_matching_text_plots)
+    include("test_render_helpers.jl")
+end
+
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 struct IntegrationTestNode
@@ -634,6 +638,21 @@ end
             leaf_xs3 = unique(round(pos[1]; digits = 5) for pos in leaf_positions3)
             @test length(leaf_ys3) == 1
             @test length(leaf_xs3) > 1
+
+            ll3 = only(filter(p -> p isa LeafLabelLayer, lp3.plots))
+            cll3 = only(filter(p -> p isa CladeLabelLayer, lp3.plots))
+            leaf_text_plot3 = _rt_only_text_plot(lax3.blockscene, ll3[:leaf_label_strings][])
+            clade_text_plot3 = _rt_only_text_plot(lax3.blockscene, cll3[:bracket_label_strings][])
+            leaf_rects3 = _rt_string_bbox_ranges(leaf_text_plot3)
+            clade_rects3 = _rt_string_bbox_ranges(clade_text_plot3)
+
+            @test length(leaf_rects3) == length(ll3[:leaf_label_strings][])
+            @test length(clade_rects3) == length(cll3[:bracket_label_strings][])
+            @test _rt_rects_all_nonoverlapping(leaf_rects3)
+            @test _rt_rects_all_nonoverlapping(clade_rects3)
+            @test _rt_rects_collections_disjoint(leaf_rects3, clade_rects3)
+            @test _rt_rects_within_viewport(leaf_rects3, lax3.blockscene)
+            @test _rt_rects_within_viewport(clade_rects3, lax3.blockscene)
         finally
             isfile(tmpfile) && rm(tmpfile)
         end

@@ -6,7 +6,11 @@ import CairoMakie
 const Makie = CairoMakie.Makie
 using CairoMakie: Figure, Axis
 using CairoMakie: colorbuffer
-using CairoMakie: Rect2i, Vec2f
+using CairoMakie: Rect2f, Rect2i, Vec2f
+
+if !isdefined(@__MODULE__, :_rt_matching_text_plots)
+    include("test_render_helpers.jl")
+end
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -444,6 +448,38 @@ end
                 cll[:bracket_label_pixel_positions][],
             )
             @test layout.leaf_label_anchor_y > layout.clade_bracket_y > layout.clade_label_anchor_y
+        end
+
+        @testset "top-to-bottom rendered label bboxes stay non-overlapping and visible" begin
+            fig = Figure(; size = (700, 500))
+            lax = LineageAxis(fig[1, 1]; lineage_orientation = :top_to_bottom)
+            lp = lineageplot!(
+                lax,
+                _LT_BALANCED_ROOT,
+                _LT_ACC_UNIT;
+                lineageunits = :edgelengths,
+                leaf_label_func = v -> "species_" * string(v.name),
+                clade_vertices = [_LT_BALANCED_ROOT.children[1], _LT_BALANCED_ROOT.children[2]],
+                clade_label_func = v -> "clade_" * string(v.name),
+            )
+            colorbuffer(fig)
+
+            ll = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+
+            leaf_text_plot = _rt_only_text_plot(lax.blockscene, ll[:leaf_label_strings][])
+            clade_text_plot = _rt_only_text_plot(lax.blockscene, cll[:bracket_label_strings][])
+
+            leaf_rects = _rt_string_bbox_ranges(leaf_text_plot)
+            clade_rects = _rt_string_bbox_ranges(clade_text_plot)
+
+            @test length(leaf_rects) == length(ll[:leaf_label_strings][])
+            @test length(clade_rects) == length(cll[:bracket_label_strings][])
+            @test _rt_rects_all_nonoverlapping(leaf_rects)
+            @test _rt_rects_all_nonoverlapping(clade_rects)
+            @test _rt_rects_collections_disjoint(leaf_rects, clade_rects)
+            @test _rt_rects_within_viewport(leaf_rects, lax.blockscene)
+            @test _rt_rects_within_viewport(clade_rects, lax.blockscene)
         end
 
     end
