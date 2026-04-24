@@ -169,6 +169,32 @@ end
         @test_nowarn CairoMakie.colorbuffer(fig)
     end
 
+    @testset "vertical screen-axis API renders through lineageplot" begin
+        acc = lineagegraph_accessor(
+            _IT_ROOT;
+            children = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+        plot_result = lineageplot(
+            _IT_ROOT,
+            acc;
+            lineageunits = :edgelengths,
+            figure = (; size = (700, 500)),
+            axis = (;
+                lineage_orientation = :top_to_bottom,
+                show_y_axis = true,
+                show_grid = true,
+                ylabel = "Lineage distance",
+            ),
+        )
+        fig, lax, lp = plot_result
+        @test lp isa LineagePlot
+        @test_nowarn CairoMakie.colorbuffer(fig)
+        @test !isempty(lax._yaxis_tick_segments[])
+        @test !isempty(lax._grid_segments[])
+        @test "Lineage distance" in _it_visible_blockscene_strings(lax)
+    end
+
     @testset "LineageAxis camera projection is non-identity after lineageplot!" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])

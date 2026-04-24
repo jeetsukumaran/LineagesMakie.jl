@@ -280,13 +280,18 @@ that places the rootvertex at the top with leaves descending:
 fig = Figure()
 ax = LineageAxis(fig[1, 1];
     lineage_orientation = :top_to_bottom,
+    show_y_axis         = true,
+    show_grid           = true,
+    ylabel              = "Branch length",
 )
 lineageplot!(ax, root; children = v -> v.children)
 ```
 
-`show_y_axis`, `show_grid`, and `ylabel` remain reserved in the current
-implementation. Vertical orientation changes the tree embedding and shared
-annotation layout; it does not yet enable a rendered y-axis surface.
+`show_x_axis` and `xlabel` are screen x-axis controls. `show_y_axis` and
+`ylabel` are screen y-axis controls. In vertical rectangular embeddings, the
+lineage process coordinate lives on the screen y-axis, so `show_y_axis = true`
+and `show_grid = true` provide a direct quantitative readout for the dendrogram
+direction.
 
 ### Manual layer composition
 

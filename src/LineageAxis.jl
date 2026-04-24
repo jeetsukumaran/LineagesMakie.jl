@@ -84,12 +84,19 @@ struct _LineageAxisAnnotationMeasurements
     scalebar_band_padding_px::Float32
 end
 
+struct _LineageAxisScreenAxisMeasurements
+    yaxis_band_width_px::Float32
+    ylabel_band_width_px::Float32
+end
+
 struct _LineageAxisDecorationLayout
     plot_rect::Rect2f
     title_band_rect::Rect2f
     scalebar_band_rect::Rect2f
     xaxis_band_rect::Rect2f
     xlabel_band_rect::Rect2f
+    yaxis_band_rect::Rect2f
+    ylabel_band_rect::Rect2f
     left_gutter_px::Float32
     right_gutter_px::Float32
     top_gutter_px::Float32
@@ -138,8 +145,10 @@ These three views are independent. A coalescent lineage graph (`axis_polarity =
 radially by setting `lineage_orientation = :radial`.
 
 `LineageAxis` provides a naked lineage graph appearance by default: no tick
-marks, no grid lines, no axis spines. An optional quantitative x-axis is
-activated by `show_x_axis = true`.
+marks, no grid lines, no axis spines. Optional quantitative screen-axis
+decorations are activated by `show_x_axis = true` and `show_y_axis = true`,
+and `show_grid = true` draws grid lines aligned with whichever screen axes are
+visible.
 
 # Attributes
 
@@ -154,11 +163,14 @@ activated by `show_x_axis = true`.
   carries the process coordinate. `:right_to_left` and `:top_to_bottom`
   delegate internally to the corresponding standard-orientation path with the
   process direction reversed.
-- `show_x_axis::Bool` — default `false`. When `true`, a quantitative x-axis is
-  shown (Tier-1 implementation: evenly-spaced tick marks from bounding box).
-- `show_y_axis::Bool` — default `false`. Reserved; not rendered in Tier 1.
-- `show_grid::Bool` — default `false`. Reserved; not rendered in Tier 1.
-- `title`, `xlabel`, `ylabel` — standard text attributes.
+- `show_x_axis::Bool` — default `false`. When `true`, a quantitative screen
+  x-axis is shown using evenly spaced ticks derived from the rendered geometry.
+- `show_y_axis::Bool` — default `false`. When `true`, a quantitative screen
+  y-axis is shown using evenly spaced ticks derived from the rendered geometry.
+- `show_grid::Bool` — default `false`. When `true`, grid lines are shown for
+  whichever screen axes are visible.
+- `title`, `xlabel`, `ylabel` — standard text attributes. `xlabel` labels the
+  screen x-axis and `ylabel` labels the screen y-axis.
 
 # Usage
 
@@ -187,6 +199,10 @@ Makie.@Block LineageAxis <: Makie.AbstractAxis begin
     _xaxis_tick_positions::Makie.Observable{Vector{Point2f}}
     _xaxis_tick_segments::Makie.Observable{Vector{Point2f}}
     _xaxis_tick_labels::Makie.Observable{Vector{String}}
+    _yaxis_tick_positions::Makie.Observable{Vector{Point2f}}
+    _yaxis_tick_segments::Makie.Observable{Vector{Point2f}}
+    _yaxis_tick_labels::Makie.Observable{Vector{String}}
+    _grid_segments::Makie.Observable{Vector{Point2f}}
 
     @attributes begin
         "Semantic direction of increasing process coordinates."
@@ -197,9 +213,9 @@ Makie.@Block LineageAxis <: Makie.AbstractAxis begin
         lineage_orientation::Symbol = :left_to_right
         "Whether to display a quantitative x-axis."
         show_x_axis::Bool = false
-        "Whether to display a quantitative y-axis (reserved; not rendered in Tier 1)."
+        "Whether to display a quantitative y-axis."
         show_y_axis::Bool = false
-        "Whether to display grid lines (reserved; not rendered in Tier 1)."
+        "Whether to display grid lines for visible screen axes."
         show_grid::Bool = false
         "Axis title."
         title::String = ""
@@ -249,6 +265,9 @@ const _LINEAGEAXIS_TITLE_FONTSIZE = 16
 const _LINEAGEAXIS_LABEL_FONTSIZE = 12
 const _LINEAGEAXIS_TICK_FONTSIZE = 10
 const _LINEAGEAXIS_TICK_LENGTH_PX = 6.0f0
+const _LINEAGEAXIS_YAXIS_MIN_BAND_PX = 30.0f0
+const _LINEAGEAXIS_YAXIS_LABEL_GAP_PX = 4.0f0
+const _LINEAGEAXIS_YLABEL_PAD_PX = 6.0f0
 const _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX = 28.0f0
 const _LINEAGEAXIS_CLADE_LANE_GAP_PX = 8.0f0
 const _LINEAGEAXIS_CLADE_TICK_LENGTH_PX = 3.0f0
@@ -256,6 +275,7 @@ const _LINEAGEAXIS_CLADE_TEXT_GAP_PX = 6.0f0
 const _LINEAGEAXIS_SCALEBAR_FONTSIZE = 10
 const _LINEAGEAXIS_SCALEBAR_LABEL_GAP_PX = 3.0f0
 const _LINEAGEAXIS_SCALEBAR_BAND_PADDING_PX = 6.0f0
+const _LINEAGEAXIS_GRID_COLOR = (:black, 0.12)
 
 struct _LineageOrientationPolicy
     rectangular::Bool
@@ -312,6 +332,10 @@ function _default_annotation_measurements()::_LineageAxisAnnotationMeasurements
     )
 end
 
+function _default_screen_axis_measurements()::_LineageAxisScreenAxisMeasurements
+    return _LineageAxisScreenAxisMeasurements(0.0f0, 0.0f0)
+end
+
 function _lineage_orientation_policy(lineage_orientation::Symbol)::_LineageOrientationPolicy
     if lineage_orientation === :left_to_right
         return _LineageOrientationPolicy(true, :x, false, :left, :right)
@@ -331,6 +355,70 @@ function _lineage_orientation_policy(lineage_orientation::Symbol)::_LineageOrien
             ":bottom_to_top, :top_to_bottom, and :radial",
         ),
     )
+end
+
+function _clean_tick_value(value::Float32)::Float32
+    abs(value) < 5.0f-4 && return 0.0f0
+    return value
+end
+
+function _axis_tick_values(lower::Float32, upper::Float32; n::Int = 5)::Vector{Float32}
+    if !isfinite(lower) || !isfinite(upper)
+        return Float32[]
+    elseif isapprox(lower, upper; atol = 1.0f-6, rtol = 1.0f-6)
+        return Float32[_clean_tick_value(lower)]
+    end
+    return Float32[_clean_tick_value(value) for value in range(lower, upper; length = n)]
+end
+
+function _axis_tick_labels(values::Vector{Float32})::Vector{String}
+    return [string(round(value; digits = 2)) for value in values]
+end
+
+function _boundingbox_tick_values(
+        geom::LineageGraphGeometry,
+        axis::Symbol,
+    )::Vector{Float32}
+    bb = geom.boundingbox
+    lower = axis === :x ? Float32(Makie.minimum(bb)[1]) : Float32(Makie.minimum(bb)[2])
+    upper = axis === :x ? Float32(Makie.maximum(bb)[1]) : Float32(Makie.maximum(bb)[2])
+    return _axis_tick_values(lower, upper)
+end
+
+function _screen_axis_measurements(
+        geom,
+        show_y_axis::Bool,
+        ylabel::String,
+    )::_LineageAxisScreenAxisMeasurements
+    (!show_y_axis || geom === nothing) && return _default_screen_axis_measurements()
+
+    ylabels = _axis_tick_labels(_boundingbox_tick_values(geom::LineageGraphGeometry, :y))
+    tick_width_px, _ = _max_text_size_px(ylabels, Makie.defaultfont(), _LINEAGEAXIS_TICK_FONTSIZE)
+    yaxis_band_width_px = max(
+        _LINEAGEAXIS_YAXIS_MIN_BAND_PX,
+        tick_width_px + _LINEAGEAXIS_TICK_LENGTH_PX + _LINEAGEAXIS_YAXIS_LABEL_GAP_PX + 6.0f0,
+    )
+
+    ylabel_band_width_px = if isempty(strip(ylabel))
+        0.0f0
+    else
+        bb = Makie.text_bb(ylabel, Makie.defaultfont(), _LINEAGEAXIS_LABEL_FONTSIZE)
+        Float32(bb.widths[2]) + _LINEAGEAXIS_YLABEL_PAD_PX
+    end
+
+    return _LineageAxisScreenAxisMeasurements(yaxis_band_width_px, ylabel_band_width_px)
+end
+
+function _blockscene_x_for_data(lax::LineageAxis, data_x::Float32, data_y::Float32)::Float32
+    px = data_to_pixel(lax.scene, Point2f(data_x, data_y))
+    sc_vp = Makie.viewport(lax.scene)[]
+    return Float32(sc_vp.origin[1]) + px[1]
+end
+
+function _blockscene_y_for_data(lax::LineageAxis, data_x::Float32, data_y::Float32)::Float32
+    px = data_to_pixel(lax.scene, Point2f(data_x, data_y))
+    sc_vp = Makie.viewport(lax.scene)[]
+    return Float32(sc_vp.origin[2]) + px[2]
 end
 
 function _effective_process_reversed(
@@ -543,9 +631,12 @@ function _decoration_layout(
         bbox,
         title::String,
         xlabel::String,
+        ylabel::String,
         show_x_axis::Bool,
+        show_y_axis::Bool,
         lineage_orientation::Symbol,
         measurements::_LineageAxisAnnotationMeasurements,
+        screen_axis_measurements::_LineageAxisScreenAxisMeasurements,
     )
     policy = _lineage_orientation_policy(lineage_orientation)
     x0 = Float32(bbox.origin[1])
@@ -565,6 +656,10 @@ function _decoration_layout(
     title_band_h  = has_title ? _LINEAGEAXIS_TITLE_BAND_PX : 0.0f0
     xaxis_band_h  = show_x_axis ? _LINEAGEAXIS_XAXIS_BAND_PX : 0.0f0
     xlabel_band_h = has_xlabel ? _LINEAGEAXIS_XLABEL_BAND_PX : 0.0f0
+    yaxis_band_w = show_y_axis ? screen_axis_measurements.yaxis_band_width_px : 0.0f0
+    ylabel_band_w = show_y_axis && !isempty(strip(ylabel)) ?
+        screen_axis_measurements.ylabel_band_width_px :
+        0.0f0
     radial_outer_pad = if is_radial
         max(
             _LINEAGEAXIS_RADIAL_OUTER_PAD_PX,
@@ -607,9 +702,9 @@ function _decoration_layout(
         _LINEAGEAXIS_PLOT_GAP_PX
     end
 
-    plot_x0 = x0 + left_gutter
+    plot_x0 = x0 + ylabel_band_w + yaxis_band_w + left_gutter
     plot_y0 = y0 + xlabel_band_h + xaxis_band_h + scalebar_bottom_band_h + bottom_gutter
-    plot_w  = w - left_gutter - right_gutter
+    plot_w  = w - ylabel_band_w - yaxis_band_w - left_gutter - right_gutter
     plot_h  = h - title_band_h - xlabel_band_h - xaxis_band_h - scalebar_top_band_h -
         scalebar_bottom_band_h - top_gutter - bottom_gutter
     plot_rect = _rectf(plot_x0, plot_y0, plot_w, plot_h; clamp_minimum = true)
@@ -650,6 +745,18 @@ function _decoration_layout(
         y0,
         plot_rect.widths[1],
         xlabel_band_h,
+    )
+    yaxis_band_rect = _rectf(
+        x0 + ylabel_band_w,
+        plot_rect.origin[2],
+        yaxis_band_w,
+        plot_rect.widths[2],
+    )
+    ylabel_band_rect = _rectf(
+        x0,
+        plot_rect.origin[2],
+        ylabel_band_w,
+        plot_rect.widths[2],
     )
 
     leaf_anchor_x = Float32(NaN)
@@ -753,6 +860,8 @@ function _decoration_layout(
         scalebar_band_rect,
         xaxis_band_rect,
         xlabel_band_rect,
+        yaxis_band_rect,
+        ylabel_band_rect,
         left_gutter,
         right_gutter,
         top_gutter,
@@ -786,17 +895,40 @@ end
 function Makie.initialize_block!(lax::LineageAxis)
     blockscene = lax.blockscene
     annotation_measurements = Makie.Observable(_default_annotation_measurements())
+    setfield!(lax, :last_geom, Makie.Observable{Any}(nothing))
+
+    screen_axis_measurements = lift(
+        blockscene,
+        lax.last_geom,
+        lax.show_y_axis,
+        lax.ylabel,
+    ) do geom, show_y_axis, ylabel
+        _screen_axis_measurements(geom, show_y_axis, ylabel)
+    end
 
     layout_obs = lift(
         blockscene,
         lax.layoutobservables.computedbbox,
         lax.title,
         lax.xlabel,
+        lax.ylabel,
         lax.show_x_axis,
+        lax.show_y_axis,
         lax.lineage_orientation,
         annotation_measurements,
-    ) do bbox, title, xlabel, show_x_axis, lineage_orientation, measurements
-        _decoration_layout(bbox, title, xlabel, show_x_axis, lineage_orientation, measurements)
+        screen_axis_measurements,
+    ) do bbox, title, xlabel, ylabel, show_x_axis, show_y_axis, lineage_orientation, measurements, axis_measurements
+        _decoration_layout(
+            bbox,
+            title,
+            xlabel,
+            ylabel,
+            show_x_axis,
+            show_y_axis,
+            lineage_orientation,
+            measurements,
+            axis_measurements,
+        )
     end
 
     # Create the plotting scene inside the reserved plot rect rather than using
@@ -807,13 +939,16 @@ function Makie.initialize_block!(lax::LineageAxis)
     lax.scene = Scene(blockscene, scenearea; clear = false, visible = false)
 
     # Initialize non-attribute Observable fields.
-    setfield!(lax, :last_geom, Makie.Observable{Any}(nothing))
     setfield!(lax, :_polarity_locked, Makie.Observable{Bool}(false))
     setfield!(lax, :_annotation_measurements, annotation_measurements)
     setfield!(lax, :_decoration_layout, layout_obs)
     setfield!(lax, :_xaxis_tick_positions, Makie.Observable(Point2f[]))
     setfield!(lax, :_xaxis_tick_segments, Makie.Observable(Point2f[]))
     setfield!(lax, :_xaxis_tick_labels, Makie.Observable(String[]))
+    setfield!(lax, :_yaxis_tick_positions, Makie.Observable(Point2f[]))
+    setfield!(lax, :_yaxis_tick_segments, Makie.Observable(Point2f[]))
+    setfield!(lax, :_yaxis_tick_labels, Makie.Observable(String[]))
+    setfield!(lax, :_grid_segments, Makie.Observable(Point2f[]))
 
     # Lock axis_polarity when the user explicitly changes it. This observer is
     # connected AFTER attribute initialization so the @Block default assignment
@@ -824,11 +959,13 @@ function Makie.initialize_block!(lax::LineageAxis)
 
     _wire_panel_text!(lax, blockscene, layout_obs)
     _wire_x_axis!(lax, blockscene, layout_obs)
+    _wire_y_axis!(lax, blockscene, layout_obs)
+    _wire_grid!(lax, blockscene, layout_obs)
 
     return nothing
 end
 
-# ── Title/xlabel wiring ───────────────────────────────────────────────────────
+# ── Title/xlabel/ylabel wiring ────────────────────────────────────────────────
 
 function _wire_panel_text!(lax::LineageAxis, blockscene::Scene, layout_obs)
     title_positions = lift(blockscene, layout_obs) do layout
@@ -850,6 +987,15 @@ function _wire_panel_text!(lax::LineageAxis, blockscene::Scene, layout_obs)
     xlabel_visible = lift(blockscene, lax.xlabel) do xlabel
         !isempty(strip(xlabel))
     end
+    ylabel_positions = lift(blockscene, layout_obs) do layout
+        Point2f[_rect_center(layout.ylabel_band_rect)]
+    end
+    ylabel_strings = lift(blockscene, lax.ylabel) do ylabel
+        String[ylabel]
+    end
+    ylabel_visible = lift(blockscene, lax.show_y_axis, lax.ylabel) do show_y_axis, ylabel
+        show_y_axis && !isempty(strip(ylabel))
+    end
 
     text!(
         blockscene,
@@ -867,6 +1013,16 @@ function _wire_panel_text!(lax::LineageAxis, blockscene::Scene, layout_obs)
         align = (:center, :center),
         fontsize = _LINEAGEAXIS_LABEL_FONTSIZE,
         visible = xlabel_visible,
+        inspectable = false,
+    )
+    text!(
+        blockscene,
+        ylabel_positions;
+        text = ylabel_strings,
+        align = (:center, :center),
+        rotation = pi / 2,
+        fontsize = _LINEAGEAXIS_LABEL_FONTSIZE,
+        visible = ylabel_visible,
         inspectable = false,
     )
 
@@ -904,29 +1060,28 @@ function _wire_x_axis!(lax::LineageAxis, blockscene::Scene, layout_obs)
             lax._xaxis_tick_labels[]    = String[]
             return
         end
-        sc_vp = Makie.viewport(lax.scene)[]
         layout = lax._decoration_layout[]
-        bb    = (geom::LineageGraphGeometry).boundingbox
-        xmin  = Float32(Makie.minimum(bb)[1])
-        xmax  = Float32(Makie.maximum(bb)[1])
-        n     = 5
-        xs    = range(xmin, xmax; length = n)
+        bb = (geom::LineageGraphGeometry).boundingbox
+        ymid = (Float32(Makie.minimum(bb)[2]) + Float32(Makie.maximum(bb)[2])) / 2.0f0
+        xs = _boundingbox_tick_values(geom, :x)
 
         positions = Point2f[]
-        segments  = Point2f[]
+        segments = Point2f[]
         xaxis_band_rect = layout.xaxis_band_rect
         tick_top = xaxis_band_rect.origin[2] + xaxis_band_rect.widths[2] - 4.0f0
         tick_bottom = tick_top - _LINEAGEAXIS_TICK_LENGTH_PX
         label_y = xaxis_band_rect.origin[2] + 2.0f0
+        plot_left = layout.plot_rect.origin[1]
+        plot_right = layout.plot_rect.origin[1] + layout.plot_rect.widths[1]
+        push!(segments, Point2f(plot_left, tick_top), Point2f(plot_right, tick_top), Point2f(NaN, NaN))
         for x_val in xs
-            px      = data_to_pixel(lax.scene, Point2f(Float32(x_val), 0.0f0))
-            block_x = Float32(sc_vp.origin[1]) + px[1]
+            block_x = _blockscene_x_for_data(lax, x_val, ymid)
             push!(positions, Point2f(block_x, label_y))
             push!(segments, Point2f(block_x, tick_bottom), Point2f(block_x, tick_top), Point2f(NaN, NaN))
         end
         lax._xaxis_tick_positions[] = positions
         lax._xaxis_tick_segments[]  = segments
-        lax._xaxis_tick_labels[]    = [string(round(x; digits = 2)) for x in xs]
+        lax._xaxis_tick_labels[]    = _axis_tick_labels(xs)
         tick_visible[] = !isempty(positions)
     end
 
@@ -942,6 +1097,150 @@ function _wire_x_axis!(lax::LineageAxis, blockscene::Scene, layout_obs)
     end
     on(blockscene, layout_obs) do _
         _update_ticks()
+    end
+
+    return nothing
+end
+
+function _wire_y_axis!(lax::LineageAxis, blockscene::Scene, layout_obs)
+    tick_visible = Makie.Observable(false)
+
+    lines!(
+        blockscene,
+        lax._yaxis_tick_segments;
+        visible = tick_visible,
+        inspectable = false,
+    )
+    text!(
+        blockscene,
+        lax._yaxis_tick_positions;
+        text = lax._yaxis_tick_labels,
+        align = (:left, :center),
+        fontsize = _LINEAGEAXIS_TICK_FONTSIZE,
+        visible = tick_visible,
+        inspectable = false,
+    )
+
+    function _update_ticks()
+        geom = lax.last_geom[]
+        show = lax.show_y_axis[]
+        if !show || geom === nothing
+            tick_visible[] = false
+            lax._yaxis_tick_positions[] = Point2f[]
+            lax._yaxis_tick_segments[] = Point2f[]
+            lax._yaxis_tick_labels[] = String[]
+            return
+        end
+
+        layout = lax._decoration_layout[]
+        bb = (geom::LineageGraphGeometry).boundingbox
+        xmid = (Float32(Makie.minimum(bb)[1]) + Float32(Makie.maximum(bb)[1])) / 2.0f0
+        ys = _boundingbox_tick_values(geom, :y)
+
+        yaxis_band_rect = layout.yaxis_band_rect
+        axis_x = yaxis_band_rect.origin[1] + yaxis_band_rect.widths[1] - 4.0f0
+        tick_left = axis_x - _LINEAGEAXIS_TICK_LENGTH_PX
+        label_x = yaxis_band_rect.origin[1] + 2.0f0
+        plot_bottom = layout.plot_rect.origin[2]
+        plot_top = layout.plot_rect.origin[2] + layout.plot_rect.widths[2]
+
+        positions = Point2f[]
+        segments = Point2f[Point2f(axis_x, plot_bottom), Point2f(axis_x, plot_top), Point2f(NaN, NaN)]
+        for y_val in ys
+            block_y = _blockscene_y_for_data(lax, xmid, y_val)
+            push!(positions, Point2f(label_x, block_y))
+            push!(segments, Point2f(tick_left, block_y), Point2f(axis_x, block_y), Point2f(NaN, NaN))
+        end
+        lax._yaxis_tick_positions[] = positions
+        lax._yaxis_tick_segments[] = segments
+        lax._yaxis_tick_labels[] = _axis_tick_labels(ys)
+        tick_visible[] = !isempty(positions)
+    end
+
+    on(blockscene, lax.show_y_axis) do _
+        _update_ticks()
+    end
+    on(blockscene, lax.last_geom) do _
+        _update_ticks()
+    end
+    on(blockscene, Makie.viewport(lax.scene)) do _
+        _update_ticks()
+    end
+    on(blockscene, layout_obs) do _
+        _update_ticks()
+    end
+
+    return nothing
+end
+
+function _wire_grid!(lax::LineageAxis, blockscene::Scene, layout_obs)
+    grid_visible = Makie.Observable(false)
+    grid_plot = lines!(
+        blockscene,
+        lax._grid_segments;
+        color = _LINEAGEAXIS_GRID_COLOR,
+        linewidth = 1.0,
+        visible = grid_visible,
+        inspectable = false,
+    )
+    Makie.translate!(grid_plot, 0, 0, -10)
+
+    function _update_grid()
+        geom = lax.last_geom[]
+        show_grid = lax.show_grid[]
+        if !show_grid || geom === nothing
+            grid_visible[] = false
+            lax._grid_segments[] = Point2f[]
+            return
+        end
+
+        xvals = lax.show_x_axis[] ? _boundingbox_tick_values(geom::LineageGraphGeometry, :x) : Float32[]
+        yvals = lax.show_y_axis[] ? _boundingbox_tick_values(geom::LineageGraphGeometry, :y) : Float32[]
+        if isempty(xvals) && isempty(yvals)
+            grid_visible[] = false
+            lax._grid_segments[] = Point2f[]
+            return
+        end
+
+        layout = lax._decoration_layout[]
+        bb = geom.boundingbox
+        xmid = (Float32(Makie.minimum(bb)[1]) + Float32(Makie.maximum(bb)[1])) / 2.0f0
+        ymid = (Float32(Makie.minimum(bb)[2]) + Float32(Makie.maximum(bb)[2])) / 2.0f0
+        plot_left = layout.plot_rect.origin[1]
+        plot_right = layout.plot_rect.origin[1] + layout.plot_rect.widths[1]
+        plot_bottom = layout.plot_rect.origin[2]
+        plot_top = layout.plot_rect.origin[2] + layout.plot_rect.widths[2]
+
+        segments = Point2f[]
+        for x_val in xvals
+            block_x = _blockscene_x_for_data(lax, x_val, ymid)
+            push!(segments, Point2f(block_x, plot_bottom), Point2f(block_x, plot_top), Point2f(NaN, NaN))
+        end
+        for y_val in yvals
+            block_y = _blockscene_y_for_data(lax, xmid, y_val)
+            push!(segments, Point2f(plot_left, block_y), Point2f(plot_right, block_y), Point2f(NaN, NaN))
+        end
+        lax._grid_segments[] = segments
+        grid_visible[] = !isempty(segments)
+    end
+
+    on(blockscene, lax.show_grid) do _
+        _update_grid()
+    end
+    on(blockscene, lax.show_x_axis) do _
+        _update_grid()
+    end
+    on(blockscene, lax.show_y_axis) do _
+        _update_grid()
+    end
+    on(blockscene, lax.last_geom) do _
+        _update_grid()
+    end
+    on(blockscene, Makie.viewport(lax.scene)) do _
+        _update_grid()
+    end
+    on(blockscene, layout_obs) do _
+        _update_grid()
     end
 
     return nothing

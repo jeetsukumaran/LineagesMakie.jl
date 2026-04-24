@@ -212,6 +212,34 @@ end
         @test isempty(lax._xaxis_tick_positions[])
     end
 
+    @testset "show_y_axis = true renders tick elements and ylabel" begin
+        fig, lax, _ = _plotted_lax(; lineage_orientation = :top_to_bottom)
+        lax.show_y_axis[] = true
+        lax.ylabel[] = "Lineage distance"
+        @test_nowarn colorbuffer(fig)
+        @test !isempty(lax._yaxis_tick_segments[])
+        @test "Lineage distance" in _visible_blockscene_strings(lax)
+    end
+
+    @testset "show_y_axis reactive toggle" begin
+        fig, lax, _ = _plotted_lax(; lineage_orientation = :top_to_bottom)
+        lax.show_y_axis[] = true
+        @test !isempty(lax._yaxis_tick_segments[])
+        lax.show_y_axis[] = false
+        @test isempty(lax._yaxis_tick_segments[])
+        @test isempty(lax._yaxis_tick_positions[])
+    end
+
+    @testset "show_grid follows visible screen axes" begin
+        fig, lax, _ = _plotted_lax(; lineage_orientation = :top_to_bottom)
+        lax.show_y_axis[] = true
+        lax.show_grid[] = true
+        @test_nowarn colorbuffer(fig)
+        @test !isempty(lax._grid_segments[])
+        lax.show_grid[] = false
+        @test isempty(lax._grid_segments[])
+    end
+
     @testset "invalid lineage_orientation fails fast" begin
         fig, lax = _fresh_lax()
         @test_throws r"unsupported lineage_orientation" lineageplot!(

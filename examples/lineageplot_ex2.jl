@@ -132,12 +132,15 @@ lineageplot!(
     clade_highlight_alpha = 0.08,
 )
 
-# ── Panel 3 (bottom-left): top-to-bottom orientation ─────────────────────────
+# ── Panel 3 (bottom-left): top-to-bottom orientation with y-axis ─────────────
 
 lax3 = LineageAxis(
     fig[2, 1];
-    title = "Top-to-bottom orientation",
+    title = "Top-to-bottom orientation with y-axis",
     lineage_orientation = :top_to_bottom,
+    show_y_axis = true,
+    show_grid = true,
+    ylabel = "cumulative branch length (Ma)",
 )
 lineageplot!(
     lax3, PHYROOT, PHYACC;

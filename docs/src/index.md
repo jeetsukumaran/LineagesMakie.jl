@@ -27,8 +27,11 @@ Current `LineageAxis` orientation support includes `:left_to_right`,
 Vertical rectangular embeddings are supported end to end for tree geometry and
 shared annotations.
 
-The current panel-decoration surface is intentionally narrower: `show_y_axis`,
-`show_grid`, and `ylabel` remain reserved and are not rendered yet.
+Screen-axis controls are live: `show_x_axis` and `xlabel` govern the screen
+x-axis, `show_y_axis` and `ylabel` govern the screen y-axis, and `show_grid`
+draws grid lines for whichever screen axes are visible. In vertical
+rectangular embeddings, the lineage process coordinate lives on the screen
+y-axis.
 
 ```@index
 ```
