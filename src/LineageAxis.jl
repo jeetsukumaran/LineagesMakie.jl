@@ -92,15 +92,22 @@ struct _LineageAxisDecorationLayout
     xlabel_band_rect::Rect2f
     left_gutter_px::Float32
     right_gutter_px::Float32
+    top_gutter_px::Float32
+    bottom_gutter_px::Float32
     active_annotation_side::Symbol
     leaf_label_anchor_x::Float32
+    leaf_label_anchor_y::Float32
     leaf_label_align::Tuple{Symbol, Symbol}
     leaf_label_outer_edge_x::Float32
+    leaf_label_outer_edge_y::Float32
     clade_bracket_x::Float32
+    clade_bracket_y::Float32
     clade_tick_length_px::Float32
     clade_label_anchor_x::Float32
+    clade_label_anchor_y::Float32
     clade_label_align::Tuple{Symbol, Symbol}
     clade_annotation_outer_edge_x::Float32
+    clade_annotation_outer_edge_y::Float32
     radial_outer_pad_px::Float32
     radial_leaf_gap_px::Float32
     scalebar_visible::Bool
@@ -143,9 +150,10 @@ activated by `show_x_axis = true`.
 - `display_polarity::Symbol` — `:standard` (default) or `:reversed`. Controls
   whether increasing process coordinates map to increasing screen position.
 - `lineage_orientation::Symbol` — `:left_to_right` (default), `:right_to_left`,
-  or `:radial`. Controls which screen axis carries the process coordinate.
-  `:right_to_left` delegates internally to the `:left_to_right` path with
-  `display_polarity = :reversed` (DRY).
+  `:bottom_to_top`, `:top_to_bottom`, or `:radial`. Controls which screen axis
+  carries the process coordinate. `:right_to_left` and `:top_to_bottom`
+  delegate internally to the corresponding standard-orientation path with the
+  process direction reversed.
 - `show_x_axis::Bool` — default `false`. When `true`, a quantitative x-axis is
   shown (Tier-1 implementation: evenly-spaced tick marks from bounding box).
 - `show_y_axis::Bool` — default `false`. Reserved; not rendered in Tier 1.
@@ -249,6 +257,14 @@ const _LINEAGEAXIS_SCALEBAR_FONTSIZE = 10
 const _LINEAGEAXIS_SCALEBAR_LABEL_GAP_PX = 3.0f0
 const _LINEAGEAXIS_SCALEBAR_BAND_PADDING_PX = 6.0f0
 
+struct _LineageOrientationPolicy
+    rectangular::Bool
+    process_axis::Symbol
+    orientation_reversed::Bool
+    negative_annotation_side::Symbol
+    positive_annotation_side::Symbol
+end
+
 function _rectf(
         x::Float32,
         y::Float32,
@@ -296,27 +312,159 @@ function _default_annotation_measurements()::_LineageAxisAnnotationMeasurements
     )
 end
 
-function _text_anchor_extents(width_px::Float32, halign::Symbol)::Tuple{Float32, Float32}
-    if halign === :right
-        return (width_px, 0.0f0)
-    elseif halign === :center
-        half_width = width_px / 2.0f0
-        return (half_width, half_width)
-    else
-        return (0.0f0, width_px)
+function _lineage_orientation_policy(lineage_orientation::Symbol)::_LineageOrientationPolicy
+    if lineage_orientation === :left_to_right
+        return _LineageOrientationPolicy(true, :x, false, :left, :right)
+    elseif lineage_orientation === :right_to_left
+        return _LineageOrientationPolicy(true, :x, true, :left, :right)
+    elseif lineage_orientation === :bottom_to_top
+        return _LineageOrientationPolicy(true, :y, false, :bottom, :top)
+    elseif lineage_orientation === :top_to_bottom
+        return _LineageOrientationPolicy(true, :y, true, :bottom, :top)
+    elseif lineage_orientation === :radial
+        return _LineageOrientationPolicy(false, :x, false, :radial, :radial)
     end
+    throw(
+        ArgumentError(
+            "unsupported lineage_orientation $(repr(lineage_orientation)); " *
+            "supported values are :left_to_right, :right_to_left, " *
+            ":bottom_to_top, :top_to_bottom, and :radial",
+        ),
+    )
+end
+
+function _effective_process_reversed(
+        policy::_LineageOrientationPolicy,
+        display_polarity::Symbol,
+    )::Bool
+    user_reversed = if display_polarity === :standard
+        false
+    elseif display_polarity === :reversed
+        true
+    else
+        throw(
+            ArgumentError(
+                "unsupported display_polarity $(repr(display_polarity)); " *
+                "supported values are :standard and :reversed",
+            ),
+        )
+    end
+    return xor(policy.orientation_reversed, user_reversed)
+end
+
+function _compute_rectangular_boundingbox(vertex_positions::Dict)::Rect2f
+    xs = Float32[pos[1] for pos in values(vertex_positions)]
+    ys = Float32[pos[2] for pos in values(vertex_positions)]
+    isempty(xs) && throw(ArgumentError("cannot compute a bounding box for empty vertex positions"))
+    xmin = minimum(xs)
+    xmax = maximum(xs)
+    ymin = minimum(ys)
+    ymax = maximum(ys)
+    return Rect2f(xmin, ymin, xmax - xmin, ymax - ymin)
+end
+
+function _orient_rectangular_geometry(
+        geom::LineageGraphGeometry,
+        lineage_orientation::Symbol,
+        owner_handles_direction::Bool = false,
+    )::LineageGraphGeometry
+    policy = _lineage_orientation_policy(lineage_orientation)
+    !policy.rectangular && return geom
+
+    function _transform_rectangular_point(pt::Point2f)::Point2f
+        process = pt[1]
+        transverse = pt[2]
+        process_coord = if owner_handles_direction || !policy.orientation_reversed
+            process
+        else
+            -process
+        end
+        if policy.process_axis === :x
+            return Point2f(process_coord, transverse)
+        end
+        return Point2f(transverse, process_coord)
+    end
+
+    key_t = Base.keytype(typeof(geom.vertex_positions))
+    vertex_positions = Dict{key_t, Point2f}()
+    sizehint!(vertex_positions, length(geom.vertex_positions))
+    for (vertex, pos) in geom.vertex_positions
+        vertex_positions[vertex] = _transform_rectangular_point(pos)
+    end
+    edge_shapes = Point2f[_transform_rectangular_point(pt) for pt in geom.edge_shapes]
+    boundingbox = _compute_rectangular_boundingbox(vertex_positions)
+    return LineageGraphGeometry(
+        vertex_positions,
+        edge_shapes,
+        copy(geom.edges),
+        copy(geom.leaf_order),
+        boundingbox,
+    )
+end
+
+function _text_anchor_extents(size_px::Float32, align::Symbol)::Tuple{Float32, Float32}
+    if align in (:right, :top)
+        return (size_px, 0.0f0)
+    elseif align === :center
+        half_size = size_px / 2.0f0
+        return (half_size, half_size)
+    elseif align in (:left, :bottom)
+        return (0.0f0, size_px)
+    end
+    throw(
+        ArgumentError(
+            "unsupported text alignment component $(repr(align)); " *
+            "expected :left/:center/:right or :bottom/:center/:top",
+        ),
+    )
 end
 
 function _text_extents_for_side(
-        width_px::Float32,
-        halign::Symbol,
+        size_px::Float32,
+        align::Symbol,
         side::Symbol,
     )::Tuple{Float32, Float32}
-    left_extent, right_extent = _text_anchor_extents(width_px, halign)
-    if side === :left
-        return (right_extent, left_extent)
+    low_extent, high_extent = _text_anchor_extents(size_px, align)
+    if side in (:left, :bottom)
+        return (high_extent, low_extent)
+    elseif side in (:right, :top)
+        return (low_extent, high_extent)
     end
-    return (left_extent, right_extent)
+    throw(
+        ArgumentError(
+            "unsupported annotation side $(repr(side)); " *
+            "expected :left, :right, :top, or :bottom",
+        ),
+    )
+end
+
+function _rectangular_annotation_side(side::Symbol)::Symbol
+    side in (:left, :right, :top, :bottom) && return side
+    throw(
+        ArgumentError(
+            "unsupported rectangular annotation side $(repr(side)); " *
+            "supported values are :left, :right, :top, and :bottom",
+        ),
+    )
+end
+
+function _text_normal_alignment(
+        align::Tuple{Symbol, Symbol},
+        side::Symbol,
+    )::Symbol
+    return side in (:top, :bottom) ? align[2] : align[1]
+end
+
+function _offset_component_px(offset::Makie.Vec2f, side::Symbol)::Float32
+    return abs(Float32(side in (:top, :bottom) ? offset[2] : offset[1]))
+end
+
+function _normal_text_extent_px(
+        width_px::Float32,
+        height_px::Float32,
+        side::Symbol,
+    )::Float32
+    return side in (:top, :bottom) ? height_px : width_px
 end
 
 function _max_text_size_px(strings::Vector{String}, font, fontsize)::Tuple{Float32, Float32}
@@ -371,9 +519,14 @@ function _rectangular_annotation_extent_px(
         measurements.clade_bracket_min_gap_px,
         leaf_extent + _LINEAGEAXIS_CLADE_LANE_GAP_PX + measurements.clade_tick_length_px,
     )
+    clade_label_extent_px = _normal_text_extent_px(
+        measurements.clade_label_max_width_px,
+        measurements.clade_label_max_height_px,
+        measurements.active_side,
+    )
     clade_label_extent = clade_bracket_extent +
         measurements.clade_label_gap_px +
-        measurements.clade_label_max_width_px
+        clade_label_extent_px
     return max(leaf_extent, clade_label_extent)
 end
 
@@ -394,6 +547,7 @@ function _decoration_layout(
         lineage_orientation::Symbol,
         measurements::_LineageAxisAnnotationMeasurements,
     )
+    policy = _lineage_orientation_policy(lineage_orientation)
     x0 = Float32(bbox.origin[1])
     y0 = Float32(bbox.origin[2])
     w  = Float32(bbox.widths[1])
@@ -401,7 +555,7 @@ function _decoration_layout(
 
     has_title  = !isempty(strip(title))
     has_xlabel = !isempty(strip(xlabel))
-    is_radial  = lineage_orientation === :radial
+    is_radial  = !policy.rectangular
     scalebar_halign = measurements.scalebar_position[1]
     scalebar_valign = measurements.scalebar_position[2] === :top ? :top : :bottom
     scalebar_band_h = _scalebar_band_height_px(measurements)
@@ -438,22 +592,36 @@ function _decoration_layout(
     else
         _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX
     end
-    vertical_pad  = is_radial ? radial_outer_pad : _LINEAGEAXIS_PLOT_GAP_PX
+    top_gutter = if is_radial
+        radial_outer_pad
+    elseif active_side === :top
+        _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX + annotation_extent_px
+    else
+        _LINEAGEAXIS_PLOT_GAP_PX
+    end
+    bottom_gutter = if is_radial
+        radial_outer_pad
+    elseif active_side === :bottom
+        _LINEAGEAXIS_SIDE_OUTER_MARGIN_PX + annotation_extent_px
+    else
+        _LINEAGEAXIS_PLOT_GAP_PX
+    end
 
     plot_x0 = x0 + left_gutter
-    plot_y0 = y0 + xlabel_band_h + xaxis_band_h + scalebar_bottom_band_h + vertical_pad
+    plot_y0 = y0 + xlabel_band_h + xaxis_band_h + scalebar_bottom_band_h + bottom_gutter
     plot_w  = w - left_gutter - right_gutter
     plot_h  = h - title_band_h - xlabel_band_h - xaxis_band_h - scalebar_top_band_h -
-        scalebar_bottom_band_h - 2.0f0 * vertical_pad
+        scalebar_bottom_band_h - top_gutter - bottom_gutter
     plot_rect = _rectf(plot_x0, plot_y0, plot_w, plot_h; clamp_minimum = true)
     plot_left = plot_rect.origin[1]
     plot_right = plot_rect.origin[1] + plot_rect.widths[1]
+    plot_bottom = plot_rect.origin[2]
 
     plot_top = plot_rect.origin[2] + plot_rect.widths[2]
     scalebar_band_rect = if scalebar_valign === :top
         _rectf(
             plot_rect.origin[1],
-            plot_top + vertical_pad,
+            plot_top + top_gutter,
             plot_rect.widths[1],
             scalebar_top_band_h,
         )
@@ -467,7 +635,7 @@ function _decoration_layout(
     end
     title_band_rect = _rectf(
         plot_rect.origin[1],
-        plot_top + vertical_pad + scalebar_top_band_h,
+        plot_top + top_gutter + scalebar_top_band_h,
         plot_rect.widths[1],
         title_band_h,
     )
@@ -485,14 +653,34 @@ function _decoration_layout(
     )
 
     leaf_anchor_x = Float32(NaN)
+    leaf_anchor_y = Float32(NaN)
     leaf_outer_edge_x = Float32(NaN)
+    leaf_outer_edge_y = Float32(NaN)
     clade_bracket_x = Float32(NaN)
+    clade_bracket_y = Float32(NaN)
     clade_label_anchor_x = Float32(NaN)
+    clade_label_anchor_y = Float32(NaN)
     clade_annotation_outer_edge_x = Float32(NaN)
+    clade_annotation_outer_edge_y = Float32(NaN)
     scalebar_line_y = Float32(NaN)
     scalebar_label_y = Float32(NaN)
     leaf_align = measurements.leaf_label_align
-    clade_align = active_side === :left ? (:right, :center) : (:left, :center)
+    clade_align = if active_side === :left
+        (:right, :center)
+    elseif active_side === :right
+        (:left, :center)
+    elseif active_side === :top
+        (:center, :bottom)
+    elseif active_side === :bottom
+        (:center, :top)
+    else
+        (:left, :center)
+    end
+    clade_label_extent_px = _normal_text_extent_px(
+        measurements.clade_label_max_width_px,
+        measurements.clade_label_max_height_px,
+        active_side,
+    )
 
     if !is_radial && active_side === :right
         leaf_anchor_x = plot_right + measurements.leaf_label_gap_px + measurements.leaf_label_toward_plot_px
@@ -519,8 +707,36 @@ function _decoration_layout(
         clade_annotation_outer_edge_x = min(
             leaf_outer_edge_x,
             measurements.clade_annotation_visible ?
-                (clade_label_anchor_x - measurements.clade_label_max_width_px) :
+                (clade_label_anchor_x - clade_label_extent_px) :
                 leaf_outer_edge_x,
+        )
+    elseif !is_radial && active_side === :top
+        leaf_anchor_y = plot_top + measurements.leaf_label_gap_px + measurements.leaf_label_toward_plot_px
+        leaf_outer_edge_y = leaf_anchor_y + measurements.leaf_label_away_from_plot_px
+        clade_bracket_y = max(
+            plot_top + measurements.clade_bracket_min_gap_px,
+            leaf_outer_edge_y + _LINEAGEAXIS_CLADE_LANE_GAP_PX + measurements.clade_tick_length_px,
+        )
+        clade_label_anchor_y = clade_bracket_y + measurements.clade_label_gap_px
+        clade_annotation_outer_edge_y = max(
+            leaf_outer_edge_y,
+            measurements.clade_annotation_visible ?
+                (clade_label_anchor_y + clade_label_extent_px) :
+                leaf_outer_edge_y,
+        )
+    elseif !is_radial && active_side === :bottom
+        leaf_anchor_y = plot_bottom - measurements.leaf_label_gap_px - measurements.leaf_label_toward_plot_px
+        leaf_outer_edge_y = leaf_anchor_y - measurements.leaf_label_away_from_plot_px
+        clade_bracket_y = min(
+            plot_bottom - measurements.clade_bracket_min_gap_px,
+            leaf_outer_edge_y - _LINEAGEAXIS_CLADE_LANE_GAP_PX - measurements.clade_tick_length_px,
+        )
+        clade_label_anchor_y = clade_bracket_y - measurements.clade_label_gap_px
+        clade_annotation_outer_edge_y = min(
+            leaf_outer_edge_y,
+            measurements.clade_annotation_visible ?
+                (clade_label_anchor_y - clade_label_extent_px) :
+                leaf_outer_edge_y,
         )
     end
 
@@ -539,15 +755,22 @@ function _decoration_layout(
         xlabel_band_rect,
         left_gutter,
         right_gutter,
+        top_gutter,
+        bottom_gutter,
         active_side,
         leaf_anchor_x,
+        leaf_anchor_y,
         leaf_align,
         leaf_outer_edge_x,
+        leaf_outer_edge_y,
         clade_bracket_x,
+        clade_bracket_y,
         measurements.clade_tick_length_px,
         clade_label_anchor_x,
+        clade_label_anchor_y,
         clade_align,
         clade_annotation_outer_edge_x,
+        clade_annotation_outer_edge_y,
         radial_outer_pad,
         measurements.radial_leaf_gap_px,
         measurements.scalebar_visible,
@@ -759,12 +982,12 @@ limit function. Confirmed idiom from
 `leftright = xrev ? (right, left) : (left, right)` feeds directly into
 `orthographicprojection` / `set_proj_view!`.
 
-`lineage_orientation = :right_to_left` delegates to the `:left_to_right` path
-with `display_polarity = :reversed` (DRY, per `02_issues.md` resolution of
-PRD Open Q5).
-
-`lineage_orientation = :radial` sets equal x and y extents centred on the data
-bounding box, producing a square viewport suitable for circular layouts.
+Rectangular orientations support both horizontal and vertical embeddings:
+`:left_to_right`, `:right_to_left`, `:bottom_to_top`, and `:top_to_bottom`.
+`:right_to_left` and `:top_to_bottom` are implemented as the corresponding
+standard embedding plus a reversed process direction. `:radial` sets equal x
+and y extents centred on the data bounding box, producing a square viewport
+suitable for circular layouts.
 """
 function reset_limits!(lax::LineageAxis, geom::LineageGraphGeometry)::Nothing
     lax.last_geom[] = geom
@@ -780,24 +1003,28 @@ function reset_limits!(lax::LineageAxis, geom::LineageGraphGeometry)::Nothing
     xpad = max(xspan * 0.05f0, 0.1f0)
     ypad = max(yspan * 0.05f0, 0.1f0)
 
-    lo = lax.lineage_orientation[]
-    dp = lax.display_polarity[]
-    effective_reversed = (dp === :reversed) || (lo === :right_to_left)
+    policy = _lineage_orientation_policy(lax.lineage_orientation[])
+    effective_reversed = _effective_process_reversed(policy, lax.display_polarity[])
 
     local leftright::Tuple{Float32, Float32}
     local bottomtop::Tuple{Float32, Float32}
 
-    if lo === :radial
+    if !policy.rectangular
         cx   = (data_left + data_right) / 2f0
         cy   = (data_bottom + data_top) / 2f0
         half = max(xspan, yspan) / 2f0 + max(xpad, ypad)
         leftright = effective_reversed ? (cx + half, cx - half) : (cx - half, cx + half)
         bottomtop = (cy - half, cy + half)
-    else
+    elseif policy.process_axis === :x
         leftright = effective_reversed ?
             (data_right + xpad, data_left - xpad) :
             (data_left - xpad, data_right + xpad)
         bottomtop = (data_bottom - ypad, data_top + ypad)
+    else
+        leftright = (data_left - xpad, data_right + xpad)
+        bottomtop = effective_reversed ?
+            (data_top + ypad, data_bottom - ypad) :
+            (data_bottom - ypad, data_top + ypad)
     end
 
     proj = Makie.orthographicprojection(
@@ -943,26 +1170,31 @@ function _annotation_measurements(
         )
     end
 
-    active_side = clade_label_side
-    leaf_halign = leaf_label_align[1]
-    toward_plot_px, away_from_plot_px = _text_extents_for_side(leaf_width_px, leaf_halign, active_side)
+    active_side = _rectangular_annotation_side(clade_label_side)
+    leaf_normal_align = _text_normal_alignment(leaf_label_align, active_side)
+    leaf_normal_extent_px = _normal_text_extent_px(leaf_width_px, leaf_height_px, active_side)
+    toward_plot_px, away_from_plot_px = _text_extents_for_side(
+        leaf_normal_extent_px,
+        leaf_normal_align,
+        active_side,
+    )
 
     return _LineageAxisAnnotationMeasurements(
         active_side,
         leaf_label_visible && !isempty(leaf_strings),
         (leaf_label_align[1], leaf_label_align[2]),
-        abs(Float32(leaf_label_offset[1])),
+        _offset_component_px(leaf_label_offset, active_side),
         toward_plot_px,
         away_from_plot_px,
         leaf_width_px,
         leaf_height_px,
         clade_label_visible && !isempty(clade_vertices),
-        abs(Float32(clade_label_offset[1])),
+        _offset_component_px(clade_label_offset, active_side),
         _LINEAGEAXIS_CLADE_TICK_LENGTH_PX,
         _LINEAGEAXIS_CLADE_TEXT_GAP_PX,
         clade_width_px,
         clade_height_px,
-        max(abs(Float32(leaf_label_offset[1])), 4.0f0),
+        max(_offset_component_px(leaf_label_offset, active_side), 4.0f0),
         leaf_width_px,
         leaf_height_px,
         scalebar_visible,
@@ -1092,9 +1324,9 @@ When `ax` is a `LineageAxis`, this method additionally:
    set it (detected by the `_polarity_locked` flag wired in `initialize_block!`).
 2. Computes orientation-aware defaults for `leaf_label_offset`, `leaf_label_align`,
    and `clade_label_side` based on `lineage_orientation` and `display_polarity`.
-   When leaves fall on the left side of the screen, leaf labels are offset leftward
-   (`Vec2f(-4, 0)`, right-aligned) and the clade bracket is placed on the left.
-   Caller-supplied keyword arguments always override these defaults.
+   Horizontal embeddings default to left/right annotation lanes; vertical
+   embeddings default to top/bottom annotation lanes. Caller-supplied keyword
+   arguments always override these defaults.
 3. Calls `reset_limits!(ax, geom)` after the recipe sets `lp[:computed_geom]`
    so that axis limits fit the lineage graph bounding box with `display_polarity`
    and `lineage_orientation` applied.
@@ -1117,6 +1349,11 @@ function lineageplot!(
         lineageunits = nothing,
         kwargs...,
     )::LineagePlot
+    user_kwargs = (; kwargs...)
+    if haskey(user_kwargs, :lineage_orientation)
+        ax.lineage_orientation[] = user_kwargs.lineage_orientation
+    end
+
     resolved_lu = _resolve_lineageunits_stub(lineageunits, accessor)
 
     if !ax._polarity_locked[]
@@ -1124,31 +1361,52 @@ function lineageplot!(
     end
 
     # Compute orientation-aware defaults for leaf labels and clade bracket side.
-    # leaves_on_left is true when the layout places leaf tips on the left screen edge.
-    lo                 = ax.lineage_orientation[]
-    dp                 = ax.display_polarity[]
-    backward           = resolved_lu in (:vertexheights, :coalescenceage)
-    effective_reversed = (dp === :reversed) || (lo === :right_to_left)
-    leaves_on_left     = xor(backward, effective_reversed)
+    lo = ax.lineage_orientation[]
+    policy = _lineage_orientation_policy(lo)
+    backward = resolved_lu in (:vertexheights, :coalescenceage)
+    effective_reversed = _effective_process_reversed(policy, ax.display_polarity[])
+    leaves_on_negative_end = xor(backward, effective_reversed)
+    annotation_side = leaves_on_negative_end ? policy.negative_annotation_side : policy.positive_annotation_side
 
-    orientation_defaults = if lo !== :radial
-        side_kw = (
-            clade_label_side = leaves_on_left ? :left : :right,
-            clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
-        )
-        if leaves_on_left
-            merge(side_kw,
-                  (leaf_label_offset = Makie.Vec2f(-4, 0),
-                   leaf_label_align  = (:right, :center)))
+    orientation_defaults = if policy.rectangular
+        if annotation_side === :left
+            (
+                leaf_label_offset = Makie.Vec2f(-4, 0),
+                leaf_label_align = (:right, :center),
+                clade_label_side = :left,
+                clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
+            )
+        elseif annotation_side === :right
+            (
+                leaf_label_offset = Makie.Vec2f(4, 0),
+                leaf_label_align = (:left, :center),
+                clade_label_side = :right,
+                clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
+            )
+        elseif annotation_side === :top
+            (
+                leaf_label_offset = Makie.Vec2f(0, 4),
+                leaf_label_align = (:center, :bottom),
+                clade_label_side = :top,
+                clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
+            )
         else
-            side_kw
+            (
+                leaf_label_offset = Makie.Vec2f(0, -4),
+                leaf_label_align = (:center, :top),
+                clade_label_side = :bottom,
+                clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
+            )
         end
     else
         NamedTuple()
     end
     # Caller-supplied kwargs take precedence over orientation defaults.
-    user_kwargs = (; kwargs...)
-    merged_kwargs = merge(orientation_defaults, user_kwargs)
+    merged_kwargs = merge(
+        (rectangular_orientation_owner = :lineageaxis,),
+        orientation_defaults,
+        user_kwargs,
+    )
 
     # Route to ax.scene (not ax) to avoid recursive dispatch through the
     # @recipe-generated lineageplot! which also accepts AbstractAxis.

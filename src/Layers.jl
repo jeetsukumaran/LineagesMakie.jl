@@ -262,8 +262,9 @@ guarantees that label strings and positions share the same index mapping.
   basis. The offset remains stable on resize.
 - `italic`: when `true`, renders labels in italic style. Default `false`.
 - `align`: Makie text alignment tuple. Default `(:left, :center)`.
-- `lineage_orientation`: `:left_to_right` (default), `:right_to_left`, or
-  `:radial`. Determines whether radial outward placement logic is used.
+- `lineage_orientation`: `:left_to_right` (default), `:right_to_left`,
+  `:bottom_to_top`, `:top_to_bottom`, or `:radial`. Determines whether radial
+  outward placement logic is used.
 - `visible`: whether the layer is rendered. Default `true`.
 """
 @recipe LeafLabelLayer (geom, accessor) begin
@@ -480,6 +481,22 @@ function _normalized_or_default(vec::Vec2f, default::Vec2f)::Vec2f
     return Vec2f(vec[1] * inv_norm, vec[2] * inv_norm)
 end
 
+function _parent_lineage_orientation_policy(lineage_orientation::Symbol)
+    return getfield(parentmodule(@__MODULE__), :_lineage_orientation_policy)(lineage_orientation)
+end
+
+function _parent_orient_rectangular_geometry(
+        geom::LineageGraphGeometry,
+        lineage_orientation::Symbol,
+        owner_handles_direction::Bool,
+    )::LineageGraphGeometry
+    return getfield(parentmodule(@__MODULE__), :_orient_rectangular_geometry)(
+        geom,
+        lineage_orientation,
+        owner_handles_direction,
+    )
+end
+
 function _leaf_label_data(
         sc,
         geom::LineageGraphGeometry,
@@ -499,6 +516,15 @@ function _leaf_label_data(
                 anchor = geom.vertex_positions[v]
                 block_anchor = _to_blockscene_pixel(sc, anchor)
                 push!(entries, (Point2f(anchor_x, block_anchor[2]), shared_align))
+            end
+            return entries
+        elseif side in (:top, :bottom)
+            shared_align = annotation_layout.leaf_label_align
+            anchor_y = annotation_layout.leaf_label_anchor_y
+            for v in geom.leaf_order
+                anchor = geom.vertex_positions[v]
+                block_anchor = _to_blockscene_pixel(sc, anchor)
+                push!(entries, (Point2f(block_anchor[1], anchor_y), shared_align))
             end
             return entries
         end
@@ -537,7 +563,7 @@ end
 
 function _shared_clade_annotation_active(annotation_layout)::Bool
     annotation_layout === nothing && return false
-    return annotation_layout.active_annotation_side in (:left, :right)
+    return annotation_layout.active_annotation_side in (:left, :right, :top, :bottom)
 end
 
 function _shared_bracket_pixel_shapes(
@@ -550,7 +576,6 @@ function _shared_bracket_pixel_shapes(
     !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
 
     side = annotation_layout.active_annotation_side
-    x_bar = annotation_layout.clade_bracket_x
     tick_length_px = annotation_layout.clade_tick_length_px
     pts = Point2f[]
     nan = Point2f(NaN, NaN)
@@ -559,18 +584,33 @@ function _shared_bracket_pixel_shapes(
         leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
         isempty(leaf_pts) && continue
         leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
+        xs = [q[1] for q in leaf_px]
         ys = [q[2] for q in leaf_px]
+        x_min = minimum(xs)
+        x_max = maximum(xs)
         y_min = minimum(ys)
         y_max = maximum(ys)
 
         if side === :right
+            x_bar = annotation_layout.clade_bracket_x
             push!(pts, Point2f(x_bar - tick_length_px, y_min), Point2f(x_bar, y_min), nan)
             push!(pts, Point2f(x_bar, y_min), Point2f(x_bar, y_max), nan)
             push!(pts, Point2f(x_bar, y_max), Point2f(x_bar - tick_length_px, y_max), nan)
-        else
+        elseif side === :left
+            x_bar = annotation_layout.clade_bracket_x
             push!(pts, Point2f(x_bar + tick_length_px, y_min), Point2f(x_bar, y_min), nan)
             push!(pts, Point2f(x_bar, y_min), Point2f(x_bar, y_max), nan)
             push!(pts, Point2f(x_bar, y_max), Point2f(x_bar + tick_length_px, y_max), nan)
+        elseif side === :top
+            y_bar = annotation_layout.clade_bracket_y
+            push!(pts, Point2f(x_min, y_bar - tick_length_px), Point2f(x_min, y_bar), nan)
+            push!(pts, Point2f(x_min, y_bar), Point2f(x_max, y_bar), nan)
+            push!(pts, Point2f(x_max, y_bar), Point2f(x_max, y_bar - tick_length_px), nan)
+        else
+            y_bar = annotation_layout.clade_bracket_y
+            push!(pts, Point2f(x_min, y_bar + tick_length_px), Point2f(x_min, y_bar), nan)
+            push!(pts, Point2f(x_min, y_bar), Point2f(x_max, y_bar), nan)
+            push!(pts, Point2f(x_max, y_bar), Point2f(x_max, y_bar + tick_length_px), nan)
         end
     end
     return pts
@@ -585,14 +625,20 @@ function _shared_bracket_label_pixel_positions(
     )::Vector{Point2f}
     !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
 
-    x_label = annotation_layout.clade_label_anchor_x
     positions = Point2f[]
     for mrca in clade_vertices
         leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
         isempty(leaf_pts) && continue
         leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
+        xs = [q[1] for q in leaf_px]
         ys = [q[2] for q in leaf_px]
-        push!(positions, Point2f(x_label, (minimum(ys) + maximum(ys)) / 2))
+        if annotation_layout.active_annotation_side in (:left, :right)
+            x_label = annotation_layout.clade_label_anchor_x
+            push!(positions, Point2f(x_label, (minimum(ys) + maximum(ys)) / 2))
+        else
+            y_label = annotation_layout.clade_label_anchor_y
+            push!(positions, Point2f((minimum(xs) + maximum(xs)) / 2, y_label))
+        end
     end
     return positions
 end
@@ -626,9 +672,18 @@ function _scalebar_visible(lineageunits::Symbol, label)::Bool
     return _scalebar_visible(lineageunits) && !isempty(strip(string(label)))
 end
 
-function _resolved_scalebar_length(geom::LineageGraphGeometry, len)::Float64
+function _resolved_scalebar_length(
+        geom::LineageGraphGeometry,
+        len,
+        lineage_orientation::Symbol,
+    )::Float64
     bb = geom.boundingbox
-    return len === nothing ? Float64(bb.widths[1]) * 0.1 : Float64(len)
+    if len !== nothing
+        return Float64(len)
+    end
+    policy = _parent_lineage_orientation_policy(lineage_orientation)
+    process_span = (!policy.rectangular || policy.process_axis === :x) ? bb.widths[1] : bb.widths[2]
+    return Float64(process_span) * 0.1
 end
 
 function _scalebar_length_px(
@@ -642,16 +697,28 @@ function _scalebar_length_px(
         center = _geom_center(bb)
         start_pt = center
         end_pt = Point2f(center[1] + Float32(bar_length), center[2])
+        px_start = data_to_pixel(sc, start_pt)
+        px_end = data_to_pixel(sc, end_pt)
+        return abs(Float32(px_end[1] - px_start[1]))
     else
-        y_mid = Float32(Makie.minimum(bb)[2] + Makie.maximum(bb)[2]) / 2.0f0
-        start_x = Float32(Makie.minimum(bb)[1])
-        start_pt = Point2f(start_x, y_mid)
-        end_pt = Point2f(start_x + Float32(bar_length), y_mid)
+        policy = _parent_lineage_orientation_policy(lineage_orientation)
+        if policy.process_axis === :x
+            y_mid = Float32(Makie.minimum(bb)[2] + Makie.maximum(bb)[2]) / 2.0f0
+            start_x = Float32(Makie.minimum(bb)[1])
+            start_pt = Point2f(start_x, y_mid)
+            end_pt = Point2f(start_x + Float32(bar_length), y_mid)
+            px_start = data_to_pixel(sc, start_pt)
+            px_end = data_to_pixel(sc, end_pt)
+            return abs(Float32(px_end[1] - px_start[1]))
+        end
+        x_mid = Float32(Makie.minimum(bb)[1] + Makie.maximum(bb)[1]) / 2.0f0
+        start_y = Float32(Makie.minimum(bb)[2])
+        start_pt = Point2f(x_mid, start_y)
+        end_pt = Point2f(x_mid, start_y + Float32(bar_length))
+        px_start = data_to_pixel(sc, start_pt)
+        px_end = data_to_pixel(sc, end_pt)
+        return abs(Float32(px_end[2] - px_start[2]))
     end
-
-    px_start = data_to_pixel(sc, start_pt)
-    px_end = data_to_pixel(sc, end_pt)
-    return abs(Float32(px_end[1] - px_start[1]))
 end
 
 function _scalebar_origin_x(
@@ -676,21 +743,40 @@ function _scalebar_origin(
         position::Tuple{Symbol, Symbol},
         bb::Rect2f,
         bar_length::Float64,
+        lineage_orientation::Symbol,
     )::Point2f
+    policy = _parent_lineage_orientation_policy(lineage_orientation)
     halign, valign = position
+    if !policy.rectangular || policy.process_axis === :x
+        x = if halign === :left
+            bb.origin[1]
+        elseif halign === :right
+            bb.origin[1] + bb.widths[1] - bar_length
+        else  # :center
+            bb.origin[1] + (bb.widths[1] - bar_length) / 2
+        end
+        y = if valign === :bottom
+            bb.origin[2] - 0.5f0
+        elseif valign === :top
+            bb.origin[2] + bb.widths[2] + 0.5f0
+        else  # :center
+            bb.origin[2] + bb.widths[2] / 2
+        end
+        return Point2f(x, y)
+    end
     x = if halign === :left
-        bb.origin[1]
+        bb.origin[1] - 0.5f0
     elseif halign === :right
-        bb.origin[1] + bb.widths[1] - bar_length
+        bb.origin[1] + bb.widths[1] + 0.5f0
     else  # :center
-        bb.origin[1] + (bb.widths[1] - bar_length) / 2
+        bb.origin[1] + bb.widths[1] / 2
     end
     y = if valign === :bottom
-        bb.origin[2] - 0.5f0
+        bb.origin[2]
     elseif valign === :top
-        bb.origin[2] + bb.widths[2] + 0.5f0
+        bb.origin[2] + bb.widths[2] - bar_length
     else  # :center
-        bb.origin[2] + bb.widths[2] / 2
+        bb.origin[2] + (bb.widths[2] - bar_length) / 2
     end
     return Point2f(x, y)
 end
@@ -865,10 +951,11 @@ the scene viewport or camera changes.
   Default `v -> ""` (invisible empty labels).
 - `color`: line and text color. Default `:black`.
 - `fontsize`: label font size in points. Default `11`.
-- `offset`: pixel-space offset from the outermost leaf x-position to the bracket
-  vertical bar, as `Vec2f(dx_px, 0)`. Default `Vec2f(6, 0)`.
-- `side`: which side of the leaf tips to place the bracket. `:right` (default,
-  leaves at right) or `:left` (leaves at left). Set automatically by
+- `offset`: pixel-space offset from the leaf span toward the bracket bar.
+  Horizontal brackets use the x component; vertical brackets use the y
+  component. Default `Vec2f(6, 0)`.
+- `side`: which side of the leaf tips to place the bracket. Supported values
+  are `:right` (default), `:left`, `:top`, and `:bottom`. Set automatically by
   `lineageplot!(ax::LineageAxis, ...)` based on orientation.
 - `visible`: whether the layer is rendered. Default `true`.
 """
@@ -878,9 +965,9 @@ the scene viewport or camera changes.
     label_func = (v -> "")
     color = :black
     fontsize = 11
-    "Pixel-space offset from the rightmost leaf position to the bracket bar."
+    "Pixel-space offset from the leaf span toward the bracket bar."
     offset = Makie.Vec2f(6, 0)
-    "Bracket side relative to leaf tips: :right (leaves at right) or :left (leaves at left)."
+    "Bracket side relative to leaf tips: :right, :left, :top, or :bottom."
     side = :right
     annotation_layout = nothing
     visible = true
@@ -890,9 +977,9 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     sc = parent_scene(p)
     register_pixel_projection!(p.attributes, sc)
 
-    # NaN-separated bracket geometry: bottom tick + vertical bar + top tick per clade.
-    # Depends on :pixel_projection so offset/tick conversions recompute on resize.
-    # :side controls whether the bracket is placed to the right or left of leaf tips.
+    # NaN-separated bracket geometry in data space. Horizontal sides produce
+    # the classic vertical phylogenetic bracket; top/bottom sides produce the
+    # transposed horizontal version for vertical embeddings.
     map!(
         p.attributes,
         [:geom, :accessor, :clade_vertices, :offset, :pixel_projection, :side],
@@ -903,9 +990,13 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
             leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
             isempty(leaf_pts) && continue
 
+            xs    = [q[1] for q in leaf_pts]
             ys    = [q[2] for q in leaf_pts]
+            x_min = minimum(xs)
+            x_max = maximum(xs)
             y_min = minimum(ys)
             y_max = maximum(ys)
+            mid_x = (x_min + x_max) / 2
             mid_y = (y_min + y_max) / 2
             nan   = Point2f(NaN, NaN)
 
@@ -918,7 +1009,7 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
                 push!(pts, Point2f(x_bar - dx_tick, y_min), Point2f(x_bar, y_min), nan)
                 push!(pts, Point2f(x_bar, y_min),            Point2f(x_bar, y_max), nan)
                 push!(pts, Point2f(x_bar, y_max),            Point2f(x_bar - dx_tick, y_max), nan)
-            else  # :left
+            elseif side === :left
                 x_anchor = minimum(q[1] for q in leaf_pts)
                 anchor   = Point2f(x_anchor, mid_y)
                 dx_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
@@ -927,28 +1018,54 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
                 push!(pts, Point2f(x_bar + dx_tick, y_min), Point2f(x_bar, y_min), nan)
                 push!(pts, Point2f(x_bar, y_min),            Point2f(x_bar, y_max), nan)
                 push!(pts, Point2f(x_bar, y_max),            Point2f(x_bar + dx_tick, y_max), nan)
+            elseif side === :top
+                y_anchor = maximum(q[2] for q in leaf_pts)
+                anchor   = Point2f(mid_x, y_anchor)
+                dy_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+                dy_tick  = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, 3.0f0))[2]
+                y_bar    = y_anchor + dy_off
+                push!(pts, Point2f(x_min, y_bar - dy_tick), Point2f(x_min, y_bar), nan)
+                push!(pts, Point2f(x_min, y_bar),           Point2f(x_max, y_bar), nan)
+                push!(pts, Point2f(x_max, y_bar),           Point2f(x_max, y_bar - dy_tick), nan)
+            elseif side === :bottom
+                y_anchor = minimum(q[2] for q in leaf_pts)
+                anchor   = Point2f(mid_x, y_anchor)
+                dy_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+                dy_tick  = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, 3.0f0))[2]
+                y_bar    = y_anchor - dy_off
+                push!(pts, Point2f(x_min, y_bar + dy_tick), Point2f(x_min, y_bar), nan)
+                push!(pts, Point2f(x_min, y_bar),           Point2f(x_max, y_bar), nan)
+                push!(pts, Point2f(x_max, y_bar),           Point2f(x_max, y_bar + dy_tick), nan)
+            else
+                throw(
+                    ArgumentError(
+                        "unsupported clade label side $(repr(side)); " *
+                        "supported values are :right, :left, :top, and :bottom",
+                    ),
+                )
             end
         end
         return pts
     end
 
-    # Label (position, string, halign) triples — one per MRCA.
-    # Has a separate dependency on :label_func so label text changes do not
-    # force bracket geometry recomputation. :side governs label alignment and
-    # x-position relative to the bracket bar.
+    # Label (position, string, align) triples — one per MRCA.
     map!(
         p.attributes,
         [:geom, :accessor, :clade_vertices, :label_func, :offset, :pixel_projection, :side],
         :bracket_label_data,
     ) do geom, accessor, clade_vertices, label_func, offset, _, side
-        entries = Tuple{Point2f, String, Symbol}[]
+        entries = Tuple{Point2f, String, Tuple{Symbol, Symbol}}[]
         for mrca in clade_vertices
             leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.vertex_positions)
             isempty(leaf_pts) && continue
 
+            xs    = [q[1] for q in leaf_pts]
             ys    = [q[2] for q in leaf_pts]
+            x_min = minimum(xs)
+            x_max = maximum(xs)
             y_min = minimum(ys)
             y_max = maximum(ys)
+            mid_x = (x_min + x_max) / 2
             mid_y = (y_min + y_max) / 2
 
             if side === :right
@@ -956,13 +1073,32 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
                 anchor   = Point2f(x_anchor, mid_y)
                 dx_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
                 x_bar    = x_anchor + dx_off
-                push!(entries, (Point2f(x_bar, mid_y), string(label_func(mrca)), :left))
-            else  # :left
+                push!(entries, (Point2f(x_bar, mid_y), string(label_func(mrca)), (:left, :center)))
+            elseif side === :left
                 x_anchor = minimum(q[1] for q in leaf_pts)
                 anchor   = Point2f(x_anchor, mid_y)
                 dx_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
                 x_bar    = x_anchor - dx_off
-                push!(entries, (Point2f(x_bar, mid_y), string(label_func(mrca)), :right))
+                push!(entries, (Point2f(x_bar, mid_y), string(label_func(mrca)), (:right, :center)))
+            elseif side === :top
+                y_anchor = maximum(q[2] for q in leaf_pts)
+                anchor   = Point2f(mid_x, y_anchor)
+                dy_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+                y_bar    = y_anchor + dy_off
+                push!(entries, (Point2f(mid_x, y_bar), string(label_func(mrca)), (:center, :bottom)))
+            elseif side === :bottom
+                y_anchor = minimum(q[2] for q in leaf_pts)
+                anchor   = Point2f(mid_x, y_anchor)
+                dy_off   = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+                y_bar    = y_anchor - dy_off
+                push!(entries, (Point2f(mid_x, y_bar), string(label_func(mrca)), (:center, :top)))
+            else
+                throw(
+                    ArgumentError(
+                        "unsupported clade label side $(repr(side)); " *
+                        "supported values are :right, :left, :top, and :bottom",
+                    ),
+                )
             end
         end
         return entries
@@ -976,15 +1112,15 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
         return String[str for (_, str, _) in entries]
     end
 
-    map!(p.attributes, [:bracket_label_data], :bracket_label_haligns) do entries
-        return Symbol[halign for (_, _, halign) in entries]
+    map!(p.attributes, [:bracket_label_data], :local_bracket_label_aligns) do entries
+        return Tuple{Symbol, Symbol}[align for (_, _, align) in entries]
     end
 
-    map!(p.attributes, [:bracket_label_haligns, :annotation_layout], :bracket_label_aligns) do haligns, annotation_layout
+    map!(p.attributes, [:local_bracket_label_aligns, :annotation_layout], :bracket_label_aligns) do aligns, annotation_layout
         if _shared_clade_annotation_active(annotation_layout)
-            return Tuple{Symbol, Symbol}[annotation_layout.clade_label_align for _ in haligns]
+            return Tuple{Symbol, Symbol}[annotation_layout.clade_label_align for _ in aligns]
         end
-        return Tuple{Symbol, Symbol}[(h, :center) for h in haligns]
+        return aligns
     end
 
     # Convert NaN-separated bracket line points to blockscene pixel coordinates.
@@ -1144,18 +1280,35 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
         return av === nothing ? _scalebar_visible(lu, label) : av::Bool
     end
 
-    map!(p.attributes, [:geom, :position, :length], :scalebar_line_pts) do geom, position, len
+    map!(
+        p.attributes,
+        [:geom, :position, :length, :lineage_orientation],
+        :scalebar_line_pts,
+    ) do geom, position, len, lineage_orientation
         bb = geom.boundingbox
-        bar_length = _resolved_scalebar_length(geom, len)
-        origin = _scalebar_origin(position, bb, bar_length)
-        return Point2f[origin, Point2f(origin[1] + bar_length, origin[2])]
+        bar_length = _resolved_scalebar_length(geom, len, lineage_orientation)
+        origin = _scalebar_origin(position, bb, bar_length, lineage_orientation)
+        policy = _parent_lineage_orientation_policy(lineage_orientation)
+        if !policy.rectangular || policy.process_axis === :x
+            return Point2f[origin, Point2f(origin[1] + bar_length, origin[2])]
+        end
+        return Point2f[origin, Point2f(origin[1], origin[2] + bar_length)]
     end
 
-    map!(p.attributes, [:geom, :position, :length], :scalebar_label_pos_vec) do geom, position, len
+    map!(
+        p.attributes,
+        [:geom, :position, :length, :lineage_orientation],
+        :scalebar_label_pos_vec,
+    ) do geom, position, len, lineage_orientation
         bb = geom.boundingbox
-        bar_length = _resolved_scalebar_length(geom, len)
-        origin = _scalebar_origin(position, bb, bar_length)
-        midpoint = Point2f(origin[1] + bar_length / 2, origin[2])
+        bar_length = _resolved_scalebar_length(geom, len, lineage_orientation)
+        origin = _scalebar_origin(position, bb, bar_length, lineage_orientation)
+        policy = _parent_lineage_orientation_policy(lineage_orientation)
+        midpoint = if !policy.rectangular || policy.process_axis === :x
+            Point2f(origin[1] + bar_length / 2, origin[2])
+        else
+            Point2f(origin[1], origin[2] + bar_length / 2)
+        end
         return Point2f[midpoint]
     end
 
@@ -1167,7 +1320,7 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
         annotation_layout === nothing && return Point2f[]
         annotation_layout.scalebar_visible || return Point2f[]
 
-        bar_length = _resolved_scalebar_length(geom, len)
+        bar_length = _resolved_scalebar_length(geom, len, lineage_orientation)
         bar_length_px = min(
             _scalebar_length_px(sc, geom, bar_length, lineage_orientation),
             Float32(annotation_layout.scalebar_band_rect.widths[1]),
@@ -1200,6 +1353,17 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
         return annotation_layout !== nothing
     end
 
+    map!(p.attributes, [:position, :lineage_orientation], :resolved_data_label_align) do position, lineage_orientation
+        policy = _parent_lineage_orientation_policy(lineage_orientation)
+        if !policy.rectangular || policy.process_axis === :x
+            return (:center, :top)
+        elseif position[1] === :right
+            return (:right, :center)
+        else
+            return (:left, :center)
+        end
+    end
+
     map!(p.attributes, [:resolved_visible, :render_in_blockscene], :resolved_data_visible) do visible, in_blockscene
         return visible && !in_blockscene
     end
@@ -1223,7 +1387,7 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
         p[:scalebar_label_pos_vec];
         text = p[:label],
         color = p[:color],
-        align = (:center, :top),
+        align = p[:resolved_data_label_align],
         fontsize = 10,
         visible = p[:resolved_data_visible],
     )
@@ -1262,7 +1426,8 @@ the appropriate value automatically: `:edgelengths` when an `edgelength`
 accessor is present, `:vertexheights` otherwise.
 
 `lineage_orientation = :radial` selects `Geometry.circular_layout`; all other
-values use `Geometry.rectangular_layout`.
+values use `Geometry.rectangular_layout`, followed by owner-level rectangular
+embedding repair for vertical orientations.
 
 All layer attributes are exposed as namespaced keyword arguments (e.g.,
 `edge_color`, `leaf_label_func`, `vertex_label_threshold`). All are Observable-
@@ -1278,8 +1443,9 @@ re-calling `lineageplot!`. The `rootvertex` argument may be a plain value or an
 
 # Keyword attributes
 - `lineageunits`: `nothing` or a `Symbol`; see `Geometry.rectangular_layout`.
-- `lineage_orientation`: `:left_to_right` (default), `:right_to_left`, or
-  `:radial`. `:radial` triggers `circular_layout`.
+- `lineage_orientation`: `:left_to_right` (default), `:right_to_left`,
+  `:bottom_to_top`, `:top_to_bottom`, or `:radial`. `:radial` triggers
+  `circular_layout`.
 - `edge_color`, `edge_linewidth`, `edge_linestyle`, `edge_alpha`,
   `edge_visible`: forwarded to `EdgeLayer`.
 - `vertex_marker`, `vertex_color`, `vertex_markersize`, `vertex_strokecolor`,
@@ -1315,10 +1481,13 @@ For the non-mutating convenience entry point that creates a `Figure` and
 - `lp[:resolved_lineageunits][]` — resolved `lineageunits` `Symbol`.
 """
 @recipe LineagePlot (rootvertex, accessor) begin
-    "How the lineage axis is embedded in the 2D scene: :left_to_right, :right_to_left, or :radial."
+    "How the lineage axis is embedded in the 2D scene: :left_to_right, :right_to_left, :bottom_to_top, :top_to_bottom, or :radial."
     lineage_orientation = :left_to_right
     "Selects how process coordinates are computed. nothing triggers auto-detection."
     lineageunits = nothing
+    # Internal ownership split: LineageAxis keeps rectangular direction reversal
+    # in its camera policy, while standalone plots bake it into geometry.
+    rectangular_orientation_owner = :plot
 
     # ── EdgeLayer ─────────────────────────────────────────────────────────────
     "Edge color; uniform Makie color or (fromvertex, tovertex) -> color function."
@@ -1382,9 +1551,9 @@ For the non-mutating convenience entry point that creates a `Figure` and
     clade_label_func = (v -> "")
     clade_label_color = :black
     clade_label_fontsize = 11
-    "Pixel-space offset from the rightmost leaf position to the bracket bar."
+    "Pixel-space offset from the leaf span toward the bracket bar."
     clade_label_offset = Makie.Vec2f(6, 0)
-    "Side on which the clade bracket is placed: :right or :left."
+    "Side on which the clade bracket is placed: :right, :left, :top, or :bottom."
     clade_label_side = :right
     clade_label_visible = true
 
@@ -1427,14 +1596,27 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     # Same pattern as LineageAxis.last_geom::Observable{Any}.
     map!(
         lp.attributes,
-        [:rootvertex, :accessor, :resolved_lineageunits, :lineage_orientation],
+        [:rootvertex, :accessor, :resolved_lineageunits, :lineage_orientation, :rectangular_orientation_owner],
         :computed_geom,
-    ) do rv, acc, lu, lo
+    ) do rv, acc, lu, lo, orientation_owner
         resolved_acc = acc::LineageGraphAccessor
         return if lo === :radial
             circular_layout(rv, resolved_acc; lineageunits = lu)
         else
-            rectangular_layout(rv, resolved_acc; lineageunits = lu)
+            base_geom = rectangular_layout(rv, resolved_acc; lineageunits = lu)
+            owner_handles_direction = if orientation_owner === :lineageaxis
+                true
+            elseif orientation_owner === :plot
+                false
+            else
+                throw(
+                    ArgumentError(
+                        "unsupported rectangular_orientation_owner $(repr(orientation_owner)); " *
+                        "expected :plot or :lineageaxis",
+                    ),
+                )
+            end
+            _parent_orient_rectangular_geometry(base_geom, lo, owner_handles_direction)
         end
     end
 

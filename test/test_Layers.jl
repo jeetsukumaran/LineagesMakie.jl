@@ -288,6 +288,40 @@ end
             @test !isempty(cll[:bracket_label_pixel_positions][])
         end
 
+        @testset "standalone LineagePlot honors reversed rectangular embeddings in geometry" begin
+            fig = Figure(; size = (500, 350))
+            ax = Axis(fig[1, 1])
+            lp = lineageplot!(
+                ax,
+                _LT_BALANCED_ROOT,
+                _LT_ACC_UNIT;
+                lineageunits = :edgelengths,
+                lineage_orientation = :top_to_bottom,
+            )
+            colorbuffer(fig)
+
+            geom = lp[:computed_geom][]
+            root_pos = geom.vertex_positions[_LT_BALANCED_ROOT]
+            leaf_pos = geom.vertex_positions[_LT_BALANCED_ROOT.children[1].children[1]]
+            @test root_pos[2] > leaf_pos[2]
+
+            fig2 = Figure(; size = (500, 350))
+            ax2 = Axis(fig2[1, 1])
+            lp2 = lineageplot!(
+                ax2,
+                _LT_BALANCED_ROOT,
+                _LT_ACC_UNIT;
+                lineageunits = :edgelengths,
+                lineage_orientation = :right_to_left,
+            )
+            colorbuffer(fig2)
+
+            geom2 = lp2[:computed_geom][]
+            root_pos2 = geom2.vertex_positions[_LT_BALANCED_ROOT]
+            leaf_pos2 = geom2.vertex_positions[_LT_BALANCED_ROOT.children[1].children[1]]
+            @test root_pos2[1] > leaf_pos2[1]
+        end
+
         @testset "LineageAxis leaf and clade labels consume shared lane anchors" begin
             fig = Figure(; size = (500, 350))
             lax = LineageAxis(fig[1, 1])
@@ -346,6 +380,70 @@ end
                 cll[:bracket_label_pixel_positions][],
             )
             @test layout.clade_label_anchor_x < layout.clade_bracket_x < layout.leaf_label_anchor_x
+        end
+
+        @testset "LineageAxis shared lanes transpose to the top side" begin
+            fig = Figure(; size = (500, 350))
+            lax = LineageAxis(fig[1, 1]; lineage_orientation = :bottom_to_top)
+            lp = lineageplot!(
+                lax,
+                _LT_BALANCED_ROOT,
+                _LT_ACC_UNIT;
+                lineageunits = :edgelengths,
+                leaf_label_func = v -> "species_" * string(v.name),
+                clade_vertices = [_LT_NONROOT_CLADE],
+                clade_label_func = v -> "clade_" * string(v.name),
+            )
+            colorbuffer(fig)
+
+            layout = lax._decoration_layout[]
+            ll = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+
+            @test all(
+                pos -> isapprox(pos[2], layout.leaf_label_anchor_y; atol = 1.0f-3),
+                ll[:leaf_label_positions][],
+            )
+
+            bracket_ys = unique(Float32[pt[2] for pt in cll[:bracket_pixel_shapes][] if isfinite(pt[2])])
+            @test any(y -> isapprox(y, layout.clade_bracket_y; atol = 1.0f-3), bracket_ys)
+            @test all(
+                pos -> isapprox(pos[2], layout.clade_label_anchor_y; atol = 1.0f-3),
+                cll[:bracket_label_pixel_positions][],
+            )
+            @test layout.leaf_label_anchor_y < layout.clade_bracket_y < layout.clade_label_anchor_y
+        end
+
+        @testset "LineageAxis shared lanes transpose to the bottom side" begin
+            fig = Figure(; size = (500, 350))
+            lax = LineageAxis(fig[1, 1]; lineage_orientation = :top_to_bottom)
+            lp = lineageplot!(
+                lax,
+                _LT_BALANCED_ROOT,
+                _LT_ACC_UNIT;
+                lineageunits = :edgelengths,
+                leaf_label_func = v -> "species_" * string(v.name),
+                clade_vertices = [_LT_NONROOT_CLADE],
+                clade_label_func = v -> "clade_" * string(v.name),
+            )
+            colorbuffer(fig)
+
+            layout = lax._decoration_layout[]
+            ll = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+            cll = only(filter(p -> p isa CladeLabelLayer, lp.plots))
+
+            @test all(
+                pos -> isapprox(pos[2], layout.leaf_label_anchor_y; atol = 1.0f-3),
+                ll[:leaf_label_positions][],
+            )
+
+            bracket_ys = unique(Float32[pt[2] for pt in cll[:bracket_pixel_shapes][] if isfinite(pt[2])])
+            @test any(y -> isapprox(y, layout.clade_bracket_y; atol = 1.0f-3), bracket_ys)
+            @test all(
+                pos -> isapprox(pos[2], layout.clade_label_anchor_y; atol = 1.0f-3),
+                cll[:bracket_label_pixel_positions][],
+            )
+            @test layout.leaf_label_anchor_y > layout.clade_bracket_y > layout.clade_label_anchor_y
         end
 
     end

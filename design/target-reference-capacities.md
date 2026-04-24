@@ -176,7 +176,7 @@ overlay layers. This is Tier 4.
 | Optional x-axis with tick marks for quantitative `lineageunits` values | 1 |
 | `CoordTransform` module for non-isotropic pixel↔data conversion | 1 |
 | Viewport-reactive pixel↔data mapping (correct resize behavior) | 1 |
-| Dendrogram orientation (`:top_to_bottom` / `:bottom_to_top`) | 2 |
+| Rendered y-axis / ylabel / grid for vertical embeddings | 2 |
 | Interval schemas and geological timescale bands | 4 |
 | 3D lineage embeddings (tubes, morphospace) | 4 |
 | Geographic tip coordinate constraints | 3 |
@@ -238,7 +238,7 @@ Functions that reproject or rearrange an already-rendered tree.
 | Circular | 1 |
 | Fan layout | 2 |
 | Slanted layout | 2 |
-| Dendrogram (`:top_to_bottom`) | 2 |
+| Dendrogram (`:top_to_bottom`) | 1 |
 | Equal-angle unrooted | 2 |
 | Daylight unrooted | 4 |
 | Inward circular | 3 |
@@ -619,7 +619,7 @@ For any continuous data mapped to color.
 | Primary axis with optional tick marks | 1 |
 | Scale bar layer | 1 |
 | Reversed axis (`display_polarity`) | 1 |
-| Dendrogram y-axis | 2 |
+| Rendered y-axis / ylabel / grid for vertical embeddings | 2 |
 | Color legend / color bar | 2 |
 | Geological time scale bands (`interval_schema`) | 4 |
 

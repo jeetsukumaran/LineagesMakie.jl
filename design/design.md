@@ -273,17 +273,20 @@ fig
 ### Dendrogram orientation
 
 The `lineage_orientation` attribute controls which screen axis carries the
-process coordinate. A dendrogram places the rootvertex at the top with leaves
-descending:
+process coordinate. A top-down dendrogram is a vertical rectangular embedding
+that places the rootvertex at the top with leaves descending:
 
 ```julia
 fig = Figure()
 ax = LineageAxis(fig[1, 1];
     lineage_orientation = :top_to_bottom,
-    show_y_axis         = true,
 )
 lineageplot!(ax, root; children = v -> v.children)
 ```
+
+`show_y_axis`, `show_grid`, and `ylabel` remain reserved in the current
+implementation. Vertical orientation changes the tree embedding and shared
+annotation layout; it does not yet enable a rendered y-axis surface.
 
 ### Manual layer composition
 

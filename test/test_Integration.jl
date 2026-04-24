@@ -429,6 +429,20 @@ end
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
+        @testset "bottom_to_top" begin
+            fig = Figure(; size = (800, 600))
+            lax = LineageAxis(fig[1, 1]; lineage_orientation = :bottom_to_top)
+            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
+            @test_nowarn CairoMakie.colorbuffer(fig)
+        end
+
+        @testset "top_to_bottom" begin
+            fig = Figure(; size = (800, 600))
+            lax = LineageAxis(fig[1, 1]; lineage_orientation = :top_to_bottom)
+            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
+            @test_nowarn CairoMakie.colorbuffer(fig)
+        end
+
         @testset "radial" begin
             fig = Figure(; size = (600, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)

@@ -9,7 +9,7 @@
 #   - Hand-coded phylogenetic tree with branch lengths
 #   - lineagegraph_accessor with edgelength and vertexvalue
 #   - Four panels: forward-time (:edgelengths), backward-time (:vertexheights),
-#     right-to-left orientation, and radial layout
+#     top-to-bottom orientation, and radial layout
 #   - All major attribute groups: edge styling, vertex markers, leaf labels,
 #     clade highlights, clade labels, scalebar
 
@@ -132,13 +132,12 @@ lineageplot!(
     clade_highlight_alpha = 0.08,
 )
 
-# ── Panel 3 (bottom-left): right-to-left orientation ─────────────────────────
+# ── Panel 3 (bottom-left): top-to-bottom orientation ─────────────────────────
 
 lax3 = LineageAxis(
     fig[2, 1];
-    title = "Right-to-left orientation",
-    lineage_orientation = :right_to_left,
-    show_x_axis = true,
+    title = "Top-to-bottom orientation",
+    lineage_orientation = :top_to_bottom,
 )
 lineageplot!(
     lax3, PHYROOT, PHYACC;

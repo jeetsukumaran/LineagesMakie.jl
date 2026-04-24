@@ -126,6 +126,18 @@ end
         @test proj_rtl[1, 1] ≈ proj_rev[1, 1]
     end
 
+    @testset "lineage_orientation :bottom_to_top uses positive y projection" begin
+        fig, lax, _ = _plotted_lax(; lineage_orientation = :bottom_to_top)
+        proj = Makie.camera(lax.scene).projection[]
+        @test proj[2, 2] > 0
+    end
+
+    @testset "lineage_orientation :top_to_bottom uses negative y projection" begin
+        fig, lax, _ = _plotted_lax(; lineage_orientation = :top_to_bottom)
+        proj = Makie.camera(lax.scene).projection[]
+        @test proj[2, 2] < 0
+    end
+
     @testset "lineage_orientation :radial produces equal x and y extents" begin
         fig, lax, _ = _plotted_lax(; lineage_orientation = :radial)
         proj = Makie.camera(lax.scene).projection[]
@@ -200,6 +212,16 @@ end
         @test isempty(lax._xaxis_tick_positions[])
     end
 
+    @testset "invalid lineage_orientation fails fast" begin
+        fig, lax = _fresh_lax()
+        @test_throws r"unsupported lineage_orientation" lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineage_orientation = :diagonal,
+        )
+    end
+
     @testset "measured annotation layout reserves coordinated right-side lanes" begin
         fig, lax = _fresh_lax()
         lineageplot!(
@@ -240,6 +262,48 @@ end
         @test isfinite(layout.leaf_label_anchor_x)
         @test layout.leaf_label_outer_edge_x > layout.clade_bracket_x + layout.clade_tick_length_px
         @test layout.clade_label_anchor_x < layout.clade_bracket_x
+    end
+
+    @testset "measured annotation layout reserves coordinated top-side lanes" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :bottom_to_top)
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineageunits = :vertexlevels,
+            leaf_label_func = n -> "species_" * n.name,
+            clade_vertices = [_LA_NONROOT_CLADE],
+            clade_label_func = n -> "clade_" * n.name,
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        @test layout.active_annotation_side === :top
+        @test layout.top_gutter_px > layout.bottom_gutter_px
+        @test isfinite(layout.leaf_label_anchor_y)
+        @test layout.leaf_label_outer_edge_y < layout.clade_bracket_y - layout.clade_tick_length_px
+        @test layout.clade_bracket_y < layout.clade_label_anchor_y
+    end
+
+    @testset "measured annotation layout reserves coordinated bottom-side lanes" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :top_to_bottom)
+        lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineageunits = :vertexlevels,
+            leaf_label_func = n -> "species_" * n.name,
+            clade_vertices = [_LA_NONROOT_CLADE],
+            clade_label_func = n -> "clade_" * n.name,
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        @test layout.active_annotation_side === :bottom
+        @test layout.bottom_gutter_px > layout.top_gutter_px
+        @test isfinite(layout.leaf_label_anchor_y)
+        @test layout.leaf_label_outer_edge_y > layout.clade_bracket_y + layout.clade_tick_length_px
+        @test layout.clade_label_anchor_y < layout.clade_bracket_y
     end
 
     @testset "radial annotation layout uses measured outer padding" begin
@@ -416,6 +480,24 @@ end
         ll3  = only(filter(p -> p isa LeafLabelLayer, lp3.plots))
         @test ll3[:offset][] == Makie.Vec2f(4, 0)
         @test ll3[:align][]  == (:left, :center)
+
+        # Forward + :bottom_to_top → leaves on top → upward labels.
+        fig4 = Figure()
+        lax4 = LineageAxis(fig4[1, 1]; lineage_orientation = :bottom_to_top)
+        lp4  = lineageplot!(lax4, _LA_BALANCED_ROOT, acc_el;
+                             leaf_label_func = v -> string(v.name))
+        ll4  = only(filter(p -> p isa LeafLabelLayer, lp4.plots))
+        @test ll4[:offset][] == Makie.Vec2f(0, 4)
+        @test ll4[:align][]  == (:center, :bottom)
+
+        # Forward + :top_to_bottom → leaves on bottom → downward labels.
+        fig5 = Figure()
+        lax5 = LineageAxis(fig5[1, 1]; lineage_orientation = :top_to_bottom)
+        lp5  = lineageplot!(lax5, _LA_BALANCED_ROOT, acc_el;
+                             leaf_label_func = v -> string(v.name))
+        ll5  = only(filter(p -> p isa LeafLabelLayer, lp5.plots))
+        @test ll5[:offset][] == Makie.Vec2f(0, -4)
+        @test ll5[:align][]  == (:center, :top)
     end
 
     @testset "lineageplot! orientation-aware clade_label_side" begin
@@ -438,6 +520,20 @@ end
         lp2  = lineageplot!(lax2, _LA_BALANCED_ROOT, acc_el;
                              clade_vertices = [_LA_BALANCED_ROOT])
         @test lp2[:clade_label_side][] === :right
+
+        # Forward + :bottom_to_top → leaves on top → bracket on top.
+        fig3 = Figure()
+        lax3 = LineageAxis(fig3[1, 1]; lineage_orientation = :bottom_to_top)
+        lp3  = lineageplot!(lax3, _LA_BALANCED_ROOT, acc_el;
+                             clade_vertices = [_LA_BALANCED_ROOT])
+        @test lp3[:clade_label_side][] === :top
+
+        # Forward + :top_to_bottom → leaves on bottom → bracket on bottom.
+        fig4 = Figure()
+        lax4 = LineageAxis(fig4[1, 1]; lineage_orientation = :top_to_bottom)
+        lp4  = lineageplot!(lax4, _LA_BALANCED_ROOT, acc_el;
+                             clade_vertices = [_LA_BALANCED_ROOT])
+        @test lp4[:clade_label_side][] === :bottom
     end
 
     @testset "x-axis ticks in blockscene pixel space when show_x_axis = true" begin
