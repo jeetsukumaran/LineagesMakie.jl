@@ -6,31 +6,29 @@ Parent PRD:
 Parent tranche file:
 `.workflow-docs/202604231538_tier1-audit-fixes/02_tranches.md`
 
-This directory now has three tasking states:
+This directory now has two tasking states:
 
 - completed tranche tasking files archived under `completed_tranches/`
-- one still-pending original tranche tasking file
-- one new immediate-action tranche tasking file for owner-normalization
-  hardening discovered after Tranches 1 and 2 were completed
+- one still-pending tranche tasking file for the remaining render-level
+  readability and proof-surface work
 
 ## Completed tranche tasking files
 
-- Tranche 1: `.workflow-docs/202604231538_tier1-audit-fixes/completed_tranches/03_tranche-01--tasking.md`
-- Tranche 2: `.workflow-docs/202604231538_tier1-audit-fixes/completed_tranches/03_tranche-02--tasking.md`
+- Tranche 1:
+  `.workflow-docs/202604231538_tier1-audit-fixes/completed_tranches/03_tranche-01--tasking.md`
+- Tranche 2:
+  `.workflow-docs/202604231538_tier1-audit-fixes/completed_tranches/03_tranche-02--tasking.md`
+- Immediate action IA20260423-01:
+  `.workflow-docs/202604231538_tier1-audit-fixes/completed_tranches/03_tranche-IA20260423-01--tasking.md`
 
-## Active tranche tasking files
+## Active tranche tasking file
 
-- Tranche 3: `.workflow-docs/202604231538_tier1-audit-fixes/03_tranche-03--tasking.md`
-  This remains the render-level readability and proof-surface tranche. It is
-  not folded into the immediate-action tranche below because it addresses a
-  different defect class.
-
-## Immediate-action tranche tasking files
-
-- IA20260423-01: `.workflow-docs/202604231538_tier1-audit-fixes/03_tranche-IA20260423-01--tasking.md`
-  Recommended as a single immediate-action tranche. Splitting it further would
-  separate the owner-normalization repair from the multi-surface verification
-  that proves the repair is actually robust.
+- Tranche 3:
+  `.workflow-docs/202604231538_tier1-audit-fixes/03_tranche-03--tasking.md`
+  This remains the pending render-level readability and proof-surface tranche.
+  It has been reviewed after the completed immediate-action tranche and updated
+  to inherit the current owner-normalized, multi-surface-verified baseline
+  rather than the older pre-IA framing.
 
 ## Standing constraints
 
@@ -43,5 +41,5 @@ This directory now has three tasking states:
 - Any task that discovers a necessary external breaking change must stop and
   escalate to the user before implementation continues.
 - All downstream tasking must preserve the reading, vocabulary, upstream, and
-  verification obligations from the PRD, tranche documents, audit logs, and
-  updated governance documents.
+  verification obligations from the PRD, tranche documents, completed tranche
+  tasking, audit logs, and updated governance documents.
