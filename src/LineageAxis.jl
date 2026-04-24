@@ -285,6 +285,14 @@ struct _LineageOrientationPolicy
     positive_annotation_side::Symbol
 end
 
+struct _LineageAxisPlotContract{NT<:NamedTuple}
+    lineage_orientation::Symbol
+    policy::_LineageOrientationPolicy
+    effective_process_reversed::Bool
+    annotation_side::Symbol
+    plot_kwargs::NT
+end
+
 function _rectf(
         x::Float32,
         y::Float32,
@@ -1377,6 +1385,83 @@ function _infer_axis_polarity(lineageunits::Symbol)::Symbol
     return :forward
 end
 
+function _lineageaxis_orientation_defaults(annotation_side::Symbol)::NamedTuple
+    if annotation_side === :left
+        return (
+            leaf_label_offset = Makie.Vec2f(-4, 0),
+            leaf_label_align = (:right, :center),
+            clade_label_side = :left,
+            clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
+        )
+    elseif annotation_side === :right
+        return (
+            leaf_label_offset = Makie.Vec2f(4, 0),
+            leaf_label_align = (:left, :center),
+            clade_label_side = :right,
+            clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
+        )
+    elseif annotation_side === :top
+        return (
+            leaf_label_offset = Makie.Vec2f(0, 4),
+            leaf_label_align = (:center, :bottom),
+            clade_label_side = :top,
+            clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
+        )
+    elseif annotation_side === :bottom
+        return (
+            leaf_label_offset = Makie.Vec2f(0, -4),
+            leaf_label_align = (:center, :top),
+            clade_label_side = :bottom,
+            clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
+        )
+    end
+    throw(
+        ArgumentError(
+            "unsupported annotation side $(repr(annotation_side)); " *
+            "expected :left, :right, :top, or :bottom",
+        ),
+    )
+end
+
+function _resolved_lineageaxis_plot_contract!(
+        ax::LineageAxis,
+        resolved_lu::Symbol,
+        user_kwargs::NamedTuple,
+    )::_LineageAxisPlotContract
+    if haskey(user_kwargs, :lineage_orientation)
+        ax.lineage_orientation[] = user_kwargs.lineage_orientation
+    end
+
+    if !ax._polarity_locked[]
+        ax.axis_polarity[] = _infer_axis_polarity(resolved_lu)
+    end
+
+    lo = ax.lineage_orientation[]
+    policy = _lineage_orientation_policy(lo)
+    backward = resolved_lu in (:vertexheights, :coalescenceage)
+    effective_reversed = _effective_process_reversed(policy, ax.display_polarity[])
+    leaves_on_negative_end = xor(backward, effective_reversed)
+    annotation_side = leaves_on_negative_end ? policy.negative_annotation_side : policy.positive_annotation_side
+    orientation_defaults = policy.rectangular ?
+        _lineageaxis_orientation_defaults(annotation_side) :
+        NamedTuple()
+    plot_kwargs = merge(
+        orientation_defaults,
+        user_kwargs,
+        (
+            lineage_orientation = lo,
+            rectangular_orientation_owner = :lineageaxis,
+        ),
+    )
+    return _LineageAxisPlotContract(
+        lo,
+        policy,
+        effective_reversed,
+        annotation_side,
+        plot_kwargs,
+    )
+end
+
 function _resolved_leaf_label_font(font, italic::Bool)
     return italic ? :italic : font
 end
@@ -1649,66 +1734,9 @@ function lineageplot!(
         kwargs...,
     )::LineagePlot
     user_kwargs = (; kwargs...)
-    if haskey(user_kwargs, :lineage_orientation)
-        ax.lineage_orientation[] = user_kwargs.lineage_orientation
-    end
 
     resolved_lu = _resolve_lineageunits_stub(lineageunits, accessor)
-
-    if !ax._polarity_locked[]
-        ax.axis_polarity[] = _infer_axis_polarity(resolved_lu)
-    end
-
-    # Compute orientation-aware defaults for leaf labels and clade bracket side.
-    lo = ax.lineage_orientation[]
-    policy = _lineage_orientation_policy(lo)
-    backward = resolved_lu in (:vertexheights, :coalescenceage)
-    effective_reversed = _effective_process_reversed(policy, ax.display_polarity[])
-    leaves_on_negative_end = xor(backward, effective_reversed)
-    annotation_side = leaves_on_negative_end ? policy.negative_annotation_side : policy.positive_annotation_side
-
-    orientation_defaults = if policy.rectangular
-        if annotation_side === :left
-            (
-                leaf_label_offset = Makie.Vec2f(-4, 0),
-                leaf_label_align = (:right, :center),
-                clade_label_side = :left,
-                clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
-            )
-        elseif annotation_side === :right
-            (
-                leaf_label_offset = Makie.Vec2f(4, 0),
-                leaf_label_align = (:left, :center),
-                clade_label_side = :right,
-                clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
-            )
-        elseif annotation_side === :top
-            (
-                leaf_label_offset = Makie.Vec2f(0, 4),
-                leaf_label_align = (:center, :bottom),
-                clade_label_side = :top,
-                clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
-            )
-        else
-            (
-                leaf_label_offset = Makie.Vec2f(0, -4),
-                leaf_label_align = (:center, :top),
-                clade_label_side = :bottom,
-                clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
-            )
-        end
-    else
-        NamedTuple()
-    end
-    # Caller-supplied kwargs take precedence over orientation defaults.
-    merged_kwargs = merge(
-        (
-            lineage_orientation = lo,
-            rectangular_orientation_owner = :lineageaxis,
-        ),
-        orientation_defaults,
-        user_kwargs,
-    )
+    contract = _resolved_lineageaxis_plot_contract!(ax, resolved_lu, user_kwargs)
 
     # Route to ax.scene (not ax) to avoid recursive dispatch through the
     # @recipe-generated lineageplot! which also accepts AbstractAxis.
@@ -1716,7 +1744,7 @@ function lineageplot!(
     # reset_limits!(ax) after every sub-layer plot! — wasteful and premature
     # before computed_geom is populated. Going directly to ax.scene bypasses
     # the AbstractAxis protocol; we call reset_limits! manually below.
-    lp = lineageplot!(ax.scene, rootvertex, accessor; lineageunits = lineageunits, merged_kwargs...)
+    lp = lineageplot!(ax.scene, rootvertex, accessor; lineageunits = lineageunits, contract.plot_kwargs...)
 
     _wire_annotation_layout!(ax, lp)
     _sync_annotation_measurements!(ax, lp)

@@ -188,11 +188,45 @@ end
             ),
         )
         fig, lax, lp = plot_result
+        geom = lp[:computed_geom][]
+        leaf_positions = [geom.vertex_positions[v] for v in geom.leaf_order]
+        leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
+        leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
         @test lp isa LineagePlot
+        @test lp[:lineage_orientation][] === :top_to_bottom
+        @test lp[:rectangular_orientation_owner][] === :lineageaxis
+        @test length(leaf_ys) == 1
+        @test length(leaf_xs) > 1
         @test_nowarn CairoMakie.colorbuffer(fig)
         @test !isempty(lax._yaxis_tick_segments[])
         @test !isempty(lax._grid_segments[])
         @test "Lineage distance" in _it_visible_blockscene_strings(lax)
+    end
+
+    @testset "plain Axis preserves plot-owned vertical orientation in integration path" begin
+        fig = Figure(; size = (700, 500))
+        ax = Axis(fig[1, 1])
+        acc = lineagegraph_accessor(
+            _IT_ROOT;
+            children = n -> n.children,
+            edgelength = (u, v) -> 1.0,
+        )
+        lp = lineageplot!(
+            ax,
+            _IT_ROOT,
+            acc;
+            lineageunits = :edgelengths,
+            lineage_orientation = :top_to_bottom,
+        )
+        geom = lp[:computed_geom][]
+        leaf_positions = [geom.vertex_positions[v] for v in geom.leaf_order]
+        leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
+        leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
+        @test lp[:lineage_orientation][] === :top_to_bottom
+        @test lp[:rectangular_orientation_owner][] === :plot
+        @test length(leaf_ys) == 1
+        @test length(leaf_xs) > 1
+        @test_nowarn CairoMakie.colorbuffer(fig)
     end
 
     @testset "LineageAxis camera projection is non-identity after lineageplot!" begin
@@ -555,7 +589,7 @@ end
                 clade_vertices = [clade_a, clade_b],
                 clade_label_func = n -> n.name,
             )
-            @test_nowarn lineageplot!(
+            lp3 = @test_nowarn lineageplot!(
                 lax3,
                 _IT_ROOT,
                 acc;
@@ -591,6 +625,15 @@ end
             @test !isempty(lax3._yaxis_tick_segments[])
             @test !isempty(lax3._grid_segments[])
             @test isempty(lax4._xaxis_tick_segments[])
+            @test lp3[:lineage_orientation][] === :top_to_bottom
+            @test lp3[:rectangular_orientation_owner][] === :lineageaxis
+
+            geom3 = lp3[:computed_geom][]
+            leaf_positions3 = [geom3.vertex_positions[v] for v in geom3.leaf_order]
+            leaf_ys3 = unique(round(pos[2]; digits = 5) for pos in leaf_positions3)
+            leaf_xs3 = unique(round(pos[1]; digits = 5) for pos in leaf_positions3)
+            @test length(leaf_ys3) == 1
+            @test length(leaf_xs3) > 1
         finally
             isfile(tmpfile) && rm(tmpfile)
         end

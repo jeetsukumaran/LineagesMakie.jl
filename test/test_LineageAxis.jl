@@ -100,6 +100,27 @@ end
         @test_nowarn colorbuffer(fig)
     end
 
+    @testset "plain Axis keeps plot-owned vertical orientation support" begin
+        fig = Figure(; size = (400, 300))
+        ax = Axis(fig[1, 1])
+        lp = lineageplot!(
+            ax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineageunits = :vertexlevels,
+            lineage_orientation = :top_to_bottom,
+        )
+        geom = lp[:computed_geom][]
+        leaf_positions = [geom.vertex_positions[v] for v in geom.leaf_order]
+        leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
+        leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
+        @test lp[:lineage_orientation][] === :top_to_bottom
+        @test lp[:rectangular_orientation_owner][] === :plot
+        @test length(leaf_ys) == 1
+        @test length(leaf_xs) > 1
+        @test_nowarn colorbuffer(fig)
+    end
+
     @testset "reset_limits! with :standard display_polarity" begin
         fig, lax, _ = _plotted_lax(; display_polarity = :standard)
         proj = Makie.camera(lax.scene).projection[]
@@ -146,6 +167,27 @@ end
         leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
         leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
         @test lp[:lineage_orientation][] === :top_to_bottom
+        @test length(leaf_ys) == 1
+        @test length(leaf_xs) > 1
+    end
+
+    @testset "lineageplot! keyword orientation normalizes through LineageAxis ownership" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :left_to_right)
+        lp = lineageplot!(
+            lax,
+            _LA_BALANCED_ROOT,
+            _LA_ACC;
+            lineageunits = :vertexlevels,
+            lineage_orientation = :top_to_bottom,
+            rectangular_orientation_owner = :plot,
+        )
+        geom = lp[:computed_geom][]
+        leaf_positions = [geom.vertex_positions[v] for v in geom.leaf_order]
+        leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
+        leaf_xs = unique(round(pos[1]; digits = 5) for pos in leaf_positions)
+        @test lax.lineage_orientation[] === :top_to_bottom
+        @test lp[:lineage_orientation][] === :top_to_bottom
+        @test lp[:rectangular_orientation_owner][] === :lineageaxis
         @test length(leaf_ys) == 1
         @test length(leaf_xs) > 1
     end
