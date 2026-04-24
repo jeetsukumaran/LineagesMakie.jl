@@ -318,9 +318,9 @@ Follows the `Graphs.jl` ecosystem convention.
 
 **Part of speech:** noun (measure); two related uses
 
-**Definition (tree-level):** The maximum `branchingtime` of any vertex in the
+**Definition (tree-level):** The maximum `branchingtime` of any node in the
 tree, equivalently the `branchingtime` of the deepest leaf. For an ultrametric
-tree, equals the `coalescenceage` of the `rootvertex`.
+tree, equals the `coalescenceage` of the `rootnode`.
 
 **Definition (per-node):** The path distance (number of edges, ignoring
 `edgelength` values) from a given node to its farthest descendant leaf. Used
@@ -330,7 +330,7 @@ aligns all leaves at the same x-coordinate (the classic cladogram appearance).
 `height` is the clade graph (unweighted edge) analogue of `coalescenceage`.
 
 **Proscribed alternates:** `max_depth` (for tree-level height), `depth` (for
-per-vertex height — these are now different concepts and `depth` is proscribed
+per-node height — these are now different concepts and `depth` is proscribed
 entirely).
 
 ---
@@ -409,7 +409,7 @@ names; `lineagegraph` (no underscore) in compound code identifiers.
 **Definition:** The primary conceptual object that LineagesMakie.jl visualizes.
 A lineage graph is a graph representing evolutionary relationships.
 
-In Tier 1 the lineage graph is always a tree (each vertex has exactly one parent);
+In Tier 1 the lineage graph is always a tree (each node has exactly one parent);
 future tiers will extend to DAGs with shared ancestry (reticulation) and
 eventually to general networks.
 
@@ -439,7 +439,7 @@ in prose and `LineageGraph` / `lineagegraph` in code.
 
 **Part of speech:** noun (positioning concept); keyword argument name
 
-**Definition:** The keyword argument that selects how vertex process coordinates
+**Definition:** The keyword argument that selects how node process coordinates
 are determined during layout. Formerly referred to as `mode` in early design
 drafts; renamed to `lineageunits` because `mode` is too generic to convey that
 this keyword selects the unit and direction of the primary lineage axis.
@@ -511,7 +511,7 @@ smaller values.
 
 **Part of speech:** noun (visual concept)
 
-**Definition:** The visual symbol rendered at a vertex position (circle, square,
+**Definition:** The visual symbol rendered at a node position (circle, square,
 diamond, etc.). Follows Makie's naming convention. In prose, "glyph" is an
 acceptable synonym; in code, `marker` is the only permitted term.
 
@@ -598,6 +598,7 @@ node, or any `leaf`. The generic term for a graph element. `nodes` is
 the plural. In compound role-specific names, use the role term directly
 (`leaf`, `rootnode`, `internal node` in prose) rather than repeating `node`
 where the role already implies it.
+We, of course, accept the use of `vertex` (and lexemic variants when used in a graph theoretic mathematical context or third-party API's.
 
 **Proscribed alternates (as a generic term):** `vertex`, `vertices`. The words
 `vertex` / `vertices` must not appear as generic synonyms for `node` in any
