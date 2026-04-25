@@ -1,1 +1,3 @@
 *.png
+!readme_quickstart.png
+!readme_features.png
