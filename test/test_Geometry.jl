@@ -375,7 +375,7 @@ end
         geom = @test_warn r"fallback" rectangular_layout(
             GEO_BALANCED, acc; lineageunits = :edgelengths,
         )
-        # ab→a fell back to 1.0, so a's process coord = ab's (1.0) + fallback (1.0) = 2.0
+        # ab→a fell back to 1.0, so a's process coordinate = ab's (1.0) + fallback (1.0) = 2.0
         @test geom.node_positions[a][1] ≈ 2.0
     end
 
@@ -398,7 +398,7 @@ end
 
     # ── :branchingtime ──────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :branchingtime — process coords match accessor" begin
+    @testset "rectangular_layout :branchingtime — process coordinates match accessor" begin
         root = GEO_BALANCED
         ab   = root.children[1]
         cd   = root.children[2]
@@ -547,15 +547,15 @@ end
         )
     end
 
-    # ── :nodecoords ─────────────────────────────────────────────────────────────
+    # ── :nodecoordinates ─────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :nodecoords — node_positions match accessor" begin
+    @testset "rectangular_layout :nodecoordinates — node_positions match accessor" begin
         root = GEO_BALANCED
         ab   = root.children[1]
         cd   = root.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
-        node_coords = Dict(
+        node_coordinates = Dict(
             root => Point2f(0, 2.5),
             ab => Point2f(1, 1.5),
             cd => Point2f(1, 3.5),
@@ -566,20 +566,20 @@ end
         )
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
-            nodecoords = node -> node_coords[node],
+            nodecoordinates = node -> node_coordinates[node],
         )
-        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodecoords)
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodecoordinates)
         node_pos = geom.node_positions
 
-        for (node, expected) in node_coords
+        for (node, expected) in node_coordinates
             @test node_pos[node] ≈ expected
         end
     end
 
-    @testset "rectangular_layout :nodecoords — missing accessor raises ArgumentError" begin
+    @testset "rectangular_layout :nodecoordinates — missing accessor raises ArgumentError" begin
         acc = _acc(GEO_BALANCED)
         @test_throws ArgumentError rectangular_layout(
-            GEO_BALANCED, acc; lineageunits = :nodecoords,
+            GEO_BALANCED, acc; lineageunits = :nodecoordinates,
         )
     end
 

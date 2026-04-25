@@ -94,7 +94,7 @@ use edge-length data:
   polarity; clade graph (unweighted) analogue of `coalescenceage`. This is the
   default when no `edgelength` is supplied, because it aligns all leaves at the
   same x-coordinate (classic cladogram appearance).
-- `:nodecoords` / `:nodepos` — user-supplied coordinates in data or pixel
+- `:nodecoordinates` / `:nodepos` — user-supplied coordinates in data or pixel
   space respectively; polarity is user-defined.
 
 ### Axis polarity, display polarity, and orientation
@@ -153,7 +153,7 @@ that can be extended to three or more dimensions:
 - Geographic tip coordinates (tips placed at latitude/longitude)
 - Trait-space embeddings
 
-The accessor-first input design does not prevent this: `nodecoords` already
+The accessor-first input design does not prevent this: `nodecoordinates` already
 admits user-supplied 2D coordinates, and the same pattern extends to higher
 dimensions. These capabilities are Tier 3 and Tier 4.
 
@@ -174,7 +174,7 @@ overlay layers. This is Tier 4.
 | `lineage_orientation` (`:left_to_right`, `:right_to_left`, `:top_to_bottom`, `:bottom_to_top`) | 1 |
 | `lineage_orientation = :radial` (circular layouts) | 1 |
 | Optional x-axis with tick marks for quantitative `lineageunits` values | 1 |
-| `CoordTransform` module for non-isotropic pixel↔data conversion | 1 |
+| `CoordinateTransform` module for non-isotropic pixel↔data conversion | 1 |
 | Viewport-reactive pixel↔data mapping (correct resize behavior) | 1 |
 | Rendered y-axis / ylabel / grid for vertical embeddings | 2 |
 | Interval schemas and geological timescale bands | 4 |
@@ -670,12 +670,12 @@ is just a matter of wiring.
 ### Tier 1 — Core MVP
 
 - `LineageAxis` with full semantic axis abstraction (axis_polarity,
-  display_polarity, lineage_orientation, CoordTransform, viewport-reactive
+  display_polarity, lineage_orientation, CoordinateTransform, viewport-reactive
   pixel↔data mapping)
 - Rectangular (cladogram + phylogram) and circular layouts
 - All eight `lineageunits` values (`:edgelengths`, `:branchingtime`,
   `:coalescenceage`, `:nodedepths`, `:nodeheights`, `:nodelevels`,
-  `:nodecoords`, `:nodepos`)
+  `:nodecoordinates`, `:nodepos`)
 - `EdgeLayer`, `NodeLayer`, `LeafLayer`, `LeafLabelLayer`,
   `NodeLabelLayer`, `CladeHighlightLayer` (rectangle), `CladeLabelLayer`,
   `ScaleBarLayer`

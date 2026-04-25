@@ -64,8 +64,8 @@ function _it_coalescenceage(node::IntegrationTestNode)
     return node.name in ("a", "b", "c", "d") ? 0.0 : node.name in ("ab", "cd") ? 1.0 : 2.0
 end
 
-# nodecoords: data-space Point2f for each node in the 4-leaf tree
-const _IT_NODECOORDS = Dict{String, CairoMakie.Makie.Point2f}(
+# nodecoordinates: data-space Point2f for each node in the 4-leaf tree
+const _IT_NODECOORDINATES = Dict{String, CairoMakie.Makie.Point2f}(
     "root" => CairoMakie.Makie.Point2f(0, 2),
     "ab" => CairoMakie.Makie.Point2f(1, 1),
     "cd" => CairoMakie.Makie.Point2f(1, 3),
@@ -74,7 +74,7 @@ const _IT_NODECOORDS = Dict{String, CairoMakie.Makie.Point2f}(
     "c" => CairoMakie.Makie.Point2f(2, 3),
     "d" => CairoMakie.Makie.Point2f(2, 4),
 )
-_it_nodecoords(node::IntegrationTestNode) = _IT_NODECOORDS[node.name]
+_it_nodecoordinates(node::IntegrationTestNode) = _IT_NODECOORDINATES[node.name]
 
 # nodepos: pixel-space Point2f for each node in the 4-leaf tree
 const _IT_NODEPOS = Dict{String, CairoMakie.Makie.Point2f}(
@@ -408,7 +408,7 @@ end
             (:nodedepths, "nodedepths", NamedTuple()),
             (:nodeheights, "nodeheights", NamedTuple()),
             (:nodelevels, "nodelevels", NamedTuple()),
-            (:nodecoords, "nodecoords", (nodecoords = _it_nodecoords,)),
+            (:nodecoordinates, "nodecoordinates", (nodecoordinates = _it_nodecoordinates,)),
             (:nodepos, "nodepos", (nodepos = _it_nodepos,)),
         ]
 
@@ -531,7 +531,7 @@ end
         # Simulate a viewport resize by updating the scene viewport Observable.
         lax.scene.viewport[] = CairoMakie.Makie.Rect2i(0, 0, 1200, 900)
         markersize_after = nl.markersize[]
-        # Pixel-space markers must not be rescaled by CoordTransform on viewport change.
+        # Pixel-space markers must not be rescaled by CoordinateTransform on viewport change.
         @test markersize_before == markersize_after
     end
 

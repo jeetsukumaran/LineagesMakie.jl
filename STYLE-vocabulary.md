@@ -460,7 +460,7 @@ node, and what `axis_polarity` `LineageAxis` infers:
   `edgelength` accessor is supplied; `:backward` polarity.
 - `:nodelevels` — integer level from rootnode; equal inter-level spacing;
   no accessor required; `:forward` polarity.
-- `:nodecoords` — user-supplied data coordinates; requires `nodecoords`
+- `:nodecoordinates` — user-supplied data coordinates; requires `nodecoordinates`
   accessor; polarity is user-defined.
 - `:nodepos` — user-supplied pixel coordinates; requires `nodepos` accessor;
   polarity is user-defined.
@@ -528,7 +528,7 @@ In any given plot, the process coordinate is determined by the active
 `lineageunits` value: `branchingtime` values for `lineageunits = :branchingtime`
 or `:edgelengths`, `coalescenceage` values for `lineageunits = :coalescenceage`,
 path distances (edge counts) for `:nodelevels` / `:nodedepths` / `:nodeheights`,
-or user-supplied coordinates for `:nodecoords` / `:nodepos`.
+or user-supplied coordinates for `:nodecoordinates` / `:nodepos`.
 
 This is a documentation and design term that unifies all `lineageunits` values
 under a single concept. It does not appear as a code identifier (there is no
@@ -856,7 +856,7 @@ required artifact set.
 | `:nodedepths` | none | Cumulative path distance (edge count) from `rootnode` (all edge weights = 1) | Root = 0, increases toward leaves | `:forward` |
 | `:nodeheights` | none | Per-node height (path distance to farthest leaf); all leaves at x = 0; clade graph (unweighted) analogue of `:coalescenceage` | Leaf = 0, increases toward root | `:backward` |
 | `:nodelevels` | none | Integer level = edge count from `rootnode`; equal spacing between levels; clade graph (unweighted) analogue of `:branchingtime` | Root = 0, increases toward leaves | `:forward` |
-| `:nodecoords` | `nodecoords` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
+| `:nodecoordinates` | `nodecoordinates` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
 | `:nodepos` | `nodepos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
 
 **Default `lineageunits`:** `:edgelengths` if an `edgelength` accessor is
@@ -907,4 +907,4 @@ must not appear in any identifier, field name, keyword, type name, or symbol.
 | Children collection (local var) | `child_collection` | — | `ch`, `children` (collision with `AbstractTrees.children`) |
 | Node identity type parameter | — | `NodeT` | `V`, `N`, `T` |
 | Collection of all nodes | `all_nodes` | — | `all_vertices`, `vs` |
-| Node data accessor | `nodecoords` / `nodepos` | `NC` / `NP` | `vertexcoords`, `vertexpos`, `vc`, `vp` |
+| Node data accessor | `nodecoordinates` / `nodepos` | `NC` / `NP` | `vertexcoords`, `vertexpos`, `vc`, `vp` |

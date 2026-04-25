@@ -13,7 +13,7 @@ using JET
     end
     include("test_Accessors.jl")
     include("test_Geometry.jl")
-    include("test_CoordTransform.jl")
+    include("test_CoordinateTransform.jl")
     include("test_Layers.jl")
     include("test_LineageAxis.jl")
     include("test_Integration.jl")

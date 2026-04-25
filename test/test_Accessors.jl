@@ -72,7 +72,7 @@ end
         @test acc.nodevalue     === nothing
         @test acc.branchingtime === nothing
         @test acc.coalescenceage === nothing
-        @test acc.nodecoords    === nothing
+        @test acc.nodecoordinates    === nothing
         @test acc.nodepos       === nothing
     end
 
@@ -81,7 +81,7 @@ end
         nodevalue_fn = node -> node.name
         bt           = node -> 0.0
         ca           = node -> 0.0
-        nodecoords_fn = node -> (0.0, 0.0)
+        nodecoordinates_fn = node -> (0.0, 0.0)
         nodepos_fn    = node -> (0.0, 0.0)
         acc = lineagegraph_accessor(BALANCED_ROOT;
             children       = node -> node.children,
@@ -89,7 +89,7 @@ end
             nodevalue      = nodevalue_fn,
             branchingtime  = bt,
             coalescenceage = ca,
-            nodecoords     = nodecoords_fn,
+            nodecoordinates     = nodecoordinates_fn,
             nodepos        = nodepos_fn,
         )
         @test acc isa LineageGraphAccessor
@@ -97,7 +97,7 @@ end
         @test acc.nodevalue      === nodevalue_fn
         @test acc.branchingtime  === bt
         @test acc.coalescenceage === ca
-        @test acc.nodecoords     === nodecoords_fn
+        @test acc.nodecoordinates     === nodecoordinates_fn
         @test acc.nodepos        === nodepos_fn
     end
 
@@ -114,7 +114,7 @@ end
         # children field must be AbstractTrees.children
         @test acc.children === AbstractTrees.children
         @test acc.edgelength    === nothing
-        @test acc.nodecoords    === nothing
+        @test acc.nodecoordinates    === nothing
         @test acc.nodepos       === nothing
     end
 

@@ -8,8 +8,8 @@ include("Geometry.jl")
 using .Geometry: LineageGraphGeometry, boundingbox, rectangular_layout, circular_layout
 export LineageGraphGeometry, boundingbox, rectangular_layout, circular_layout
 
-include("CoordTransform.jl")
-using .CoordTransform:
+include("CoordinateTransform.jl")
+using .CoordinateTransform:
     data_to_pixel, pixel_to_data, pixel_offset_to_data_delta, register_pixel_projection!
 export data_to_pixel, pixel_to_data, pixel_offset_to_data_delta, register_pixel_projection!
 

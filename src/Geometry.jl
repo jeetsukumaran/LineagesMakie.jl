@@ -90,13 +90,13 @@ Process coordinates (first `Point2f` component) are determined by `lineageunits`
   leaf. Leaves = 0, root = maximum. No accessor required.
 - `:nodelevels` — edge count from `rootnode`: root = 0, leaves = maximum.
   Equal inter-level spacing. No accessor required.
-- `:nodecoords` — user-supplied `Point2f` data coordinates read from
-  `nodecoords(node)`; requires `nodecoords` accessor. Bypasses layout
+- `:nodecoordinates` — user-supplied `Point2f` data coordinates read from
+  `nodecoordinates(node)`; requires `nodecoordinates` accessor. Bypasses layout
   computation entirely; both process and transverse coordinates come from the
   accessor.
 - `:nodepos` — user-supplied `Point2f` pixel coordinates read from
   `nodepos(node)`; requires `nodepos` accessor. Same geometry-layer
-  behaviour as `:nodecoords`; the semantic distinction (data vs pixel space)
+  behaviour as `:nodecoordinates`; the semantic distinction (data vs pixel space)
   is documented here but not enforced at the geometry layer.
 
 **Default detection:** if `lineageunits` is not supplied (or `nothing`), the
@@ -157,8 +157,8 @@ function rectangular_layout(
     all_nodes = preorder(accessor, rootnode)
 
     # Bypass modes: both process and transverse coordinates come from the accessor.
-    if lineageunits === :nodecoords || lineageunits === :nodepos
-        accessor_fn = lineageunits === :nodecoords ? accessor.nodecoords : accessor.nodepos
+    if lineageunits === :nodecoordinates || lineageunits === :nodepos
+        accessor_fn = lineageunits === :nodecoordinates ? accessor.nodecoordinates : accessor.nodepos
         accessor_fn === nothing && throw(
             ArgumentError(
                 "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
@@ -174,11 +174,11 @@ function rectangular_layout(
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coords = _process_coords(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
-    transverse_coords = _assign_transverse(leaf_list, accessor, all_nodes, step)
+    process_coordinates = _process_coordinates(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
+    transverse_coordinates = _assign_transverse(leaf_list, accessor, all_nodes, step)
 
-    node_positions = _build_node_positions(all_nodes, process_coords, transverse_coords)
-    edge_shapes = _build_edge_shapes(all_nodes, accessor, process_coords, transverse_coords)
+    node_positions = _build_node_positions(all_nodes, process_coordinates, transverse_coordinates)
+    edge_shapes = _build_edge_shapes(all_nodes, accessor, process_coordinates, transverse_coordinates)
     edges = _build_edge_list(all_nodes, accessor)
     bb = _compute_boundingbox(node_positions)
 
@@ -228,7 +228,7 @@ end
 
 # ── Internal: process coordinate computation ───────────────────────────────────
 
-function _process_coords(
+function _process_coordinates(
         rootnode,
         accessor::LineageGraphAccessor,
         lineageunits::Symbol,
@@ -282,7 +282,7 @@ function _process_coords(
                 "unsupported lineageunits value: $(repr(lineageunits)); " *
                     "rectangular_layout supports :nodeheights, :nodelevels, " *
                     ":edgelengths, :branchingtime, :nodedepths, :coalescenceage, " *
-                    ":nodecoords, :nodepos",
+                    ":nodecoordinates, :nodepos",
             ),
         )
     end
@@ -339,13 +339,13 @@ Preorder cumulative-sum traversal used by both `:edgelengths` and `:branchingtim
 Seeds `rootnode` at 0.0. For each node in preorder order, sets each child's
 coordinate to:
 
-    coords[child] = coords[node] + edge_increment(node, child)
+    coordinates[child] = coordinates[node] + edge_increment(node, child)
 
 `edge_increment` is a callable `(src, dst) -> Float64` that returns
 the additive increment for each directed edge:
 - For `:edgelengths`: the edge length via `_safe_edgelength`.
 - For `:branchingtime`: `branchingtime(dst) - branchingtime(src)`, which yields
-  `coords[dst] = branchingtime(dst)` — i.e., the accessor value is used directly.
+  `coordinates[dst] = branchingtime(dst)` — i.e., the accessor value is used directly.
 
 The caller is responsible for ensuring that `edge_increment` returns non-negative
 values where required.
@@ -356,15 +356,15 @@ function _cumulative_preorder(
         accessor::LineageGraphAccessor,
         edge_increment,
     )::Dict{Any, Float64}
-    coords = Dict{Any, Float64}()
-    coords[rootnode] = 0.0
+    coordinates = Dict{Any, Float64}()
+    coordinates[rootnode] = 0.0
     for node in all_nodes
-        coord = coords[node]
+        coordinate = coordinates[node]
         for child in accessor.children(node)
-            coords[child] = coord + edge_increment(node, child)
+            coordinates[child] = coordinate + edge_increment(node, child)
         end
     end
-    return coords
+    return coordinates
 end
 
 # ── Internal: :nodeheights — postorder, leaf = 0, internal = max(children) + 1
@@ -467,9 +467,9 @@ function _validate_ultrametric(
         all_nodes::Vector,
         nonultrametric::Symbol,
     )::Dict{Any, Float64}
-    coords = Dict{Any, Float64}()
+    coordinates = Dict{Any, Float64}()
     for node in Iterators.reverse(all_nodes)  # postorder: children before parents
-        coords[node] = accessor.coalescenceage(node)
+        coordinates[node] = accessor.coalescenceage(node)
         child_collection = accessor.children(node)
         isempty(child_collection) && continue
         child_ages = [accessor.coalescenceage(child) for child in child_collection]
@@ -489,7 +489,7 @@ function _validate_ultrametric(
             # :minimum or :maximum: inconsistency silently accepted.
         end
     end
-    return coords
+    return coordinates
 end
 
 # ── Internal: transverse coordinate assignment ─────────────────────────────────
@@ -542,12 +542,12 @@ end
 
 function _build_node_positions(
         all_nodes::Vector,
-        process_coords::Dict{Any, Float64},
-        transverse_coords::Dict{Any, Float64},
+        process_coordinates::Dict{Any, Float64},
+        transverse_coordinates::Dict{Any, Float64},
     )::Dict{Any, Point2f}
     pos = Dict{Any, Point2f}()
     for node in all_nodes
-        pos[node] = Point2f(process_coords[node], transverse_coords[node])
+        pos[node] = Point2f(process_coordinates[node], transverse_coordinates[node])
     end
     return pos
 end
@@ -560,16 +560,16 @@ end
 function _build_edge_shapes(
         all_nodes::Vector,
         accessor::LineageGraphAccessor,
-        process_coords::Dict{Any, Float64},
-        transverse_coords::Dict{Any, Float64},
+        process_coordinates::Dict{Any, Float64},
+        transverse_coordinates::Dict{Any, Float64},
     )::Vector{Point2f}
     shapes = Point2f[]
     for node in all_nodes
-        xp = process_coords[node]
-        yp = transverse_coords[node]
+        xp = process_coordinates[node]
+        yp = transverse_coordinates[node]
         for child in accessor.children(node)
-            xc = process_coords[child]
-            yc = transverse_coords[child]
+            xc = process_coordinates[child]
+            yc = transverse_coordinates[child]
             push!(
                 shapes,
                 Point2f(xp, yp),
@@ -625,7 +625,7 @@ chord segment at the parent's radial distance spanning the child's angular posit
 followed by a radial segment from that connector point to the child's position. The
 `:arc` style (Tier 2) is not implemented.
 
-**Bypass modes:** `lineageunits = :nodecoords` and `:nodepos` use the accessor
+**Bypass modes:** `lineageunits = :nodecoordinates` and `:nodepos` use the accessor
 coordinates directly, bypassing angular computation (same as `rectangular_layout`).
 
 # Arguments
@@ -685,8 +685,8 @@ function circular_layout(
     all_nodes = preorder(accessor, rootnode)
 
     # Bypass modes: both coordinates come from the accessor; no angular computation.
-    if lineageunits === :nodecoords || lineageunits === :nodepos
-        accessor_fn = lineageunits === :nodecoords ? accessor.nodecoords : accessor.nodepos
+    if lineageunits === :nodecoordinates || lineageunits === :nodepos
+        accessor_fn = lineageunits === :nodecoordinates ? accessor.nodecoordinates : accessor.nodepos
         accessor_fn === nothing && throw(
             ArgumentError(
                 "lineageunits = $(repr(lineageunits)) requires a $(lineageunits) accessor " *
@@ -702,19 +702,19 @@ function circular_layout(
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coords = _process_coords(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
+    process_coordinates = _process_coordinates(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
 
     θ_step = _angular_leaf_step(leaf_spacing, length(leaf_list), min_leaf_angle)
     angles = _angular_positions(leaf_list, all_nodes, accessor, θ_step)
 
     node_positions = Dict{Any, Point2f}()
     for node in all_nodes
-        r = process_coords[node]
+        r = process_coordinates[node]
         θ = angles[node]
         node_positions[node] = Point2f(r * cos(θ), r * sin(θ))
     end
 
-    edge_shapes = _build_circular_edge_shapes(all_nodes, accessor, process_coords, angles)
+    edge_shapes = _build_circular_edge_shapes(all_nodes, accessor, process_coordinates, angles)
     edges = _build_edge_list(all_nodes, accessor)
     bb = _compute_boundingbox(node_positions)
 
@@ -802,7 +802,7 @@ end
 # ── Internal: circular chord edge shape construction ──────────────────────────
 
 """
-    _build_circular_edge_shapes(all_nodes, accessor, process_coords, angles) -> Vector{Point2f}
+    _build_circular_edge_shapes(all_nodes, accessor, process_coordinates, angles) -> Vector{Point2f}
 
 Build the chord-style edge shape vector for a circular layout.
 
@@ -819,17 +819,17 @@ matching the convention used by `_build_edge_shapes` for rectangular layouts:
 function _build_circular_edge_shapes(
         all_nodes::Vector,
         accessor::LineageGraphAccessor,
-        process_coords::Dict{Any, Float64},
+        process_coordinates::Dict{Any, Float64},
         angles::Dict{Any, Float64},
     )::Vector{Point2f}
     shapes = Point2f[]
     for node in all_nodes
-        r_parent = process_coords[node]
+        r_parent = process_coordinates[node]
         θ_parent = angles[node]
         x_parent = r_parent * cos(θ_parent)
         y_parent = r_parent * sin(θ_parent)
         for child in accessor.children(node)
-            r_child = process_coords[child]
+            r_child = process_coordinates[child]
             θ_child = angles[child]
             x_conn = r_parent * cos(θ_child)
             y_conn = r_parent * sin(θ_child)

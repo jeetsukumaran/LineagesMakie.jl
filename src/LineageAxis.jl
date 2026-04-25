@@ -54,7 +54,7 @@ using .Layers: _resolve_lineageunits_stub, CladeLabelLayer, LeafLabelLayer, Line
 import .Layers: lineageplot!
 # data_to_pixel is needed by _wire_x_axis! to convert tick x values to blockscene
 # pixel coordinates.
-using .CoordTransform: data_to_pixel
+using .CoordinateTransform: data_to_pixel
 
 # ── Block type ─────────────────────────────────────────────────────────────────
 
@@ -470,15 +470,15 @@ function _orient_rectangular_geometry(
     function _transform_rectangular_point(pt::Point2f)::Point2f
         process = pt[1]
         transverse = pt[2]
-        process_coord = if owner_handles_direction || !policy.orientation_reversed
+        process_coordinate = if owner_handles_direction || !policy.orientation_reversed
             process
         else
             -process
         end
         if policy.process_axis === :x
-            return Point2f(process_coord, transverse)
+            return Point2f(process_coordinate, transverse)
         end
-        return Point2f(transverse, process_coord)
+        return Point2f(transverse, process_coordinate)
     end
 
     key_t = Base.keytype(typeof(geom.node_positions))

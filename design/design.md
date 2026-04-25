@@ -75,7 +75,7 @@ that any one view implies another.
 
 All input routes pass through a common set of callable keyword arguments
 (`children`, `edgelength`, `nodevalue`, `branchingtime`, `coalescenceage`,
-`nodecoords`, `nodepos`). Adapters (AbstractTrees.jl, future Graphs.jl,
+`nodecoordinates`, `nodepos`). Adapters (AbstractTrees.jl, future Graphs.jl,
 etc.) are thin shims that translate their source objects into these callables.
 The geometry and rendering modules depend only on the callables, never on the
 source type.

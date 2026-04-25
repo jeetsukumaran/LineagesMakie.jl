@@ -6,7 +6,7 @@ module Layers
 
 import Makie
 using Makie: @recipe, parent_scene, Axis, lines!, scatter!, text!, poly!, Point2f, Vec2f, Rect2f
-using LineagesMakie.CoordTransform: register_pixel_projection!, pixel_offset_to_data_delta, data_to_pixel
+using LineagesMakie.CoordinateTransform: register_pixel_projection!, pixel_offset_to_data_delta, data_to_pixel
 using ..Accessors: LineageGraphAccessor, is_leaf, leaves
 using ..Geometry: LineageGraphGeometry, rectangular_layout, circular_layout
 
@@ -93,7 +93,7 @@ Render markers at internal (non-leaf) node positions on axis `ax`.
 
 Markers are drawn in pixel space (`markerspace = :pixel`) so they remain
 fixed-size regardless of axis scale or figure resize. The
-`CoordTransform.register_pixel_projection!` call ensures the data↔pixel
+`CoordinateTransform.register_pixel_projection!` call ensures the data↔pixel
 mapping is reactive to viewport changes.
 
 Internal nodes are those for which `Accessors.is_leaf(accessor, node)`
@@ -165,7 +165,7 @@ Render markers at leaf node positions on axis `ax`.
 
 Markers are drawn in pixel space (`markerspace = :pixel`) so they remain
 fixed-size regardless of axis scale or figure resize. The
-`CoordTransform.register_pixel_projection!` call ensures the data↔pixel
+`CoordinateTransform.register_pixel_projection!` call ensures the data↔pixel
 mapping is reactive to viewport changes.
 
 Leaf nodes are those for which `Accessors.is_leaf(accessor, node)`
@@ -802,7 +802,7 @@ For each MRCA node in `clade_nodes`, the layer collects the positions of
 all descendant leaves (via `Accessors.leaves`) plus the MRCA node itself,
 computes the axis-aligned bounding box of those positions, expands the box by
 `padding` (pixel space, converted to data units via
-`CoordTransform.pixel_offset_to_data_delta`) only when the owning plot scene's
+`CoordinateTransform.pixel_offset_to_data_delta`) only when the owning plot scene's
 viewport is valid, clamps the expanded rect to the layout bounding box as a
 final geometric safety bound, and renders the result as a filled rectangle
 using `poly!`. When the viewport is degenerate, the layer falls back to the raw
@@ -1221,7 +1221,7 @@ The scale bar is visible by default only when both of the following are true:
 - `label` is non-empty after trimming whitespace.
 
 For topological layouts (`:nodeheights`, `:nodelevels`, `:nodedepths`,
-`:nodecoords`, `:nodepos`) or unlabeled bars, the scale bar defaults to
+`:nodecoordinates`, `:nodepos`) or unlabeled bars, the scale bar defaults to
 invisible. This default can be overridden by passing
 `scalebar_auto_visible = true` or `scalebar_auto_visible = false` explicitly.
 

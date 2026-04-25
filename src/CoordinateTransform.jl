@@ -1,4 +1,4 @@
-module CoordTransform
+module CoordinateTransform
 
 # Coordinate conversion approach:
 # data_to_pixel uses Makie.project(scene, point) from
@@ -202,4 +202,4 @@ end
 
 export data_to_pixel, pixel_to_data, pixel_offset_to_data_delta, register_pixel_projection!
 
-end # module CoordTransform
+end # module CoordinateTransform

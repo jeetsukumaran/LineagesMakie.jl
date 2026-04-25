@@ -22,7 +22,7 @@ Fields:
   cumulative edge-length sum from the rootnode.
 - `coalescenceage::Union{Nothing, CA}` — optional; `node -> Float64`; pre-computed
   coalescence age (leaf = 0, increases toward root).
-- `nodecoords::Union{Nothing, NC}`     — optional; `node -> Point2f`; user-supplied
+- `nodecoordinates::Union{Nothing, NC}`     — optional; `node -> Point2f`; user-supplied
   data coordinates.
 - `nodepos::Union{Nothing, NP}`        — optional; `node -> Point2f`; user-supplied
   pixel coordinates.
@@ -39,14 +39,14 @@ struct LineageGraphAccessor{C, E, NodeT, B, CA, NC, NP}
     nodevalue::NodeT
     branchingtime::B
     coalescenceage::CA
-    nodecoords::NC
+    nodecoordinates::NC
     nodepos::NP
 end
 
 """
     lineagegraph_accessor(rootnode; children, edgelength=nothing, nodevalue=nothing,
                           branchingtime=nothing, coalescenceage=nothing,
-                          nodecoords=nothing, nodepos=nothing) -> LineageGraphAccessor
+                          nodecoordinates=nothing, nodepos=nothing) -> LineageGraphAccessor
 
 Construct a `LineageGraphAccessor` from explicit keyword callables.
 
@@ -61,7 +61,7 @@ but is not stored. All accessor keyword arguments are stored as fields.
 - `nodevalue`: optional callable `node -> Any`.
 - `branchingtime`: optional callable `node -> Float64`.
 - `coalescenceage`: optional callable `node -> Float64`.
-- `nodecoords`: optional callable `node -> Point2f`.
+- `nodecoordinates`: optional callable `node -> Point2f`.
 - `nodepos`: optional callable `node -> Point2f`.
 
 # Returns
@@ -79,7 +79,7 @@ function lineagegraph_accessor(
         nodevalue = nothing,
         branchingtime = nothing,
         coalescenceage = nothing,
-        nodecoords = nothing,
+        nodecoordinates = nothing,
         nodepos = nothing,
     )::LineageGraphAccessor
     isa(children, Base.Callable) || throw(
@@ -94,7 +94,7 @@ function lineagegraph_accessor(
         nodevalue,
         branchingtime,
         coalescenceage,
-        nodecoords,
+        nodecoordinates,
         nodepos,
     )
 end

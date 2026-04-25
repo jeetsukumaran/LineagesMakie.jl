@@ -1,4 +1,4 @@
-# Tests for CoordTransform
+# Tests for CoordinateTransform
 #
 # All tests use real CairoMakie scenes to exercise the actual Makie coordinate
 # transform paths. CairoMakie re-exports all Makie types; geometric types are
@@ -9,7 +9,7 @@ using CairoMakie: Figure, Axis, scatter!
 using CairoMakie: colorbuffer
 using CairoMakie: Point2f, Vec2f, Rect2i, on
 
-@testset "CoordTransform" begin
+@testset "CoordinateTransform" begin
     # ── Shared fixture: a rendered non-isotropic axis ─────────────────────────
     #
     # x range 0–100, y range 0–1 gives very different pixel-per-data-unit
