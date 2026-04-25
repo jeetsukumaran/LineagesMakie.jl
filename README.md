@@ -256,10 +256,10 @@ geom = lp[:computed_geom][]
 lineageunits = lp[:resolved_lineageunits][]
 ```
 
-## Process coordinates and lineageunits
+## Process coordinates and lineage units
 
-The `lineageunits` keyword selects how LineagesMakie.jl computes the process
-coordinate of each node. If you omit `lineageunits`, the default is
+The `lineageunits` keyword selects how LineagesMakie.jl computes the primary 
+process coordinate of each node. If you omit `lineageunits`, the default is
 `:edgelengths` when an edge length accessor exists, and `:nodeheights`
 otherwise.
 
