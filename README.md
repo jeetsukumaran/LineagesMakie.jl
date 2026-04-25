@@ -5,15 +5,20 @@
 [![Build Status](https://github.com/jeetsukumaran/LineagesMakie.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/jeetsukumaran/LineagesMakie.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
-LineagesMakie.jl provides Makie-native plotting for lineage graphs in Julia.
-It accepts ordinary Julia objects through a small accessor interface, or any
-object that implements the AbstractTrees.jl `children` interface. It does not
-require a package-specific tree type, an R bridge, or a web service.
+LineagesMakie.jl draws lineage graphs with Makie. In this package, a
+lineage graph means a rooted branching history or hierarchy, such as a
+phylogenetic tree, coalescent genealogy, cladogram, or any custom object graph
+where each node can report its child nodes.
 
-Use LineagesMakie.jl when you want to draw rooted branching structures with
-Makie composition: clade graph layouts, edgelength-proportional layouts,
-radial layouts, labels, clade annotations, scale bars, `LineageAxis`
-decorations, and Observable-backed updates.
+LineagesMakie.jl accepts ordinary Julia objects through a small accessor
+interface, or any object that implements the AbstractTrees.jl `children`
+interface. It does not require a package-specific tree type, an R bridge, or a
+web service.
+
+Use LineagesMakie.jl when you want Makie composition for rooted branching
+structures: structure-only layouts, edge-length-proportional layouts, radial
+layouts, labels, clade annotations, scale bars, `LineageAxis` decorations, and
+Observable-backed updates.
 
 Full reference documentation lives in the [stable docs](https://jeetsukumaran.github.io/LineagesMakie.jl/stable/)
 and [development docs](https://jeetsukumaran.github.io/LineagesMakie.jl/dev/).
@@ -51,9 +56,14 @@ Pkg.develop(path = ".")
 
 ## Quick start
 
-The only required input is a rootnode and a callable `children(node)` accessor.
-When no `edgelength` accessor is supplied, LineagesMakie.jl defaults to
-`lineageunits = :nodeheights`, which gives a leaf-aligned clade graph layout.
+Start with a root node and a function that returns each node's children. In the
+example below, the code names the root node `rootnode` to follow package
+identifier conventions. The package receives that object through
+`lineageplot(rootnode, accessor)` and
+uses `children = node -> node.children` to traverse the graph.
+
+This first example does not supply edge lengths, so LineagesMakie.jl uses a
+default layout that aligns the leaves.
 
 The following example is available as
 [`examples/readme_quickstart.jl`](examples/readme_quickstart.jl).
@@ -72,7 +82,7 @@ leaf(name, edgelength) = Node(name, edgelength, Node[])
 node(name, edgelength, children::Node...) = Node(name, edgelength, Node[children...])
 
 rootnode = node(
-    "rootnode",
+    "root",
     0.0,
     node("alpha", 0.0, leaf("alpha_1", 0.0), leaf("alpha_2", 0.0)),
     node("beta", 0.0, leaf("beta_1", 0.0), leaf("beta_2", 0.0)),
@@ -84,7 +94,7 @@ plot_result = lineageplot(
     rootnode,
     accessor;
     figure = (; size = (640, 360)),
-    axis = (; title = "Default clade graph layout"),
+    axis = (; title = "Default leaf-aligned layout"),
     leaf_label_func = node -> node.name,
     node_color = :white,
     node_strokecolor = :gray35,
@@ -96,13 +106,13 @@ fig, lax, lp = plot_result
 save("readme_quickstart.png", fig)
 ```
 
-![Default clade graph layout](examples/readme_quickstart.png)
+![Default leaf-aligned layout](examples/readme_quickstart.png)
 
-## Edgelengths and annotations
+## Edge lengths and annotations
 
-Add an `edgelength(src, dst)` accessor when horizontal distance should reflect
-process-coordinate distance. The example below also shows leaf labels, clade
-highlighting, a clade bracket label, a quantitative x-axis, and a scale bar.
+Add the `edgelength(src, dst)` accessor when horizontal distance should reflect
+edge length. The same example also shows leaf labels, clade highlighting, a
+clade bracket label, a quantitative x-axis, and a scale bar.
 
 The full script is available as
 [`examples/readme_features.jl`](examples/readme_features.jl).
@@ -127,7 +137,7 @@ alpha = node(
     node("alpha_2", 0.8, leaf("alpha_2a", 0.7), leaf("alpha_2b", 0.7)),
 )
 beta = node("beta", 0.9, leaf("beta_1", 1.4), leaf("beta_2", 1.2))
-rootnode = node("rootnode", 0.0, alpha, beta)
+rootnode = node("root", 0.0, alpha, beta)
 
 accessor = lineagegraph_accessor(
     rootnode;
@@ -142,9 +152,9 @@ plot_result = lineageplot(
     lineageunits = :edgelengths,
     figure = (; size = (760, 420)),
     axis = (;
-        title = "Edgelengths, labels, clade annotation, and scale bar",
+        title = "Edge lengths, labels, clade annotation, and scale bar",
         show_x_axis = true,
-        xlabel = "cumulative edgelength",
+        xlabel = "cumulative edge length",
     ),
     edge_color = :slategray,
     edge_linewidth = 1.6,
@@ -163,20 +173,20 @@ fig, lax, lp = plot_result
 save("readme_features.png", fig)
 ```
 
-![Edgelengths, labels, clade annotation, and scale bar](examples/readme_features.png)
+![Edge lengths, labels, clade annotation, and scale bar](examples/readme_features.png)
 
 ## Input contract
 
 LineagesMakie.jl uses `LineageGraphAccessor` as its input boundary. The
 accessor stores callables that describe how to traverse and query your
-lineage graph.
+lineage graph. The left column lists exact API names.
 
 | Accessor | Required | Meaning |
 |---|---:|---|
 | `children(node)` | Yes | Return zero or more child nodes. A node with no children is a leaf. |
-| `edgelength(src, dst)` | No | Return the edgelength from source node `src` to destination node `dst`. |
-| `nodevalue(node)` | No | Return per-node data used by labels or mappings. |
-| `branchingtime(node)` | No | Return a precomputed rootnode-relative process coordinate. |
+| `edgelength(src, dst)` | No | Return the edge length from source node `src` to destination node `dst`. |
+| `nodevalue(node)` | No | Return a node value used by labels or mappings. |
+| `branchingtime(node)` | No | Return a precomputed coordinate measured from the root node. |
 | `coalescenceage(node)` | No | Return a precomputed leaf-relative process coordinate. |
 | `nodecoordinates(node)` | No | Return a user-supplied data-space `Point2f`. |
 | `nodepos(node)` | No | Return a user-supplied pixel-space `Point2f`. |
@@ -226,7 +236,7 @@ Use `lineageplot!` when you already own the plotting context:
 
 ```julia
 fig = Figure()
-lax = LineageAxis(fig[1, 1]; show_x_axis = true, xlabel = "edgelength")
+lax = LineageAxis(fig[1, 1]; show_x_axis = true, xlabel = "edge length")
 lp = lineageplot!(lax, rootnode, accessor; lineageunits = :edgelengths)
 ```
 
@@ -246,20 +256,21 @@ geom = lp[:computed_geom][]
 lineageunits = lp[:resolved_lineageunits][]
 ```
 
-## Lineageunits
+## Process coordinates and lineageunits
 
-`lineageunits` selects how LineagesMakie.jl computes the process coordinate of
-each node. If `lineageunits` is omitted, the default is `:edgelengths` when an
-`edgelength` accessor exists, and `:nodeheights` otherwise.
+The `lineageunits` keyword selects how LineagesMakie.jl computes the process
+coordinate of each node. If you omit `lineageunits`, the default is
+`:edgelengths` when an edge length accessor exists, and `:nodeheights`
+otherwise.
 
 | `lineageunits` | Required accessor | Process coordinate | Axis polarity |
 |---|---|---|---|
-| `:edgelengths` | `edgelength` | Cumulative `edgelength(src, dst)` from `rootnode`. | `:forward` |
-| `:branchingtime` | `branchingtime` | Precomputed rootnode-relative coordinate. | `:forward` |
+| `:edgelengths` | `edgelength` | Cumulative edge length from the root node. | `:forward` |
+| `:branchingtime` | `branchingtime` | Precomputed coordinate measured from the root node. | `:forward` |
 | `:coalescenceage` | `coalescenceage` | Leaf-relative coordinate; leaves have value 0. | `:backward` |
-| `:nodedepths` | None | Edge count from `rootnode`. | `:forward` |
+| `:nodedepths` | None | Edge count from the root node. | `:forward` |
 | `:nodeheights` | None | Edge count to farthest descendant leaf; leaves have value 0. | `:backward` |
-| `:nodelevels` | None | Integer level from `rootnode`. | `:forward` |
+| `:nodelevels` | None | Integer level from the root node. | `:forward` |
 | `:nodecoordinates` | `nodecoordinates` | User-supplied data coordinates. | User-defined |
 | `:nodepos` | `nodepos` | User-supplied pixel coordinates. | User-defined |
 
@@ -277,8 +288,8 @@ node_positions = geom.node_positions
 The plotting contract has 4 related pieces:
 
 - `lineageunits` chooses the process coordinate for each node.
-- `axis_polarity` records whether the coordinate increases in the
-  rootnode-to-leaf direction or the leaf-to-root direction.
+- `axis_polarity` records whether the coordinate increases from the root node
+  toward the leaves or from the leaves toward the root node.
 - `display_polarity` controls whether increasing coordinates map to increasing
   screen position.
 - `lineage_orientation` chooses which screen axis carries the process
@@ -294,7 +305,7 @@ lax = LineageAxis(
     lineage_orientation = :top_to_bottom,
     show_y_axis = true,
     show_grid = true,
-    ylabel = "cumulative edgelength",
+    ylabel = "cumulative edge length",
 )
 lineageplot!(lax, rootnode, accessor; lineageunits = :edgelengths)
 ```
@@ -385,7 +396,7 @@ Manual layer composition uses public layer functions. Prefer `lineageplot` or
 
 ## Observable updates
 
-`rootnode` and plot attributes can be Observables. This follows standard Makie
+The root node and plot attributes can be Observables. This follows standard Makie
 reactivity.
 
 ```julia
@@ -404,7 +415,7 @@ lp.edge_color = :steelblue
 rootnode_observable[] = another_rootnode
 ```
 
-Use the same accessor contract for every rootnode value assigned to the
+Use the same accessor contract for every root node value assigned to the
 Observable.
 
 ## Examples

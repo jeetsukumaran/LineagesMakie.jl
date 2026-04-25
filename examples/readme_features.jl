@@ -29,7 +29,7 @@ beta = node(
     leaf("beta_1", 1.4),
     leaf("beta_2", 1.2),
 )
-rootnode = node("rootnode", 0.0, alpha, beta)
+rootnode = node("root", 0.0, alpha, beta)
 
 accessor = lineagegraph_accessor(
     rootnode;
@@ -44,9 +44,9 @@ plot_result = lineageplot(
     lineageunits = :edgelengths,
     figure = (; size = (760, 420)),
     axis = (;
-        title = "Edgelengths, labels, clade annotation, and scale bar",
+        title = "Edge lengths, labels, clade annotation, and scale bar",
         show_x_axis = true,
-        xlabel = "cumulative edgelength",
+        xlabel = "cumulative edge length",
     ),
     edge_color = :slategray,
     edge_linewidth = 1.6,

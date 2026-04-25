@@ -18,7 +18,7 @@ leaf(name, edgelength) = Node(name, edgelength, Node[])
 node(name, edgelength, children::Node...) = Node(name, edgelength, Node[children...])
 
 rootnode = node(
-    "rootnode",
+    "root",
     0.0,
     node("alpha", 0.0, leaf("alpha_1", 0.0), leaf("alpha_2", 0.0)),
     node("beta", 0.0, leaf("beta_1", 0.0), leaf("beta_2", 0.0)),
@@ -30,7 +30,7 @@ plot_result = lineageplot(
     rootnode,
     accessor;
     figure = (; size = (640, 360)),
-    axis = (; title = "Default clade graph layout"),
+    axis = (; title = "Default leaf-aligned layout"),
     leaf_label_func = node -> node.name,
     node_color = :white,
     node_strokecolor = :gray35,
