@@ -6,7 +6,7 @@ status: ratified
 
 # Controlled vocabulary
 
-This file is the authoritative terminology reference for LineagesMakie.jl.
+This file is the authoritative terminology reference for this project.
 All code, documentation, tests, tranche documents, issue reports, and pull requests must use the canonical
 terms defined here. Proscribed terms must not appear in any identifier, type
 name, function name, keyword argument, symbol, or field name.
