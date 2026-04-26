@@ -10,12 +10,12 @@ using LineagesMakie
 
 struct Node
     name::String
-    edgelength::Float64
+    edgeweight::Float64
     children::Vector{Node}
 end
 
-leaf(name, edgelength) = Node(name, edgelength, Node[])
-node(name, edgelength, children::Node...) = Node(name, edgelength, Node[children...])
+leaf(name, edgeweight) = Node(name, edgeweight, Node[])
+node(name, edgeweight, children::Node...) = Node(name, edgeweight, Node[children...])
 
 rootnode = node(
     "root",

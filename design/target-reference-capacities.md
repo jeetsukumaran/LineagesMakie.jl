@@ -68,19 +68,19 @@ active **`lineageunits`** value (see section below). The canonical process
 coordinate types in LineagesMakie.jl are:
 
 **`branchingtime`** — root-relative, forward polarity. Defined as the
-cumulative sum of `edgelength` values on the directed path from the rootnode
+cumulative sum of `edgeweight` values on the directed path from the rootnode
 to a given node. `branchingtime(rootnode) = 0`; the value increases toward
 the leaves. This is equivalent to "divergence time" in phylogenetic prose and is
-the x-coordinate produced by the `:edgelengths` and `:branchingtime` positioning
+the x-coordinate produced by the `:edgeweights` and `:branchingtime` positioning
 modes. The process runs in the forward direction: rootnode is earliest, leaves
 are latest.
 
 **`coalescenceage`** — leaf-relative, backward polarity. Defined as the
-cumulative sum of `edgelength` values on the directed path from a given node
+cumulative sum of `edgeweight` values on the directed path from a given node
 down to any leaf. `coalescenceage(leaf) = 0`; the value increases toward the
 rootnode. This corresponds to "coalescent age" or "backward time" in
 population-genetic prose. Requires an ultrametric tree (all root-to-leaf paths
-have equal total `edgelength`) or an explicit non-ultrametric policy. The
+have equal total `edgeweight`) or an explicit non-ultrametric policy. The
 process runs in the backward direction: leaves are earliest (age = 0), the
 rootnode is latest (age = maximum).
 
@@ -92,7 +92,7 @@ use edge-length data:
   forward polarity.
 - `:nodeheights` — per-node path distance to farthest leaf; backward
   polarity; clade graph (unweighted) analogue of `coalescenceage`. This is the
-  default when no `edgelength` is supplied, because it aligns all leaves at the
+  default when no `edgeweight` is supplied, because it aligns all leaves at the
   same x-coordinate (classic cladogram appearance).
 - `:nodecoordinates` / `:nodepos` — user-supplied coordinates in data or pixel
   space respectively; polarity is user-defined.
@@ -106,7 +106,7 @@ coordinates and the screen.
 coordinates. `:forward` means increasing process coordinate moves in the
 root-to-leaf direction; `:backward` means it moves in the leaf-to-root
 direction. `LineageAxis` infers this from the active `lineageunits` value:
-`:edgelengths`, `:branchingtime`, `:nodedepths`, and `:nodelevels` are
+`:edgeweights`, `:branchingtime`, `:nodedepths`, and `:nodelevels` are
 `:forward`; `:coalescenceage` and `:nodeheights` are `:backward`. Users can
 override this for axis labeling purposes.
 
@@ -126,8 +126,8 @@ Some common combinations:
 
 | `lineageunits` value | `display_polarity` | `lineage_orientation` | Result |
 |---|---|---|---|
-| `:edgelengths` (forward) | `:standard` | `:left_to_right` | Rootnode at left, leaves at right (standard phylogram) |
-| `:edgelengths` (forward) | `:reversed` | `:left_to_right` | Rootnode at right, leaves at left (paleontological convention) |
+| `:edgeweights` (forward) | `:standard` | `:left_to_right` | Rootnode at left, leaves at right (standard phylogram) |
+| `:edgeweights` (forward) | `:reversed` | `:left_to_right` | Rootnode at right, leaves at left (paleontological convention) |
 | `:coalescenceage` (backward) | `:standard` | `:left_to_right` | Leaves at left (age = 0), rootnode at right (maximum age) |
 | `:coalescenceage` (backward) | `:reversed` | `:left_to_right` | Rootnode at left, leaves at right (inverted coalescent, non-standard) |
 | `:nodeheights` (backward) | `:standard` | `:top_to_bottom` | Leaves at top (height = 0), rootnode at bottom (dendrogram-down) |
@@ -194,7 +194,7 @@ annotations must respect the active layout.
 | Layout | Description | Reference |
 |---|---|---|
 | Rectangular (cladogram) | Standard horizontal; rootnode left, leaves right; edges at right angles; default `lineageunits = :nodeheights` | ggtree `rectangular` |
-| Rectangular (phylogram) | Same but edge horizontal length proportional to `edgelength`; `lineageunits = :edgelengths` or `:branchingtime` | ggtree `rectangular` + `branch.length` |
+| Rectangular (phylogram) | Same but edge horizontal length proportional to `edgeweight`; `lineageunits = :edgeweights` or `:branchingtime` | ggtree `rectangular` + `branch.length` |
 | Slanted | Diagonal (non-rectangular) edges forming a V-shape | ggtree `slanted` |
 | Dendrogram | Rootnode at top, leaves at bottom; hierarchical-clustering style; `lineage_orientation = :top_to_bottom` | ggtree `dendrogram` |
 | Circular | Radial from centre; leaves at outer ring; `lineage_orientation = :radial` | ggtree `circular` |
@@ -644,7 +644,7 @@ applied per-node, per-leaf, or per-edge.
 
 Data sources:
 - Per-node, per-leaf, or per-edge attributes in the tree object itself
-  (accessed via `nodevalue`, `edgelength`, or any accessor callable)
+  (accessed via `nodevalue`, `edgeweight`, or any accessor callable)
 - External data joined to the tree before calling `lineageplot` (no bespoke
   join operator; users join prior to plotting, consistent with
   STYLE-julia.md's prohibition on bespoke operators)
@@ -657,7 +657,7 @@ is just a matter of wiring.
 
 | Feature | Description | Tier |
 |---|---|---|
-| Hover tooltip | Show node/leaf name, edge length, γ, or any attribute on hover | 4 |
+| Hover tooltip | Show node/leaf name, edge weight, γ, or any attribute on hover | 4 |
 | Click to select | Select a clade or leaf for further inspection | 4 |
 | Click to collapse/expand | Interactive clade folding | 4 |
 | Pan and zoom | Standard Makie axis interaction (provided by `Axis` / `LineageAxis`) | 1 |
@@ -673,7 +673,7 @@ is just a matter of wiring.
   display_polarity, lineage_orientation, CoordinateTransform, viewport-reactive
   pixel↔data mapping)
 - Rectangular (cladogram + phylogram) and circular layouts
-- All eight `lineageunits` values (`:edgelengths`, `:branchingtime`,
+- All eight `lineageunits` values (`:edgeweights`, `:branchingtime`,
   `:coalescenceage`, `:nodedepths`, `:nodeheights`, `:nodelevels`,
   `:nodecoordinates`, `:nodepos`)
 - `EdgeLayer`, `NodeLayer`, `LeafLayer`, `LeafLabelLayer`,
@@ -689,7 +689,7 @@ is just a matter of wiring.
 
 - Fan layout; slanted layout; equal-angle (unrooted); dendrogram orientation
 - Layout transformations (flip, rotate, ladderise)
-- Edge labels (edge length, bootstrap, γ)
+- Edge labels (edge weight, bootstrap, γ)
 - Clade collapse (triangle)
 - Clade zoom / inset view
 - Continuous color / width gradient along edges

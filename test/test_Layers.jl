@@ -47,7 +47,7 @@ _LT_ACC = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.child
 _LT_ACC_UNIT = lineagegraph_accessor(
     _LT_BALANCED_ROOT;
     children = node -> node.children,
-    edgelength = (src, dst) -> 1.0,
+    edgeweight = (src, dst) -> 1.0,
 )
 _LT_GEOM = rectangular_layout(_LT_BALANCED_ROOT, _LT_ACC)
 _LT_NONROOT_CLADE = _LT_BALANCED_ROOT.children[1]
@@ -257,7 +257,7 @@ end
         @testset "radial leaf labels use blockscene pixel positions and mixed left/right alignments" begin
             fig = Figure(; size = (500, 500))
             ax = Axis(fig[1, 1])
-            geom = circular_layout(_LT_BALANCED_ROOT, _LT_ACC_UNIT; lineageunits = :edgelengths)
+            geom = circular_layout(_LT_BALANCED_ROOT, _LT_ACC_UNIT; lineageunits = :edgeweights)
             plot_obj = leaflabellayer!(
                 ax,
                 geom,
@@ -299,7 +299,7 @@ end
                 ax,
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 lineage_orientation = :top_to_bottom,
             )
             colorbuffer(fig)
@@ -315,7 +315,7 @@ end
                 ax2,
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 lineage_orientation = :right_to_left,
             )
             colorbuffer(fig2)
@@ -333,7 +333,7 @@ end
                 lax,
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 leaf_label_func = node -> "species_" * string(node.name),
                 clade_nodes = [_LT_NONROOT_CLADE],
                 clade_label_func = node -> "clade_" * string(node.name),
@@ -364,7 +364,7 @@ end
                 lax,
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 leaf_label_func = node -> "species_" * string(node.name),
                 clade_nodes = [_LT_NONROOT_CLADE],
                 clade_label_func = node -> "clade_" * string(node.name),
@@ -393,7 +393,7 @@ end
                 lax,
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 leaf_label_func = node -> "species_" * string(node.name),
                 clade_nodes = [_LT_NONROOT_CLADE],
                 clade_label_func = node -> "clade_" * string(node.name),
@@ -425,7 +425,7 @@ end
                 lax,
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 leaf_label_func = node -> "species_" * string(node.name),
                 clade_nodes = [_LT_NONROOT_CLADE],
                 clade_label_func = node -> "clade_" * string(node.name),
@@ -457,7 +457,7 @@ end
                 lax,
                 _LT_BALANCED_ROOT,
                 _LT_ACC_UNIT;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 leaf_label_func = node -> "species_" * string(node.name),
                 clade_nodes = [_LT_BALANCED_ROOT.children[1], _LT_BALANCED_ROOT.children[2]],
                 clade_label_func = node -> "clade_" * string(node.name),
@@ -613,9 +613,9 @@ end
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
                 children = node -> node.children,
-                edgelength = (src, dst) -> 1.0,
+                edgeweight = (src, dst) -> 1.0,
             )
-            geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgeweights)
             plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [_LT_NONROOT_CLADE])
             colorbuffer(fig)
 
@@ -643,9 +643,9 @@ end
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
                 children = node -> node.children,
-                edgelength = (src, dst) -> 1.0,
+                edgeweight = (src, dst) -> 1.0,
             )
-            geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
+            geom = rectangular_layout(_LT_BALANCED_ROOT, acc; lineageunits = :edgeweights)
             plot_obj = cladehighlightlayer!(ax, geom, acc; clade_nodes = [_LT_NONROOT_CLADE])
             raw_span = _lt_clade_xspan(geom, acc, _LT_NONROOT_CLADE)
             full_span = Float32(geom.boundingbox.widths[1])
@@ -762,21 +762,21 @@ end
             @test plot_obj[:resolved_visible][] == false
         end
 
-        @testset "visible defaults to false for :edgelengths when label is empty" begin
+        @testset "visible defaults to false for :edgeweights when label is empty" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths)
+            plot_obj = scalebarlayer!(ax, geom, acc, :edgeweights)
             @test plot_obj[:resolved_visible][] == false
         end
 
-        @testset "visible defaults to true for :edgelengths when label is present" begin
+        @testset "visible defaults to true for :edgeweights when label is present" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths; label = "1 unit")
+            plot_obj = scalebarlayer!(ax, geom, acc, :edgeweights; label = "1 unit")
             @test plot_obj[:resolved_visible][] == true
         end
 
@@ -794,7 +794,7 @@ end
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(_LT_BALANCED_ROOT; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_ROOT, acc)
-            plot_obj = scalebarlayer!(ax, geom, acc, :edgelengths; label = "1 unit")
+            plot_obj = scalebarlayer!(ax, geom, acc, :edgeweights; label = "1 unit")
             colorbuffer(fig)
             @test length(plot_obj[:scalebar_line_pts][]) == 2
         end
@@ -949,33 +949,33 @@ end
             @test scalebar_children[1][:resolved_visible][] == false
         end
 
-        @testset "scalebar is auto-hidden for :edgelengths when label is empty" begin
+        @testset "scalebar is auto-hidden for :edgeweights when label is empty" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
                 children = node -> node.children,
-                edgelength = (src, dst) -> 1.0,
+                edgeweight = (src, dst) -> 1.0,
             )
-            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :edgelengths)
+            lp = lineageplot!(ax, _LT_BALANCED_ROOT, acc; lineageunits = :edgeweights)
             scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)
             @test !isempty(scalebar_children)
             @test scalebar_children[1][:resolved_visible][] == false
         end
 
-        @testset "scalebar is auto-visible for :edgelengths when label is present" begin
+        @testset "scalebar is auto-visible for :edgeweights when label is present" begin
             fig = Figure(; size = (400, 300))
             ax = Axis(fig[1, 1])
             acc = lineagegraph_accessor(
                 _LT_BALANCED_ROOT;
                 children = node -> node.children,
-                edgelength = (src, dst) -> 1.0,
+                edgeweight = (src, dst) -> 1.0,
             )
             lp = lineageplot!(
                 ax,
                 _LT_BALANCED_ROOT,
                 acc;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 scalebar_label = "1 unit",
             )
             scalebar_children = filter(p -> p isa ScaleBarLayer, lp.plots)

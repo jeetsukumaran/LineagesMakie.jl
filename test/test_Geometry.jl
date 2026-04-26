@@ -309,9 +309,9 @@ end
         )
     end
 
-    # ── :edgelengths ────────────────────────────────────────────────────────────
+    # ── :edgeweights ────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :edgelengths — cumulative sums" begin
+    @testset "rectangular_layout :edgeweights — cumulative sums" begin
         # GEO_BALANCED: root → ab (1.0), root → cd (1.0)
         #               ab → a (2.0),  ab → b (2.0)
         #               cd → c (3.0),  cd → d (3.0)
@@ -326,9 +326,9 @@ end
         )
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
-            edgelength = (src, dst) -> el[(src.name, dst.name)],
+            edgeweight = (src, dst) -> el[(src.name, dst.name)],
         )
-        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgelengths)
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgeweights)
         node_pos = geom.node_positions
 
         root = GEO_BALANCED
@@ -346,12 +346,12 @@ end
         @test node_pos[d][1]    ≈ 4.0
     end
 
-    @testset "rectangular_layout :edgelengths — named-tuple (;value,units) return form" begin
+    @testset "rectangular_layout :edgeweights — named-tuple (;value,units) return form" begin
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
-            edgelength = (src, dst) -> (; value = 2.0, units = :ma),
+            edgeweight = (src, dst) -> (; value = 2.0, units = :ma),
         )
-        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgelengths)
+        geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgeweights)
         node_pos = geom.node_positions
 
         root = GEO_BALANCED
@@ -363,36 +363,36 @@ end
         @test node_pos[a][1]    ≈ 4.0
     end
 
-    @testset "rectangular_layout :edgelengths — missing edge length warns and falls back to 1.0" begin
+    @testset "rectangular_layout :edgeweights — missing edge weight warns and falls back to 1.0" begin
         # Only the ab→a edge returns nothing; all others return 1.0.
         root = GEO_BALANCED
         ab   = root.children[1]
         a    = ab.children[1]
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
-            edgelength = (src, dst) -> (src === ab && dst === a) ? nothing : 1.0,
+            edgeweight = (src, dst) -> (src === ab && dst === a) ? nothing : 1.0,
         )
         geom = @test_warn r"fallback" rectangular_layout(
-            GEO_BALANCED, acc; lineageunits = :edgelengths,
+            GEO_BALANCED, acc; lineageunits = :edgeweights,
         )
         # ab→a fell back to 1.0, so a's process coordinate = ab's (1.0) + fallback (1.0) = 2.0
         @test geom.node_positions[a][1] ≈ 2.0
     end
 
-    @testset "rectangular_layout :edgelengths — negative edge length raises ArgumentError" begin
+    @testset "rectangular_layout :edgeweights — negative edge weight raises ArgumentError" begin
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
-            edgelength = (src, dst) -> -1.0,
+            edgeweight = (src, dst) -> -1.0,
         )
         @test_throws ArgumentError rectangular_layout(
-            GEO_BALANCED, acc; lineageunits = :edgelengths,
+            GEO_BALANCED, acc; lineageunits = :edgeweights,
         )
     end
 
-    @testset "rectangular_layout :edgelengths — missing accessor raises ArgumentError" begin
+    @testset "rectangular_layout :edgeweights — missing accessor raises ArgumentError" begin
         acc = _acc(GEO_BALANCED)
         @test_throws ArgumentError rectangular_layout(
-            GEO_BALANCED, acc; lineageunits = :edgelengths,
+            GEO_BALANCED, acc; lineageunits = :edgeweights,
         )
     end
 
@@ -621,10 +621,10 @@ end
 
     # ── Default lineageunits detection ──────────────────────────────────────────
 
-    @testset "default lineageunits — edgelength present → :edgelengths (root at 0)" begin
+    @testset "default lineageunits — edgeweight present → :edgeweights (root at 0)" begin
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         geom     = rectangular_layout(GEO_BALANCED, acc)  # no lineageunits kwarg
         node_pos = geom.node_positions
@@ -635,7 +635,7 @@ end
         end
     end
 
-    @testset "default lineageunits — no edgelength → :nodeheights (leaves at 0)" begin
+    @testset "default lineageunits — no edgeweight → :nodeheights (leaves at 0)" begin
         acc      = _acc(GEO_BALANCED)
         geom     = rectangular_layout(GEO_BALANCED, acc)  # no lineageunits kwarg
         node_pos = geom.node_positions

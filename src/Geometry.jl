@@ -75,10 +75,10 @@ Compute a rectangular (right-angle) layout for a rooted lineage graph.
 
 Process coordinates (first `Point2f` component) are determined by `lineageunits`:
 
-- `:edgelengths` — cumulative `edgelength(src, dst)` from
-  `rootnode`; requires `edgelength` accessor; `rootnode` = 0, increases
-  toward leaves. Missing edge lengths emit `@warn` and fall back to 1.0;
-  negative edge lengths raise `ArgumentError`.
+- `:edgeweights` — cumulative `edgeweight(src, dst)` from
+  `rootnode`; requires `edgeweight` accessor; `rootnode` = 0, increases
+  toward leaves. Missing edge weights emit `@warn` and fall back to 1.0;
+  negative edge weights raise `ArgumentError`.
 - `:branchingtime` — per-node branching time read directly from
   `branchingtime(node)`; requires `branchingtime` accessor; `rootnode` = 0.
 - `:coalescenceage` — per-node coalescence age read from
@@ -100,7 +100,7 @@ Process coordinates (first `Point2f` component) are determined by `lineageunits`
   is documented here but not enforced at the geometry layer.
 
 **Default detection:** if `lineageunits` is not supplied (or `nothing`), the
-default is `:edgelengths` when an `edgelength` accessor is present; otherwise
+default is `:edgeweights` when an `edgeweight` accessor is present; otherwise
 `:nodeheights`.
 
 Transverse coordinates (second `Point2f` component) place leaves at equal
@@ -132,7 +132,7 @@ A `LineageGraphGeometry` with fully populated fields.
 - `ArgumentError` if `leaf_spacing` is a non-positive real number.
 - `ArgumentError` if a required accessor is `nothing` for the chosen `lineageunits`.
 - `ArgumentError` if `lineageunits` is not a supported value.
-- `ArgumentError` if `lineageunits = :edgelengths` and any edge length is negative.
+- `ArgumentError` if `lineageunits = :edgeweights` and any edge weight is negative.
 - `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
   and `nonultrametric = :error`.
 """
@@ -193,7 +193,7 @@ end
 Resolve the `lineageunits` sentinel `nothing` to the appropriate default.
 
 If `lineageunits` is not `nothing`, it is returned unchanged. Otherwise:
-- `:edgelengths` if `accessor.edgelength` is not `nothing`.
+- `:edgeweights` if `accessor.edgeweight` is not `nothing`.
 - `:nodeheights` otherwise.
 """
 function _resolve_lineageunits(
@@ -201,7 +201,7 @@ function _resolve_lineageunits(
         accessor::LineageGraphAccessor,
     )::Symbol
     lineageunits !== nothing && return lineageunits
-    return accessor.edgelength !== nothing ? :edgelengths : :nodeheights
+    return accessor.edgeweight !== nothing ? :edgeweights : :nodeheights
 end
 
 # ── Internal: leaf spacing validation ─────────────────────────────────────────
@@ -239,10 +239,10 @@ function _process_coordinates(
         return _nodeheights(all_nodes, accessor)
     elseif lineageunits === :nodelevels
         return _nodelevels(rootnode, all_nodes, accessor)
-    elseif lineageunits === :edgelengths
-        accessor.edgelength === nothing && throw(
+    elseif lineageunits === :edgeweights
+        accessor.edgeweight === nothing && throw(
             ArgumentError(
-                "lineageunits = :edgelengths requires an edgelength accessor " *
+                "lineageunits = :edgeweights requires an edgeweight accessor " *
                     "but none was supplied",
             ),
         )
@@ -250,7 +250,7 @@ function _process_coordinates(
             rootnode,
             all_nodes,
             accessor,
-            (src, dst) -> _safe_edgelength(accessor, src, dst),
+            (src, dst) -> _safe_edgeweight(accessor, src, dst),
         )
     elseif lineageunits === :branchingtime
         accessor.branchingtime === nothing && throw(
@@ -281,7 +281,7 @@ function _process_coordinates(
             ArgumentError(
                 "unsupported lineageunits value: $(repr(lineageunits)); " *
                     "rectangular_layout supports :nodeheights, :nodelevels, " *
-                    ":edgelengths, :branchingtime, :nodedepths, :coalescenceage, " *
+                    ":edgeweights, :branchingtime, :nodedepths, :coalescenceage, " *
                     ":nodecoordinates, :nodepos",
             ),
         )
@@ -291,11 +291,11 @@ end
 # ── Internal: safe edge-length extraction ─────────────────────────────────────
 
 """
-    _safe_edgelength(accessor, src, dst) -> Float64
+    _safe_edgeweight(accessor, src, dst) -> Float64
 
-Extract a non-negative `Float64` edge length from `accessor.edgelength`.
+Extract a non-negative `Float64` edge weight from `accessor.edgeweight`.
 
-Handles all documented return forms of the `edgelength` accessor:
+Handles all documented return forms of the `edgeweight` accessor:
 
 1. `NamedTuple` with a `:value` field — extracts `raw.value`; ignores other
    fields (e.g. `:units`). Unit conversion is not performed at the geometry layer.
@@ -307,23 +307,23 @@ Handles all documented return forms of the `edgelength` accessor:
 # Throws
 - `ArgumentError` if the resolved value is negative.
 """
-function _safe_edgelength(
+function _safe_edgeweight(
         accessor::LineageGraphAccessor,
         src,
         dst,
     )::Float64
-    raw = accessor.edgelength(src, dst)
+    raw = accessor.edgeweight(src, dst)
     val = (raw isa NamedTuple && haskey(raw, :value)) ? raw.value : raw
     if val === nothing || ismissing(val)
-        @warn "edgelength returned $(repr(val)) for edge $(repr(src)) → " *
+        @warn "edgeweight returned $(repr(val)) for edge $(repr(src)) → " *
             "$(repr(dst)); using fallback of 1.0"
         return 1.0
     end
     fval = Float64(val)
     fval < 0.0 && throw(
         ArgumentError(
-            "edgelength returned negative value $(fval) for edge " *
-                "$(repr(src)) → $(repr(dst)); edge lengths must be non-negative",
+            "edgeweight returned negative value $(fval) for edge " *
+                "$(repr(src)) → $(repr(dst)); edge weights must be non-negative",
         ),
     )
     return fval
@@ -334,7 +334,7 @@ end
 """
     _cumulative_preorder(rootnode, all_nodes, accessor, edge_increment) -> Dict{Any,Float64}
 
-Preorder cumulative-sum traversal used by both `:edgelengths` and `:branchingtime`.
+Preorder cumulative-sum traversal used by both `:edgeweights` and `:branchingtime`.
 
 Seeds `rootnode` at 0.0. For each node in preorder order, sets each child's
 coordinate to:
@@ -343,7 +343,7 @@ coordinate to:
 
 `edge_increment` is a callable `(src, dst) -> Float64` that returns
 the additive increment for each directed edge:
-- For `:edgelengths`: the edge length via `_safe_edgelength`.
+- For `:edgeweights`: the edge weight via `_safe_edgeweight`.
 - For `:branchingtime`: `branchingtime(dst) - branchingtime(src)`, which yields
   `coordinates[dst] = branchingtime(dst)` — i.e., the accessor value is used directly.
 
@@ -443,7 +443,7 @@ return a `Dict` mapping each node to its process coordinate.
 In a postorder traversal, for each internal node, collects the
 `coalescenceage` values of all its children from `accessor.coalescenceage`. For a
 strictly ultrametric tree, all children of any given internal node share the
-same coalescence age (since the implied edge lengths sum to the same total
+same coalescence age (since the implied edge weights sum to the same total
 distance from any child path to a leaf). If any two children disagree
 beyond a floating-point tolerance of `1e-9`, the `nonultrametric` policy is
 applied:
@@ -652,7 +652,7 @@ preorder traversal order, and `boundingbox` enclosing all node positions.
 - `ArgumentError` if a required accessor is `nothing` for the chosen `lineageunits`.
 - `ArgumentError` if `lineageunits` is not a supported value.
 - `ArgumentError` if `circular_edge_style` is not `:chord`.
-- `ArgumentError` if `lineageunits = :edgelengths` and any edge length is negative.
+- `ArgumentError` if `lineageunits = :edgeweights` and any edge weight is negative.
 - `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
   and `nonultrametric = :error`.
 """

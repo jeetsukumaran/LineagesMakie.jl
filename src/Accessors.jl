@@ -14,7 +14,7 @@ downstream modules (Geometry, Layers, LineageAxis) accept a
 
 Fields:
 - `children::C`                        — required; callable `node -> iterable-of-children`.
-- `edgelength::Union{Nothing, E}`      — optional; `(src, dst) -> Float64`
+- `edgeweight::Union{Nothing, E}`      — optional; `(src, dst) -> Float64`
   or `(src, dst) -> (; value::Float64, units::Symbol)`.
 - `nodevalue::Union{Nothing, NodeT}`   — optional; `node -> Any`; per-node data
   for labels and color mapping.
@@ -35,7 +35,7 @@ specialisation with no dynamic dispatch on accessor calls.
 """
 struct LineageGraphAccessor{C, E, NodeT, B, CA, NC, NP}
     children::C
-    edgelength::E
+    edgeweight::E
     nodevalue::NodeT
     branchingtime::B
     coalescenceage::CA
@@ -44,7 +44,7 @@ struct LineageGraphAccessor{C, E, NodeT, B, CA, NC, NP}
 end
 
 """
-    lineagegraph_accessor(rootnode; children, edgelength=nothing, nodevalue=nothing,
+    lineagegraph_accessor(rootnode; children, edgeweight=nothing, nodevalue=nothing,
                           branchingtime=nothing, coalescenceage=nothing,
                           nodecoordinates=nothing, nodepos=nothing) -> LineageGraphAccessor
 
@@ -57,7 +57,7 @@ but is not stored. All accessor keyword arguments are stored as fields.
 - `_` (rootnode): the root of the lineage graph; not stored; accepted only for
   API symmetry with `abstracttrees_accessor`.
 - `children`: required callable `node -> iterable`; the only mandatory field.
-- `edgelength`: optional callable `(src, dst) -> value`.
+- `edgeweight`: optional callable `(src, dst) -> value`.
 - `nodevalue`: optional callable `node -> Any`.
 - `branchingtime`: optional callable `node -> Float64`.
 - `coalescenceage`: optional callable `node -> Float64`.
@@ -75,7 +75,7 @@ omitted optionals).
 function lineagegraph_accessor(
         rootnode;
         children,
-        edgelength = nothing,
+        edgeweight = nothing,
         nodevalue = nothing,
         branchingtime = nothing,
         coalescenceage = nothing,
@@ -90,7 +90,7 @@ function lineagegraph_accessor(
     )
     return LineageGraphAccessor(
         children,
-        edgelength,
+        edgeweight,
         nodevalue,
         branchingtime,
         coalescenceage,
@@ -102,7 +102,7 @@ end
 # ── AbstractTrees adapter ──────────────────────────────────────────────────────
 
 """
-    abstracttrees_accessor(rootnode; edgelength=nothing, nodevalue=nothing,
+    abstracttrees_accessor(rootnode; edgeweight=nothing, nodevalue=nothing,
                            branchingtime=nothing, coalescenceage=nothing) -> LineageGraphAccessor
 
 Construct a `LineageGraphAccessor` by wrapping `AbstractTrees.children` as the
@@ -117,7 +117,7 @@ will produce a single-leaf lineage graph.
 
 # Arguments
 - `rootnode`: not stored; accepted for API symmetry with `lineagegraph_accessor`.
-- `edgelength`, `nodevalue`, `branchingtime`, `coalescenceage`: same
+- `edgeweight`, `nodevalue`, `branchingtime`, `coalescenceage`: same
   semantics as in `lineagegraph_accessor`.
 
 # Returns
@@ -125,14 +125,14 @@ A `LineageGraphAccessor` whose `children` field is `AbstractTrees.children`.
 """
 function abstracttrees_accessor(
         rootnode;
-        edgelength = nothing,
+        edgeweight = nothing,
         nodevalue = nothing,
         branchingtime = nothing,
         coalescenceage = nothing,
     )::LineageGraphAccessor
     return LineageGraphAccessor(
         abstracttrees_children,
-        edgelength,
+        edgeweight,
         nodevalue,
         branchingtime,
         coalescenceage,

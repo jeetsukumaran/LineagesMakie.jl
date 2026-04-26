@@ -7,8 +7,8 @@
 #
 # Demonstrates:
 #   - Hand-coded phylogenetic tree with branch lengths
-#   - lineagegraph_accessor with edgelength and nodevalue
-#   - Four panels: forward-time (:edgelengths), backward-time (:nodeheights),
+#   - lineagegraph_accessor with edgeweight and nodevalue
+#   - Four panels: forward-time (:edgeweights), backward-time (:nodeheights),
 #     top-to-bottom orientation, and radial layout
 #   - All major attribute groups: edge styling, node markers, leaf labels,
 #     clade highlights, clade labels, scalebar
@@ -20,7 +20,7 @@ using LineagesMakie
 
 struct PhyloNode
     name::String
-    branch_length::Float64  # edge length from parent to this node
+    branch_length::Float64  # edge weight from parent to this node
     children::Vector{PhyloNode}
 end
 
@@ -57,7 +57,7 @@ const PHYROOT = PhyloNode("root", 0.0, [
 const PHYACC = lineagegraph_accessor(
     PHYROOT;
     children   = node -> node.children,
-    edgelength = (src, dst) -> dst.branch_length,
+    edgeweight = (src, dst) -> dst.branch_length,
     nodevalue  = node -> node.name,
 )
 
@@ -89,7 +89,7 @@ lax1 = LineageAxis(
 )
 lineageplot!(
     lax1, PHYROOT, PHYACC;
-    lineageunits          = :edgelengths,
+    lineageunits          = :edgeweights,
     edge_color            = EDGE_COLOR,
     edge_linewidth        = EDGE_LW,
     node_color            = NODE_COLOR,
@@ -144,7 +144,7 @@ lax3 = LineageAxis(
 )
 lineageplot!(
     lax3, PHYROOT, PHYACC;
-    lineageunits          = :edgelengths,
+    lineageunits          = :edgeweights,
     edge_color            = EDGE_COLOR,
     edge_linewidth        = EDGE_LW,
     node_color            = NODE_COLOR,
@@ -168,7 +168,7 @@ lax4 = LineageAxis(
 )
 lineageplot!(
     lax4, PHYROOT, PHYACC;
-    lineageunits        = :edgelengths,
+    lineageunits        = :edgeweights,
     lineage_orientation = :radial,
     edge_color          = EDGE_COLOR,
     edge_linewidth      = EDGE_LW,

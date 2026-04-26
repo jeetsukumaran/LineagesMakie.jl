@@ -413,9 +413,9 @@ end
             lineagegraph_accessor(
                 _LA_BALANCED_ROOT;
                 children = node -> node.children,
-                edgelength = (src, dst) -> 1.0,
+                edgeweight = (src, dst) -> 1.0,
             );
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             scalebar_auto_visible = true,
             scalebar_label = "1 unit",
         )
@@ -443,9 +443,9 @@ end
             lineagegraph_accessor(
                 _LA_BALANCED_ROOT;
                 children = node -> node.children,
-                edgelength = (src, dst) -> 1.0,
+                edgeweight = (src, dst) -> 1.0,
             );
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             lineage_orientation = :radial,
         )
         colorbuffer(fig)
@@ -530,7 +530,7 @@ end
         acc_el = lineagegraph_accessor(
             _LA_BALANCED_ROOT;
             children   = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
 
         # Backward (:nodeheights) + standard polarity → leaves on left →
@@ -543,7 +543,7 @@ end
         @test ll1[:offset][] == Makie.Vec2f(-4, 0)
         @test ll1[:align][]  == (:right, :center)
 
-        # Forward (:edgelengths) + standard polarity → leaves on right →
+        # Forward (:edgeweights) + standard polarity → leaves on right →
         # recipe defaults (4 px rightward, left-aligned).
         fig2 = Figure()
         lax2 = LineageAxis(fig2[1, 1])
@@ -586,7 +586,7 @@ end
         acc_el = lineagegraph_accessor(
             _LA_BALANCED_ROOT;
             children   = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
 
         # Backward + standard → leaves on left → bracket on left.
@@ -736,13 +736,13 @@ end
         acc = lineagegraph_accessor(
             _LA_BALANCED_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
             _LA_BALANCED_ROOT,
             acc;
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             clade_nodes = [_LA_NONROOT_CLADE],
         )
         colorbuffer(fig)

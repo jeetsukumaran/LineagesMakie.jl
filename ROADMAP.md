@@ -10,7 +10,7 @@ LineagesMakie.jl currently provides the core Makie-native plotting foundation:
 
 - generic `LineageGraphAccessor` input with a required `children` accessor
 - `abstracttrees_accessor` for AbstractTrees.jl-compatible data
-- rectangular clade graph and edgelength-proportional layouts
+- rectangular clade graph and edgeweight-proportional layouts
 - radial layout with chord-style circular edges
 - all current `lineageunits` values
 - `LineageAxis` with `axis_polarity`, `display_polarity`, and
@@ -30,7 +30,7 @@ These capacities extend the standard 2D rooted-tree plotting surface:
 - rounded or curved edge variants
 - rootnode-specific styling
 - rootnode edge stub
-- edge label layer for edgelengths, support values, or other edge data
+- edge label layer for edgeweights, support values, or other edge data
 - continuous color and width mapping along edges
 - clade collapse with triangle glyphs
 - clade zoom and inset views

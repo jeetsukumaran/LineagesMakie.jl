@@ -658,14 +658,14 @@ end
 
 """
 Return `true` iff `lineageunits` encodes physical process-coordinate units for
-which a scale bar is meaningful (`:edgelengths`, `:branchingtime`,
+which a scale bar is meaningful (`:edgeweights`, `:branchingtime`,
 `:coalescenceage`). Returns `false` for all topological modes.
 
 The two-argument overload additionally requires a non-empty label, which is the
 default user-facing auto-visibility contract for `ScaleBarLayer`.
 """
 function _scalebar_visible(lineageunits::Symbol)::Bool
-    return lineageunits in (:edgelengths, :branchingtime, :coalescenceage)
+    return lineageunits in (:edgeweights, :branchingtime, :coalescenceage)
 end
 
 function _scalebar_visible(lineageunits::Symbol, label)::Bool
@@ -787,7 +787,7 @@ function _resolve_lineageunits_stub(
         accessor::LineageGraphAccessor,
     )::Symbol
     lineageunits === nothing || return lineageunits
-    return accessor.edgelength !== nothing ? :edgelengths : :nodeheights
+    return accessor.edgeweight !== nothing ? :edgeweights : :nodeheights
 end
 
 # ── CladeHighlightLayer ───────────────────────────────────────────────────────
@@ -1216,7 +1216,7 @@ Render a scale bar showing the magnitude of process-coordinate units on axis `ax
 
 The scale bar is visible by default only when both of the following are true:
 
-- `lineageunits_val` is one of `:edgelengths`, `:branchingtime`, or
+- `lineageunits_val` is one of `:edgeweights`, `:branchingtime`, or
   `:coalescenceage` — values that carry physical units.
 - `label` is non-empty after trimming whitespace.
 
@@ -1422,7 +1422,7 @@ Composite entry point. Computes a rectangular or circular layout from
 
 `lineageunits` selects how process coordinates are computed (see
 `Geometry.rectangular_layout` for all values). `nothing` (default) detects
-the appropriate value automatically: `:edgelengths` when an `edgelength`
+the appropriate value automatically: `:edgeweights` when an `edgeweight`
 accessor is present, `:nodeheights` otherwise.
 
 `lineage_orientation = :radial` selects `Geometry.circular_layout`; all other
@@ -1439,7 +1439,7 @@ re-calling `lineageplot!`. The `rootnode` argument may be a plain value or an
 - `ax`: any Makie axis or scene.
 - `rootnode`: the root node of the lineage graph.
 - `accessor::LineageGraphAccessor`: accessor callables supplying `children`
-  and optional `edgelength`, `nodevalue`, etc.
+  and optional `edgeweight`, `nodevalue`, etc.
 
 # Keyword attributes
 - `lineageunits`: `nothing` or a `Symbol`; see `Geometry.rectangular_layout`.

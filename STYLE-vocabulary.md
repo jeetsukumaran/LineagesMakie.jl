@@ -38,7 +38,7 @@ Examples:
 
 - Write "root node" in prose; write `rootnode` only for the exact positional
   argument name or code identifier.
-- Write "edge length" in prose; write `edgelength` only for the exact accessor
+- Write "edge weight" in prose; write `edgeweight` only for the exact accessor
   keyword, callable name, or code identifier.
 - Write "node value" in prose; write `nodevalue` only for the exact accessor
   keyword, callable name, or code identifier.
@@ -59,7 +59,7 @@ Examples:
 and the direction of the modeled process. Has two values:
 
 - `:forward` — increasing process coordinates move in the root-to-leaf
-  direction (forward time). `lineageunits` values `:edgelengths`,
+  direction (forward time). `lineageunits` values `:edgeweights`,
   `:branchingtime`, `:nodedepths`, and `:nodelevels` produce forward
   process coordinates (rootnode = 0, increases toward leaves).
 - `:backward` — increasing process coordinates move in the leaf-to-root
@@ -97,13 +97,14 @@ Written as one word without underscore.
 
 **Part of speech:** noun (data concept); accessor name
 
-**Definition (concept):** The cumulative sum of `edgelength` values on the
-directed path from `rootnode` to a given node. Represents the total
+**Definition (concept):** IFF `edgeweight` values represent time in a time-indexed branching process, 
+then this is the cumulative sum of `edgeweight` values on the directed path from `rootnode` to a given node. 
+Represents the total
 evolutionary or temporal distance accumulated since the root. Also called
 "divergence time" in phylogenetic prose.
 
 - `branchingtime(rootnode) = 0` by definition.
-- `branchingtime(child) = branchingtime(parent) + edgelength(parent, child)`.
+- `branchingtime(child) = branchingtime(parent) + edgeweight(parent, child)`.
 - Polarity: increases in the forward-time direction (root → leaves), i.e., the
   x-axis reads left = past, right = present for a standard chronogram.
 
@@ -111,11 +112,11 @@ evolutionary or temporal distance accumulated since the root. Also called
 returning a pre-computed branching time for a node. Supplied as a keyword
 argument when `lineageunits = :branchingtime`, for cases where the user has a
 vector of pre-computed divergence times and does not want to re-derive them
-from per-edge lengths.
+from per-edge weights.
 
-**Relationship to `lineageunits = :edgelengths`:** The `:edgelengths`
+**Relationship to `lineageunits = :edgeweights`:** The `:edgeweights`
 `lineageunits` value computes `branchingtime` on the fly by summing the
-`edgelength` accessor along the path from `rootnode`. The `:branchingtime`
+`edgeweight` accessor along the path from `rootnode`. The `:branchingtime`
 `lineageunits` value bypasses that traversal and reads the value directly from
 the `branchingtime` accessor. Both `lineageunits` values produce identical
 node x-coordinates when the supplied times are consistent with the edge
@@ -174,7 +175,7 @@ Subsequent uses within the same section may abbreviate to "clade graph".
 **Derived forms:**
 - `clade graph` — preferred prose form
 - `cladegraph` — code identifier form (one word, no underscore; consistent with
-  `edgelength`, `coalescenceage`, `lineageunits`)
+  `edgeweight`, `coalescenceage`, `lineageunits`)
 - `cladological` — adjectival form; e.g. "cladological distance" = path distance
   along the unweighted clade graph
 
@@ -199,12 +200,12 @@ always qualify: the phylogenetic `"topology"` (in quotation marks).
 **Part of speech:** noun (data concept); accessor name
 
 **Definition (concept):** The distance from a given node to the leaves,
-measured in cumulative `edgelength` units. Represents the elapsed time since
+measured in cumulative `edgeweight` units. Represents the elapsed time since
 the evolutionary or coalescent event at that node. Also called "coalescent
 age" or "backward time" in phylogenetic prose.
 
 - `coalescenceage(leaf) = 0` by definition; a leaf at the present has age zero.
-- `coalescenceage(parent) = edgelength(parent, child) + coalescenceage(child)`
+- `coalescenceage(parent) = edgeweight(parent, child) + coalescenceage(child)`
   for any direct child (ultrametric guarantee: all children give the same
   value).
 - Polarity: increases in the backward-time direction (leaves → root), i.e., the
@@ -213,16 +214,16 @@ age" or "backward time" in phylogenetic prose.
 
 **Ultrametricity assumption:** `coalescenceage` is well-defined only for
 ultrametric trees (all paths from any node to any of its leaf descendants have
-equal total `edgelength`). For non-ultrametric trees, three policies are
+equal total `edgeweight`). For non-ultrametric trees, three policies are
 available via a `nonultrametric` keyword argument:
 - `:minimum` — use the minimum over all descendant paths to a leaf.
 - `:maximum` — use the maximum over all descendant paths to a leaf.
 - `:error` (default) — raise `ArgumentError` if any two children yield
   inconsistent values.
 
-**Computation from edge lengths:** Can be computed in a post-order traversal:
+**Computation from edge weights:** Can be computed in a post-order traversal:
 leaves are assigned 0; each internal node is assigned
-`edgelength(parent, child) + coalescenceage(child)` for any child (or resolved via
+`edgeweight(parent, child) + coalescenceage(child)` for any child (or resolved via
 the `nonultrametric` policy).
 
 **Definition (as accessor):** The callable `coalescenceage(node) -> Float64`
@@ -286,25 +287,25 @@ argument, type name, or symbol.
 
 ---
 
-### `edgelength`
+### `edgeweight`
 
-**Part of speech:** accessor name; prose form is "edge length"
+**Part of speech:** accessor name; prose form is "edge weight"
 
 **Definition (as measure):** The scalar quantity associated with a directed
-edge. Represents evolutionary distance, time span, or any analogous
-non-negative quantity. In reader-facing prose, write "edge length".
+edge. Represents evolutionary distance, time span, or any arbitrary measurement concept. 
+In reader-facing prose, write "edge weight".
 
-**Definition (as accessor):** The callable `edgelength(src, dst)`,
+**Definition (as accessor):** The callable `edgeweight(src, dst)`,
 which returns either:
 - a `Float64` value in data units, or
 - a named tuple `(; value::Float64, units::Symbol)` with an explicit unit
   for conversion.
 
-When the `edgelength` accessor is not supplied, layout defaults to
+When the `edgeweight` accessor is not supplied, layout defaults to
 `lineageunits = :nodeheights` (leaf-aligned clade graph plot).
 
 **Proscribed alternates (as project-owned identifiers):**
-`branch_length`, `edge_length` (underscored), `weight`, `len`, `w`.
+`branch_length`, `edge_length`, `edge_len`, `edgelen`, `edgelength`, `length`, `weight`, `len`, `w`, $\el$.
 
 ---
 
@@ -318,9 +319,10 @@ that represent the visual shape of edges in a rendered layout. A field of
 compound accessor name).
 
 **Proscribed alternates:** `edge_paths` (proscribed project-wide for this
-concept; the former canonical name), `edge paths` (prose form, proscribed for
+concept), `edge paths` (prose form, proscribed for
 this concept), `paths` (unqualified, proscribed for this concept),
-`branch_paths`, `segments`, `edge_segments`.
+`branch_paths`, `segments`, `edge_segments`. We reserve the term (edge) "paths" for 
+the graph theoretic sense.
 
 ---
 
@@ -329,7 +331,7 @@ this concept), `paths` (unqualified, proscribed for this concept),
 **Part of speech:** noun (accessor argument)
 
 **Definition:** The source (parent) node in a directed edge. First positional
-argument of `edgelength(src, dst)` and any other edge-level accessor.
+argument of `edgeweight(src, dst)` and any other edge-level accessor.
 Follows the `Graphs.jl` ecosystem convention.
 
 **Proscribed alternates:** `fromnode`, `fromvertex`, `parent`, `v1`, `s`,
@@ -346,7 +348,7 @@ tree, equivalently the `branchingtime` of the deepest leaf. For an ultrametric
 tree, equals the `coalescenceage` of the root node.
 
 **Definition (per-node):** The path distance (number of edges, ignoring
-`edgelength` values) from a given node to its farthest descendant leaf. Used
+`edgeweight` values) from a given node to its farthest descendant leaf. Used
 by the `:nodeheights` `lineageunits` value: all leaves have height = 0, and
 each internal node has height = max(heights of children) + 1. This naturally
 aligns all leaves at the same x-coordinate (the classic cladogram appearance).
@@ -471,7 +473,7 @@ The value of `lineageunits` determines which accessor is consulted to compute
 the process coordinate (x in rectangular layouts, radial in circular) of each
 node, and what `axis_polarity` `LineageAxis` infers:
 
-- `:edgelengths` — cumulative edge lengths from rootnode; requires `edgelength`
+- `:edgeweights` — cumulative edge weights from rootnode; requires `edgeweight`
   accessor; `:forward` polarity.
 - `:branchingtime` — pre-supplied branching times; requires `branchingtime`
   accessor; `:forward` polarity.
@@ -480,7 +482,7 @@ node, and what `axis_polarity` `LineageAxis` infers:
 - `:nodedepths` — cumulative path distance (edge count) from rootnode; no
   accessor required; `:forward` polarity.
 - `:nodeheights` — edge count to farthest leaf; leaves at 0; default when no
-  `edgelength` accessor is supplied; `:backward` polarity.
+  `edgeweight` accessor is supplied; `:backward` polarity.
 - `:nodelevels` — integer level from rootnode; equal inter-level spacing;
   no accessor required; `:forward` polarity.
 - `:nodecoordinates` — user-supplied data coordinates; requires `nodecoordinates`
@@ -488,10 +490,10 @@ node, and what `axis_polarity` `LineageAxis` infers:
 - `:nodepos` — user-supplied pixel coordinates; requires `nodepos` accessor;
   polarity is user-defined.
 
-Default selection: `:edgelengths` if an `edgelength` accessor is supplied;
+Default selection: `:edgeweights` if an `edgeweight` accessor is supplied;
 `:nodeheights` otherwise.
 
-Written as one word without underscore, consistent with `edgelength`,
+Written as one word without underscore, consistent with `edgeweight`,
 `coalescenceage`, `branchingtime`.
 
 **Proscribed alternates:** `mode`, `positioning_mode`, `layout_mode`,
@@ -549,7 +551,7 @@ acceptable synonym; in code, `marker` is the only permitted term.
 **Definition:** The scalar value that positions a node along the lineage axis.
 In any given plot, the process coordinate is determined by the active
 `lineageunits` value: `branchingtime` values for `lineageunits = :branchingtime`
-or `:edgelengths`, `coalescenceage` values for `lineageunits = :coalescenceage`,
+or `:edgeweights`, `coalescenceage` values for `lineageunits = :coalescenceage`,
 path distances (edge counts) for `:nodelevels` / `:nodedepths` / `:nodeheights`,
 or user-supplied coordinates for `:nodecoordinates` / `:nodepos`.
 
@@ -588,7 +590,7 @@ the exact API argument or identifier.
 **Part of speech:** noun (accessor argument)
 
 **Definition:** The destination (child) node in a directed edge. Second
-positional argument of `edgelength(src, dst)` and any other edge-level accessor.
+positional argument of `edgeweight(src, dst)` and any other edge-level accessor.
 Follows the `Graphs.jl` ecosystem convention.
 
 **Proscribed alternates:** `tonode`, `tovertex`, `child`, `v2`, `d`,
@@ -877,7 +879,7 @@ required artifact set.
 
 | Symbol | Accessor required | x-coordinate source | Polarity | `axis_polarity` |
 |---|---|---|---|---|
-| `:edgelengths` | `edgelength` | Cumulative `edgelength(src, dst)` from `rootnode`; computes `branchingtime` on the fly | Root = 0, increases toward leaves | `:forward` |
+| `:edgeweights` | `edgeweight` | Cumulative `edgeweight(src, dst)` from `rootnode`; computes `branchingtime` on the fly | Root = 0, increases toward leaves | `:forward` |
 | `:branchingtime` | `branchingtime` | `branchingtime(node)` directly; user pre-supplies divergence times | Root = 0, increases toward leaves | `:forward` |
 | `:coalescenceage` | `coalescenceage` | `coalescenceage(node)`; requires ultrametric tree (or `nonultrametric` policy) | Leaf = 0, increases toward root | `:backward` |
 | `:nodedepths` | none | Cumulative path distance (edge count) from `rootnode` (all edge weights = 1) | Root = 0, increases toward leaves | `:forward` |
@@ -886,11 +888,11 @@ required artifact set.
 | `:nodecoordinates` | `nodecoordinates` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
 | `:nodepos` | `nodepos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
 
-**Default `lineageunits`:** `:edgelengths` if an `edgelength` accessor is
+**Default `lineageunits`:** `:edgeweights` if an `edgeweight` accessor is
 supplied; `:nodeheights` otherwise.
 
 **Polarity summary:** `lineageunits` values that are root-relative
-(`:edgelengths`, `:branchingtime`, `:nodedepths`, `:nodelevels`) have
+(`:edgeweights`, `:branchingtime`, `:nodedepths`, `:nodelevels`) have
 `:forward` `axis_polarity` and assign the root x = 0 increasing toward the
 leaves. `lineageunits` values that are leaf-relative (`:coalescenceage`,
 `:nodeheights`) have `:backward` `axis_polarity` and assign leaves x = 0
@@ -903,7 +905,7 @@ rootnode at the right.
 
 Compound accessor names and domain-specific identifiers in this package are
 written without underscores when the compound reads naturally as a single
-concept: `edgelength`, `nodevalue`, `coalescenceage`, `branchingtime`,
+concept: `edgeweight`, `nodevalue`, `coalescenceage`, `branchingtime`,
 `rootnode`, `boundingbox`, `lineageunits`. This is consistent with
 STYLE-julia.md §2.1, which permits omitting underscores when the name is not
 hard to read.

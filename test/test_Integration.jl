@@ -53,13 +53,13 @@ const _IT_ROOT6 = IntegrationTestNode("root6", [
 # ── Accessor helper functions ──────────────────────────────────────────────────
 
 # branchingtime: root=0.0, ab/cd=1.0, leaves=2.0
-# (Consistent with edgelength=1.0 per edge on the 4-leaf balanced tree)
+# (Consistent with edgeweight=1.0 per edge on the 4-leaf balanced tree)
 function _it_branchingtime(node::IntegrationTestNode)
     return node.name in ("a", "b", "c", "d") ? 2.0 : node.name in ("ab", "cd") ? 1.0 : 0.0
 end
 
 # coalescenceage: leaves=0.0, ab/cd=1.0, root=2.0
-# Ultrametric (all leaf-to-root sums equal); consistent with edgelength=1.0
+# Ultrametric (all leaf-to-root sums equal); consistent with edgeweight=1.0
 function _it_coalescenceage(node::IntegrationTestNode)
     return node.name in ("a", "b", "c", "d") ? 0.0 : node.name in ("ab", "cd") ? 1.0 : 2.0
 end
@@ -177,12 +177,12 @@ end
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         plot_result = lineageplot(
             _IT_ROOT,
             acc;
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             figure = (; size = (700, 500)),
             axis = (;
                 lineage_orientation = :top_to_bottom,
@@ -213,13 +213,13 @@ end
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             ax,
             _IT_ROOT,
             acc;
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             lineage_orientation = :top_to_bottom,
         )
         geom = lp[:computed_geom][]
@@ -246,17 +246,17 @@ end
     @testset "LineageAxis reset_limits! reruns reactively when lineageunits changes" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        # edgelength = 2.0:
-        #   :edgelengths produces x ∈ [0, 4] (cumulative edge length from root)
-        #   :nodelevels produces x ∈ [0, 2] (integer depth, ignores edge lengths)
+        # edgeweight = 2.0:
+        #   :edgeweights produces x ∈ [0, 4] (cumulative edge weight from root)
+        #   :nodelevels produces x ∈ [0, 2] (integer depth, ignores edge weights)
         # These have different bounding boxes, so the orthographic projection must
         # change when lineageunits is mutated reactively.
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 2.0,
+            edgeweight = (src, dst) -> 2.0,
         )
-        lp = lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
+        lp = lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
         proj_before = CairoMakie.Makie.camera(lax.scene).projection[]
         # Mutating lineageunits → computed_geom fires → on() callback → reset_limits!.
         lp.lineageunits = :nodelevels
@@ -286,13 +286,13 @@ end
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
             _IT_ROOT,
             acc;
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             scalebar_auto_visible = true,
             scalebar_label = "1 unit",
         )
@@ -311,13 +311,13 @@ end
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
             _IT_ROOT,
             acc;
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             lineage_orientation = :radial,
         )
         CairoMakie.colorbuffer(fig)
@@ -334,13 +334,13 @@ end
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
             _IT_ROOT,
             acc;
-            lineageunits = :edgelengths,
+            lineageunits = :edgeweights,
             edge_color = :slategray,
             edge_linewidth = 1.5,
             node_color = :white,
@@ -370,12 +370,12 @@ end
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         @test_nowarn begin
             lineageplot!(
                 ax, _IT_ROOT, acc;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 edge_color = :steelblue,
                 edge_linewidth = 2.0,
                 edge_linestyle = :dash,
@@ -402,7 +402,7 @@ end
     @testset "smoke/rectangular" begin
         # Each entry: (lineageunits symbol, string label for testset name, accessor kwargs)
         lu_cases = [
-            (:edgelengths, "edgelengths", (edgelength = (src, dst) -> 1.0,)),
+            (:edgeweights, "edgeweights", (edgeweight = (src, dst) -> 1.0,)),
             (:branchingtime, "branchingtime", (branchingtime = _it_branchingtime,)),
             (:coalescenceage, "coalescenceage", (coalescenceage = _it_coalescenceage,)),
             (:nodedepths, "nodedepths", NamedTuple()),
@@ -447,7 +447,7 @@ end
         acc_el = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
         acc_ca = lineagegraph_accessor(
             _IT_ROOT;
@@ -457,8 +457,8 @@ end
 
         # Setting axis_polarity explicitly on LineageAxis locks inference (by design).
         for (ap, dp, lu, acc) in [
-            (:forward, :standard, :edgelengths, acc_el),
-            (:forward, :reversed, :edgelengths, acc_el),
+            (:forward, :standard, :edgeweights, acc_el),
+            (:forward, :reversed, :edgeweights, acc_el),
             (:backward, :standard, :coalescenceage, acc_ca),
             (:backward, :reversed, :coalescenceage, acc_ca),
         ]
@@ -475,34 +475,34 @@ end
         acc = lineagegraph_accessor(
             _IT_ROOT;
             children = node -> node.children,
-            edgelength = (src, dst) -> 1.0,
+            edgeweight = (src, dst) -> 1.0,
         )
 
         @testset "left_to_right" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :left_to_right)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
+            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
         @testset "right_to_left" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :right_to_left)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
+            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
         @testset "bottom_to_top" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :bottom_to_top)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
+            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
         @testset "top_to_bottom" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :top_to_bottom)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgelengths)
+            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
@@ -511,7 +511,7 @@ end
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)
             @test_nowarn lineageplot!(
                 lax, _IT_ROOT, acc;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 lineage_orientation = :radial,
             )
             @test_nowarn CairoMakie.colorbuffer(fig)
@@ -556,7 +556,7 @@ end
             acc = lineagegraph_accessor(
                 _IT_ROOT;
                 children = node -> node.children,
-                edgelength = (src, dst) -> 1.0,
+                edgeweight = (src, dst) -> 1.0,
             )
             clade_a = _IT_ROOT.children[1]
             clade_b = _IT_ROOT.children[2]
@@ -578,7 +578,7 @@ end
                 lax1,
                 _IT_ROOT,
                 acc;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 leaf_label_func = node -> node.name,
                 clade_nodes = [clade_a, clade_b],
                 clade_label_func = node -> node.name,
@@ -596,7 +596,7 @@ end
                 lax3,
                 _IT_ROOT,
                 acc;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 leaf_label_func = node -> node.name,
                 clade_nodes = [clade_a, clade_b],
                 clade_label_func = node -> node.name,
@@ -605,7 +605,7 @@ end
                 lax4,
                 _IT_ROOT,
                 acc;
-                lineageunits = :edgelengths,
+                lineageunits = :edgeweights,
                 lineage_orientation = :radial,
                 leaf_label_func = node -> node.name,
             )

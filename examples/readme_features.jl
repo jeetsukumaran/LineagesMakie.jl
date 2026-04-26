@@ -10,12 +10,12 @@ using LineagesMakie
 
 struct Node
     name::String
-    edgelength::Float64
+    edgeweight::Float64
     children::Vector{Node}
 end
 
-leaf(name, edgelength) = Node(name, edgelength, Node[])
-node(name, edgelength, children::Node...) = Node(name, edgelength, Node[children...])
+leaf(name, edgeweight) = Node(name, edgeweight, Node[])
+node(name, edgeweight, children::Node...) = Node(name, edgeweight, Node[children...])
 
 alpha = node(
     "alpha",
@@ -34,19 +34,19 @@ rootnode = node("root", 0.0, alpha, beta)
 accessor = lineagegraph_accessor(
     rootnode;
     children = node -> node.children,
-    edgelength = (src, dst) -> dst.edgelength,
+    edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
 )
 
 plot_result = lineageplot(
     rootnode,
     accessor;
-    lineageunits = :edgelengths,
+    lineageunits = :edgeweights,
     figure = (; size = (760, 420)),
     axis = (;
         title = "Edge lengths, labels, clade annotation, and scale bar",
         show_x_axis = true,
-        xlabel = "cumulative edge length",
+        xlabel = "cumulative edge weight",
     ),
     edge_color = :slategray,
     edge_linewidth = 1.6,

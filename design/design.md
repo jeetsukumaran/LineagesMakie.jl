@@ -30,14 +30,14 @@ scalar is attached to each node along its primary dimension? What branching
 structure (clade graph) connects the nodes?
 
 This view is captured by the **`lineageunits`** selection and **accessor callables**:
-`edgelength`, `branchingtime`, `coalescenceage`, `children`. The resulting
+`edgeweight`, `branchingtime`, `coalescenceage`, `children`. The resulting
 `process_coordinate` values (see controlled vocabulary) determine the position
 of each node along the lineage axis.
 
 Two canonical process-coordinate types exist with opposite polarity:
-- `branchingtime` — cumulative edge length from rootnode; root = 0, increases
+- `branchingtime` — cumulative edge weight from rootnode; root = 0, increases
   toward leaves. The process moves forward from root to leaf.
-- `coalescenceage` — cumulative edge length from node to leaf; leaf = 0,
+- `coalescenceage` — cumulative edge weight from node to leaf; leaf = 0,
   increases toward root. The process moves backward from leaf to root
   (coalescent model). Requires an ultrametric tree.
 
@@ -74,7 +74,7 @@ that any one view implies another.
 ## Input contract
 
 All input routes pass through a common set of callable keyword arguments
-(`children`, `edgelength`, `nodevalue`, `branchingtime`, `coalescenceage`,
+(`children`, `edgeweight`, `nodevalue`, `branchingtime`, `coalescenceage`,
 `nodecoordinates`, `nodepos`). Adapters (AbstractTrees.jl, future Graphs.jl,
 etc.) are thin shims that translate their source objects into these callables.
 The geometry and rendering modules depend only on the callables, never on the
@@ -117,8 +117,8 @@ save("cladegraph.pdf", fig)
 
 ### Edge-length proportional layout
 
-Supply `edgelength` and the default `lineageunits` shifts to `:edgelengths`,
-placing nodes at x = cumulative edge length from the rootnode
+Supply `edgeweight` and the default `lineageunits` shifts to `:edgeweights`,
+placing nodes at x = cumulative edge weight from the rootnode
 (`branchingtime`).
 
 ```julia
@@ -131,7 +131,7 @@ end
 fig, ax, plt = lineageplot(
     root;
     children   = node -> node.children,
-    edgelength = (src, dst) -> dst.branch_length,
+    edgeweight = (src, dst) -> dst.branch_length,
     nodevalue  = node -> node.name,
 )
 ```
@@ -142,7 +142,7 @@ root. The `nodevalue` accessor drives the `LeafLabelLayer` text by default.
 ### Pre-computed branching times
 
 When the user has a dictionary of divergence times (e.g. from a Bayesian dating
-analysis) and does not want to re-derive them from per-edge lengths, supply
+analysis) and does not want to re-derive them from per-edge weights, supply
 `branchingtime` directly and set `lineageunits = :branchingtime`.
 
 ```julia
@@ -209,7 +209,7 @@ AbstractTrees.nodevalue(t::NewickTree) = (name = t.label, brlen = t.branch_lengt
 
 fig, ax, plt = lineageplot(
     lineagegraph_root;
-    edgelength = (src, dst) -> AbstractTrees.nodevalue(dst).brlen,
+    edgeweight = (src, dst) -> AbstractTrees.nodevalue(dst).brlen,
     nodevalue  = node -> AbstractTrees.nodevalue(node).name,
 )
 ```
@@ -233,7 +233,7 @@ ax1 = LineageAxis(fig[1, 1];
     show_x_axis         = true,
     xlabel              = "Divergence time (Ma)",
 )
-lineageplot!(ax1, root; edgelength = (src, dst) -> dst.branch_length)
+lineageplot!(ax1, root; edgeweight = (src, dst) -> dst.branch_length)
 
 # Same lineage graph, displayed right-to-left (paleontological convention: root at right)
 ax2 = LineageAxis(fig[1, 2];
@@ -242,7 +242,7 @@ ax2 = LineageAxis(fig[1, 2];
     show_x_axis         = true,
     xlabel              = "Time before present (Ma)",
 )
-lineageplot!(ax2, root; edgelength = (src, dst) -> dst.branch_length)
+lineageplot!(ax2, root; edgeweight = (src, dst) -> dst.branch_length)
 
 # Coalescent lineage graph: axis_polarity = :backward; leaves appear at left by default
 ax3 = LineageAxis(fig[2, 1];
@@ -305,8 +305,8 @@ using CairoMakie
 geom = rectangular_layout(
     root;
     children     = node -> node.children,
-    edgelength   = (src, dst) -> dst.branch_length,
-    lineageunits = :edgelengths,
+    edgeweight   = (src, dst) -> dst.branch_length,
+    lineageunits = :edgeweights,
 )
 
 fig = Figure()
@@ -358,7 +358,7 @@ in Observable reactivity.
 ```julia
 # Edges colored by evolutionary rate; width by bootstrap support
 lineageplot!(ax, root;
-    edgelength         = (src, dst) -> dst.branch_length,
+    edgeweight         = (src, dst) -> dst.branch_length,
     nodevalue          = node -> node.bootstrap,
     edge_color         = (src, dst) -> rate_colormap(dst.rate),
     edge_linewidth     = (src, dst) -> dst.support_weight,
@@ -384,7 +384,7 @@ fig = Figure()
 ax  = LineageAxis(fig[1, 1]; show_x_axis = true)
 
 lineageplot!(ax, lineagegraph_obs;
-    edgelength = (src, dst) -> dst.branch_length,
+    edgeweight = (src, dst) -> dst.branch_length,
     edge_color = lift(highlight_obs) do hs
         (src, dst) -> dst ∈ hs ? :red : :gray40
     end,
@@ -420,7 +420,7 @@ work with all layout geometries.
 fig, ax, plt = lineageplot(
     root;
     layout     = :circular,
-    edgelength = (src, dst) -> dst.branch_length,
+    edgeweight = (src, dst) -> dst.branch_length,
     nodevalue  = node -> node.name,
 )
 ```

@@ -62,7 +62,7 @@ identifier conventions. The package receives that object through
 `lineageplot(rootnode, accessor)` and
 uses `children = node -> node.children` to traverse the graph.
 
-This first example does not supply edge lengths, so LineagesMakie.jl uses a
+This first example does not supply edge weights, so LineagesMakie.jl uses a
 default layout that aligns the leaves.
 
 The following example is available as
@@ -74,12 +74,12 @@ using LineagesMakie
 
 struct Node
     name::String
-    edgelength::Float64
+    edgeweight::Float64
     children::Vector{Node}
 end
 
-leaf(name, edgelength) = Node(name, edgelength, Node[])
-node(name, edgelength, children::Node...) = Node(name, edgelength, Node[children...])
+leaf(name, edgeweight) = Node(name, edgeweight, Node[])
+node(name, edgeweight, children::Node...) = Node(name, edgeweight, Node[children...])
 
 rootnode = node(
     "root",
@@ -110,8 +110,8 @@ save("readme_quickstart.png", fig)
 
 ## Edge lengths and annotations
 
-Add the `edgelength(src, dst)` accessor when horizontal distance should reflect
-edge length. The same example also shows leaf labels, clade highlighting, a
+Add the `edgeweight(src, dst)` accessor when horizontal distance should reflect
+edge weight. The same example also shows leaf labels, clade highlighting, a
 clade bracket label, a quantitative x-axis, and a scale bar.
 
 The full script is available as
@@ -123,12 +123,12 @@ using LineagesMakie
 
 struct Node
     name::String
-    edgelength::Float64
+    edgeweight::Float64
     children::Vector{Node}
 end
 
-leaf(name, edgelength) = Node(name, edgelength, Node[])
-node(name, edgelength, children::Node...) = Node(name, edgelength, Node[children...])
+leaf(name, edgeweight) = Node(name, edgeweight, Node[])
+node(name, edgeweight, children::Node...) = Node(name, edgeweight, Node[children...])
 
 alpha = node(
     "alpha",
@@ -142,19 +142,19 @@ rootnode = node("root", 0.0, alpha, beta)
 accessor = lineagegraph_accessor(
     rootnode;
     children = node -> node.children,
-    edgelength = (src, dst) -> dst.edgelength,
+    edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
 )
 
 plot_result = lineageplot(
     rootnode,
     accessor;
-    lineageunits = :edgelengths,
+    lineageunits = :edgeweights,
     figure = (; size = (760, 420)),
     axis = (;
         title = "Edge lengths, labels, clade annotation, and scale bar",
         show_x_axis = true,
-        xlabel = "cumulative edge length",
+        xlabel = "cumulative edge weight",
     ),
     edge_color = :slategray,
     edge_linewidth = 1.6,
@@ -184,7 +184,7 @@ lineage graph. The left column lists exact API names.
 | Accessor | Required | Meaning |
 |---|---:|---|
 | `children(node)` | Yes | Return zero or more child nodes. A node with no children is a leaf. |
-| `edgelength(src, dst)` | No | Return the edge length from source node `src` to destination node `dst`. |
+| `edgeweight(src, dst)` | No | Return the edge weight from source node `src` to destination node `dst`. |
 | `nodevalue(node)` | No | Return a node value used by labels or mappings. |
 | `branchingtime(node)` | No | Return a precomputed coordinate measured from the root node. |
 | `coalescenceage(node)` | No | Return a precomputed leaf-relative process coordinate. |
@@ -197,7 +197,7 @@ Create an accessor from explicit callables:
 accessor = lineagegraph_accessor(
     rootnode;
     children = node -> node.children,
-    edgelength = (src, dst) -> dst.edgelength,
+    edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
 )
 ```
@@ -213,7 +213,7 @@ AbstractTrees.children(node::Node) = node.children
 
 accessor = abstracttrees_accessor(
     rootnode;
-    edgelength = (src, dst) -> dst.edgelength,
+    edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
 )
 ```
@@ -236,8 +236,8 @@ Use `lineageplot!` when you already own the plotting context:
 
 ```julia
 fig = Figure()
-lax = LineageAxis(fig[1, 1]; show_x_axis = true, xlabel = "edge length")
-lp = lineageplot!(lax, rootnode, accessor; lineageunits = :edgelengths)
+lax = LineageAxis(fig[1, 1]; show_x_axis = true, xlabel = "edge weight")
+lp = lineageplot!(lax, rootnode, accessor; lineageunits = :edgeweights)
 ```
 
 You can also target a standard Makie `Axis` when you do not need
@@ -260,12 +260,12 @@ lineageunits = lp[:resolved_lineageunits][]
 
 The `lineageunits` keyword selects how LineagesMakie.jl computes the primary 
 process coordinate of each node. If you omit `lineageunits`, the default is
-`:edgelengths` when an edge length accessor exists, and `:nodeheights`
+`:edgeweights` when an edge weight accessor exists, and `:nodeheights`
 otherwise.
 
 | `lineageunits` | Required accessor | Process coordinate | Axis polarity |
 |---|---|---|---|
-| `:edgelengths` | `edgelength` | Cumulative edge length from the root node. | `:forward` |
+| `:edgeweights` | `edgeweight` | Cumulative edge weight from the root node. | `:forward` |
 | `:branchingtime` | `branchingtime` | Precomputed coordinate measured from the root node. | `:forward` |
 | `:coalescenceage` | `coalescenceage` | Leaf-relative coordinate; leaves have value 0. | `:backward` |
 | `:nodedepths` | None | Edge count from the root node. | `:forward` |
@@ -277,7 +277,7 @@ otherwise.
 Use the layout functions directly when you need geometry before plotting:
 
 ```julia
-geom = rectangular_layout(rootnode, accessor; lineageunits = :edgelengths)
+geom = rectangular_layout(rootnode, accessor; lineageunits = :edgeweights)
 bb = boundingbox(geom)
 leaf_order = geom.leaf_order
 node_positions = geom.node_positions
@@ -305,9 +305,9 @@ lax = LineageAxis(
     lineage_orientation = :top_to_bottom,
     show_y_axis = true,
     show_grid = true,
-    ylabel = "cumulative edge length",
+    ylabel = "cumulative edge weight",
 )
-lineageplot!(lax, rootnode, accessor; lineageunits = :edgelengths)
+lineageplot!(lax, rootnode, accessor; lineageunits = :edgeweights)
 ```
 
 Use `display_polarity = :reversed` when the same process coordinates should
@@ -315,7 +315,7 @@ run in the opposite screen direction:
 
 ```julia
 lax = LineageAxis(fig[1, 1]; display_polarity = :reversed)
-lineageplot!(lax, rootnode, accessor; lineageunits = :edgelengths)
+lineageplot!(lax, rootnode, accessor; lineageunits = :edgeweights)
 ```
 
 Use `:radial` for circular layouts:
@@ -326,7 +326,7 @@ plot_result = lineageplot(
     accessor;
     axis = (; lineage_orientation = :radial, title = "Radial layout"),
     lineage_orientation = :radial,
-    lineageunits = :edgelengths,
+    lineageunits = :edgeweights,
     leaf_label_func = node -> node.name,
 )
 ```
@@ -354,7 +354,7 @@ lineageplot!(
     lax,
     rootnode,
     accessor;
-    edge_color = (src, dst) -> dst.edgelength > 1.0 ? :tomato : :gray50,
+    edge_color = (src, dst) -> dst.edgeweight > 1.0 ? :tomato : :gray50,
     leaf_label_func = node -> node.name,
 )
 ```
@@ -378,7 +378,7 @@ Use lower-level layout and layer recipes when you want to compose the plot
 yourself.
 
 ```julia
-geom = rectangular_layout(rootnode, accessor; lineageunits = :edgelengths)
+geom = rectangular_layout(rootnode, accessor; lineageunits = :edgeweights)
 
 fig = Figure()
 ax = Axis(fig[1, 1])
@@ -405,7 +405,7 @@ rootnode_observable = Observable(rootnode)
 plot_result = lineageplot(
     rootnode_observable,
     accessor;
-    lineageunits = :edgelengths,
+    lineageunits = :edgeweights,
     leaf_label_func = node -> node.name,
 )
 

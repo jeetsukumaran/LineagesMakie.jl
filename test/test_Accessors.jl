@@ -68,7 +68,7 @@ end
         @test acc isa LineageGraphAccessor
         @test acc.children isa Function
         @test acc.children(BALANCED_ROOT) == BALANCED_ROOT.children
-        @test acc.edgelength    === nothing
+        @test acc.edgeweight    === nothing
         @test acc.nodevalue     === nothing
         @test acc.branchingtime === nothing
         @test acc.coalescenceage === nothing
@@ -85,7 +85,7 @@ end
         nodepos_fn    = node -> (0.0, 0.0)
         acc = lineagegraph_accessor(BALANCED_ROOT;
             children       = node -> node.children,
-            edgelength     = el,
+            edgeweight     = el,
             nodevalue      = nodevalue_fn,
             branchingtime  = bt,
             coalescenceage = ca,
@@ -93,7 +93,7 @@ end
             nodepos        = nodepos_fn,
         )
         @test acc isa LineageGraphAccessor
-        @test acc.edgelength     === el
+        @test acc.edgeweight     === el
         @test acc.nodevalue      === nodevalue_fn
         @test acc.branchingtime  === bt
         @test acc.coalescenceage === ca
@@ -113,7 +113,7 @@ end
         @test acc isa LineageGraphAccessor
         # children field must be AbstractTrees.children
         @test acc.children === AbstractTrees.children
-        @test acc.edgelength    === nothing
+        @test acc.edgeweight    === nothing
         @test acc.nodecoordinates    === nothing
         @test acc.nodepos       === nothing
     end
