@@ -32,7 +32,7 @@ Without an explicit semantic axis, three distinct concerns collapse into one
 and become impossible to separate cleanly:
 
 1. **Tree-centric:** What is the process coordinate of each node? Which
-   direction does the process run (root-to-leaf or leaf-to-root)? This is
+   direction does the process run (basenode-to-leaf or leaf-to-basenode)? This is
    determined by the data and the chosen `lineageunits` value.
 2. **User-centric:** What does the process coordinate mean to the researcher?
    Is it "forward time" (species diversification) or "backward time"
@@ -44,7 +44,7 @@ and become impossible to separate cleanly:
 
 These three concerns are independent. A coalescent model with leaf-relative
 process coordinates (user-centric: backward time) can be drawn with the
-rootnode at either the left or the right (plotting-centric choice), and the
+basenode at either the left or the right (plotting-centric choice), and the
 researcher may think of it as "coalescent time increasing toward the past"
 (user-centric) or simply as a clade graph display tool. Conflating these three
 concerns leads to an API that either forces one convention on the user or
@@ -58,7 +58,7 @@ The primary dimension of `LineageAxis` is the one-dimensional index set of the
 branching process. It is the distinguished coordinate along which the process
 progresses.
 
-In a standard rectangular tree layout with the rootnode at the left and
+In a standard rectangular tree layout with the basenode at the left and
 leaves at the right, this is the x-axis. But this is a rendering convention,
 not a structural requirement. The primary dimension can be mapped to any screen
 axis in any direction.
@@ -68,27 +68,27 @@ active **`lineageunits`** value (see section below). The canonical process
 coordinate types in LineagesMakie.jl are:
 
 **`branchingtime`** — root-relative, forward polarity. Defined as the
-cumulative sum of `edgeweight` values on the directed path from the rootnode
-to a given node. `branchingtime(rootnode) = 0`; the value increases toward
+cumulative sum of `edgeweight` values on the directed path from the basenode
+to a given node. `branchingtime(basenode) = 0`; the value increases toward
 the leaves. This is equivalent to "divergence time" in phylogenetic prose and is
 the x-coordinate produced by the `:edgeweights` and `:branchingtime` positioning
-modes. The process runs in the forward direction: rootnode is earliest, leaves
+modes. The process runs in the forward direction: basenode is earliest, leaves
 are latest.
 
 **`coalescenceage`** — leaf-relative, backward polarity. Defined as the
 cumulative sum of `edgeweight` values on the directed path from a given node
 down to any leaf. `coalescenceage(leaf) = 0`; the value increases toward the
-rootnode. This corresponds to "coalescent age" or "backward time" in
-population-genetic prose. Requires an ultrametric tree (all root-to-leaf paths
+basenode. This corresponds to "coalescent age" or "backward time" in
+population-genetic prose. Requires an ultrametric tree (all basenode-to-leaf paths
 have equal total `edgeweight`) or an explicit non-ultrametric policy. The
 process runs in the backward direction: leaves are earliest (age = 0), the
-rootnode is latest (age = maximum).
+basenode is latest (age = maximum).
 
 **Clade graph variants** — four clade graph-based `lineageunits` values do not
 use edge-length data:
-- `:nodelevels` — integer level = edge count from rootnode; forward polarity;
+- `:nodelevels` — integer level = edge count from basenode; forward polarity;
   clade graph (unweighted) analogue of `branchingtime`.
-- `:nodedepths` — cumulative path distance (edge count) from rootnode;
+- `:nodedepths` — cumulative path distance (edge count) from basenode;
   forward polarity.
 - `:nodeheights` — per-node path distance to farthest leaf; backward
   polarity; clade graph (unweighted) analogue of `coalescenceage`. This is the
@@ -104,7 +104,7 @@ coordinates and the screen.
 
 **`axis_polarity`** records the semantic direction of increasing process
 coordinates. `:forward` means increasing process coordinate moves in the
-root-to-leaf direction; `:backward` means it moves in the leaf-to-root
+basenode-to-leaf direction; `:backward` means it moves in the leaf-to-basenode
 direction. `LineageAxis` infers this from the active `lineageunits` value:
 `:edgeweights`, `:branchingtime`, `:nodedepths`, and `:nodelevels` are
 `:forward`; `:coalescenceage` and `:nodeheights` are `:backward`. Users can
@@ -126,11 +126,11 @@ Some common combinations:
 
 | `lineageunits` value | `display_polarity` | `lineage_orientation` | Result |
 |---|---|---|---|
-| `:edgeweights` (forward) | `:standard` | `:left_to_right` | Rootnode at left, leaves at right (standard phylogram) |
-| `:edgeweights` (forward) | `:reversed` | `:left_to_right` | Rootnode at right, leaves at left (paleontological convention) |
-| `:coalescenceage` (backward) | `:standard` | `:left_to_right` | Leaves at left (age = 0), rootnode at right (maximum age) |
-| `:coalescenceage` (backward) | `:reversed` | `:left_to_right` | Rootnode at left, leaves at right (inverted coalescent, non-standard) |
-| `:nodeheights` (backward) | `:standard` | `:top_to_bottom` | Leaves at top (height = 0), rootnode at bottom (dendrogram-down) |
+| `:edgeweights` (forward) | `:standard` | `:left_to_right` | Basenode at left, leaves at right (standard phylogram) |
+| `:edgeweights` (forward) | `:reversed` | `:left_to_right` | Basenode at right, leaves at left (paleontological convention) |
+| `:coalescenceage` (backward) | `:standard` | `:left_to_right` | Leaves at left (age = 0), basenode at right (maximum age) |
+| `:coalescenceage` (backward) | `:reversed` | `:left_to_right` | Basenode at left, leaves at right (inverted coalescent, non-standard) |
+| `:nodeheights` (backward) | `:standard` | `:top_to_bottom` | Leaves at top (height = 0), basenode at bottom (dendrogram-down) |
 
 ### The secondary dimension
 
@@ -193,13 +193,13 @@ annotations must respect the active layout.
 
 | Layout | Description | Reference |
 |---|---|---|
-| Rectangular (cladogram) | Standard horizontal; rootnode left, leaves right; edges at right angles; default `lineageunits = :nodeheights` | ggtree `rectangular` |
+| Rectangular (cladogram) | Standard horizontal; basenode left, leaves right; edges at right angles; default `lineageunits = :nodeheights` | ggtree `rectangular` |
 | Rectangular (phylogram) | Same but edge horizontal length proportional to `edgeweight`; `lineageunits = :edgeweights` or `:branchingtime` | ggtree `rectangular` + `branch.length` |
 | Slanted | Diagonal (non-rectangular) edges forming a V-shape | ggtree `slanted` |
-| Dendrogram | Rootnode at top, leaves at bottom; hierarchical-clustering style; `lineage_orientation = :top_to_bottom` | ggtree `dendrogram` |
+| Dendrogram | Basenode at top, leaves at bottom; hierarchical-clustering style; `lineage_orientation = :top_to_bottom` | ggtree `dendrogram` |
 | Circular | Radial from centre; leaves at outer ring; `lineage_orientation = :radial` | ggtree `circular` |
 | Fan | Circular with configurable opening angle (subtree of a circular) | ggtree `fan(angle=)` |
-| Inward circular | Circular with leaves pointing inward, rootnode at outer ring | ggtree `inward_circular` |
+| Inward circular | Circular with leaves pointing inward, basenode at outer ring | ggtree `inward_circular` |
 
 ### 1.2 Unrooted layouts
 
@@ -264,7 +264,7 @@ The fundamental tree structure.
 | Continuous color gradient along edge | Color interpolated from parent to child value along edge |
 | Continuous width gradient along edge | Width interpolated along edge |
 | Directionality arrow | Arrow head at child end; configurable size; critical for hybrid edges |
-| Root edge | Optional stub extending from rootnode |
+| Basenode edge | Optional stub extending from basenode |
 
 ### 2.2 Node layer (internal nodes)
 
@@ -282,9 +282,9 @@ The fundamental tree structure.
 
 Same properties as node layer; applied to leaf nodes only.
 
-### 2.4 Rootnode layer
+### 2.4 Basenode layer
 
-Separate addressable layer for the rootnode (distinct styling from other
+Separate addressable layer for the basenode (distinct styling from other
 internal nodes).
 
 ### 2.5 Leaf label layer
@@ -339,11 +339,11 @@ internal nodes).
 | `LeafLabelLayer` | 1 |
 | `NodeLabelLayer` with threshold filter | 1 |
 | `ScaleBarLayer` | 1 |
-| Rootnode layer | 2 |
+| Basenode layer | 2 |
 | Edge label layer | 2 |
 | Continuous color/width gradient along edge | 2 |
 | Directionality arrow on edges | 3 |
-| Root edge stub | 2 |
+| Basenode edge stub | 2 |
 | Image rendering in leaf label layer | 4 |
 | Connector line / aligned margin labels | 2 |
 
@@ -468,7 +468,7 @@ Each reticulation has two parent edges converging on the same child node.
 
 | Mode | Options |
 |---|---|
-| Rooted | Rootnode marked; all edges directed away from rootnode |
+| Rooted | Basenode marked; all edges directed away from basenode |
 | Semi-directed | Hybrid edges directed; tree edges undirected |
 | Unrooted | No directional arrows on tree edges |
 
@@ -573,7 +573,7 @@ Overlay of many trees (e.g. MCMC posterior sample) showing clade graph
 | Property | Options |
 |---|---|
 | Color / alpha | Per-tree or global translucency |
-| Alignment | Align at leaves, rootnode, or internal node |
+| Alignment | Align at leaves, basenode, or internal node |
 | Summary tree overlay | Consensus or MCC tree drawn on top |
 
 ### Tier classification
@@ -693,11 +693,11 @@ is just a matter of wiring.
 - Clade collapse (triangle)
 - Clade zoom / inset view
 - Continuous color / width gradient along edges
-- Root edge stub
+- Basenode edge stub
 - Aligned heatmap panel
 - Uncertainty / range bars
 - Tanglegram layout
-- Rootnode layer
+- Basenode layer
 - Graphs.jl adapter
 
 ### Tier 3 — Network-specific and advanced layout

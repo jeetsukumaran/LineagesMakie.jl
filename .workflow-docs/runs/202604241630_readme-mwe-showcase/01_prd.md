@@ -175,7 +175,7 @@ are already available.
     composition recipe, so that I can use geometry and layer recipes directly.
 
 25. As a user building interactive or reactive Makie displays, I want an
-    Observable recipe, so that I can see how the plot updates when the rootnode
+    Observable recipe, so that I can see how the plot updates when the basenode
     or attributes change.
 
 26. As a user debugging layouts, I want the README to mention
@@ -261,7 +261,7 @@ are already available.
   existing Makie axis.
 
 - The README must teach the accessor-first input model before diving into
-  styling. The minimum user mental model is: rootnode, `children`, optional
+  styling. The minimum user mental model is: basenode, `children`, optional
   accessors, and then plot.
 
 - The README must include a concise feature tour covering layouts,
@@ -370,7 +370,7 @@ are already available.
   keep current features and future plans clearly separated.
 
 - The accessor-first input contract is the core teaching invariant. All input
-  examples should reinforce rootnode plus `children`, with optional accessors
+  examples should reinforce basenode plus `children`, with optional accessors
   layered on top.
 
 - The three-view model remains an important conceptual invariant:
@@ -433,7 +433,7 @@ Additional project documents required for downstream reading:
 Controlled vocabulary decisions:
 
 - Use `lineage graph`, `LineageGraph`, and `lineagegraph` according to context.
-- Use `node`, `nodes`, `rootnode`, `leaf`, and `leaves`.
+- Use `node`, `nodes`, `basenode`, `leaf`, and `leaves`.
 - Use `edge`, `src`, `dst`, `children`, `edgelength`, `nodevalue`,
   `branchingtime`, `coalescenceage`, and `lineageunits`.
 - Use `axis_polarity`, `display_polarity`, `lineage_orientation`,
@@ -454,7 +454,7 @@ Terms to avoid or constrain:
 - Avoid `vertex` or `vertices` as generic public terminology. Older workflow
   docs use these terms historically; the README and roadmap must use current
   vocabulary.
-- Avoid `root` as a noun when `rootnode` is intended.
+- Avoid `root` as a noun when `basenode` is intended.
 - Avoid `branch length`, `edge_length`, `weight`, or `len` for the public
   `edgelength` concept.
 - Avoid `node_value`; use `nodevalue`.

@@ -20,7 +20,7 @@ end
 
 # 4-leaf balanced tree: root → {ab → {a, b}, cd → {c, d}}
 # Internal nodes: root, ab, cd (3 total); leaves: a, b, c, d (4 total)
-const _IT_ROOT = IntegrationTestNode("root", [
+const _IT_BASENODE = IntegrationTestNode("root", [
     IntegrationTestNode("ab", [
         IntegrationTestNode("a", IntegrationTestNode[]),
         IntegrationTestNode("b", IntegrationTestNode[]),
@@ -33,7 +33,7 @@ const _IT_ROOT = IntegrationTestNode("root", [
 
 # 6-leaf unbalanced tree for Observable reactivity test (Task 3)
 # Internal nodes: root6, ab, cdef, cd, ef (5 total); leaves: a,b,c,d,e,f (6 total)
-const _IT_ROOT6 = IntegrationTestNode("root6", [
+const _IT_BASENODE6 = IntegrationTestNode("root6", [
     IntegrationTestNode("ab", [
         IntegrationTestNode("a", IntegrationTestNode[]),
         IntegrationTestNode("b", IntegrationTestNode[]),
@@ -59,7 +59,7 @@ function _it_branchingtime(node::IntegrationTestNode)
 end
 
 # coalescenceage: leaves=0.0, ab/cd=1.0, root=2.0
-# Ultrametric (all leaf-to-root sums equal); consistent with edgeweight=1.0
+# Ultrametric (all leaf-to-basenode sums equal); consistent with edgeweight=1.0
 function _it_coalescenceage(node::IntegrationTestNode)
     return node.name in ("a", "b", "c", "d") ? 0.0 : node.name in ("ab", "cd") ? 1.0 : 2.0
 end
@@ -128,8 +128,8 @@ end
         try
             fig = Figure(; size = (800, 600))
             ax = Axis(fig[1, 1])
-            acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
-            lp = lineageplot!(ax, _IT_ROOT, acc)
+            acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
+            lp = lineageplot!(ax, _IT_BASENODE, acc)
             @test lp isa LineagePlot
             save(tmpfile, fig)
             @test filesize(tmpfile) > 0
@@ -141,9 +141,9 @@ end
     @testset "lineageplot returns FigureAxisPlot with LineageAxis" begin
         tmpfile = tempname() * ".png"
         try
-            acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
+            acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
             plot_result = lineageplot(
-                _IT_ROOT,
+                _IT_BASENODE,
                 acc;
                 figure = (; size = (700, 500)),
                 axis = (; title = "Integration plot"),
@@ -166,8 +166,8 @@ end
     @testset "lineageplot! on LineageAxis returns LineagePlot and sets last_geom" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
-        lp = lineageplot!(lax, _IT_ROOT, acc)
+        acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
+        lp = lineageplot!(lax, _IT_BASENODE, acc)
         @test lp isa LineagePlot
         @test lax.last_geom[] !== nothing
         @test_nowarn CairoMakie.colorbuffer(fig)
@@ -175,12 +175,12 @@ end
 
     @testset "vertical screen-axis API renders through lineageplot" begin
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         plot_result = lineageplot(
-            _IT_ROOT,
+            _IT_BASENODE,
             acc;
             lineageunits = :edgeweights,
             figure = (; size = (700, 500)),
@@ -211,13 +211,13 @@ end
         fig = Figure(; size = (700, 500))
         ax = Axis(fig[1, 1])
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             ax,
-            _IT_ROOT,
+            _IT_BASENODE,
             acc;
             lineageunits = :edgeweights,
             lineage_orientation = :top_to_bottom,
@@ -236,8 +236,8 @@ end
     @testset "LineageAxis camera projection is non-identity after lineageplot!" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
-        lineageplot!(lax, _IT_ROOT, acc)
+        acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
+        lineageplot!(lax, _IT_BASENODE, acc)
         # reset_limits! was called, so projection is no longer the identity matrix.
         proj = CairoMakie.Makie.camera(lax.scene).projection[]
         @test proj != CairoMakie.Makie.Mat4f(CairoMakie.Makie.I)
@@ -247,16 +247,16 @@ end
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
         # edgeweight = 2.0:
-        #   :edgeweights produces x ∈ [0, 4] (cumulative edge weight from root)
+        #   :edgeweights produces x ∈ [0, 4] (cumulative edge weight from the basenode)
         #   :nodelevels produces x ∈ [0, 2] (integer depth, ignores edge weights)
         # These have different bounding boxes, so the orthographic projection must
         # change when lineageunits is mutated reactively.
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 2.0,
         )
-        lp = lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
+        lp = lineageplot!(lax, _IT_BASENODE, acc; lineageunits = :edgeweights)
         proj_before = CairoMakie.Makie.camera(lax.scene).projection[]
         # Mutating lineageunits → computed_geom fires → on() callback → reset_limits!.
         lp.lineageunits = :nodelevels
@@ -270,8 +270,8 @@ end
         try
             fig = Figure(; size = (600, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)
-            acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
-            lp = lineageplot!(lax, _IT_ROOT, acc; lineage_orientation = :radial)
+            acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
+            lp = lineageplot!(lax, _IT_BASENODE, acc; lineage_orientation = :radial)
             @test lp isa LineagePlot
             save(tmpfile, fig)
             @test filesize(tmpfile) > 0
@@ -284,13 +284,13 @@ end
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1]; show_x_axis = true)
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
-            _IT_ROOT,
+            _IT_BASENODE,
             acc;
             lineageunits = :edgeweights,
             scalebar_auto_visible = true,
@@ -309,13 +309,13 @@ end
         fig = Figure(; size = (600, 600))
         lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
-            _IT_ROOT,
+            _IT_BASENODE,
             acc;
             lineageunits = :edgeweights,
             lineage_orientation = :radial,
@@ -332,13 +332,13 @@ end
         fig = Figure(; size = (500, 400))
         lax = LineageAxis(fig[1, 1])
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
-            _IT_ROOT,
+            _IT_BASENODE,
             acc;
             lineageunits = :edgeweights,
             edge_color = :slategray,
@@ -357,7 +357,7 @@ end
         @test node_layers[2].render_stroke[] == true
 
         geom = lp[:computed_geom][]
-        for node in (_IT_ROOT.children[1], _IT_ROOT.children[2])
+        for node in (_IT_BASENODE.children[1], _IT_BASENODE.children[2])
             junction_pixel = _it_sample_figure_pixel(img, lax.scene, geom.node_positions[node])
             r, g, b = _it_rgb_channels(junction_pixel)
             @test max(r, g, b) < 0.95f0
@@ -368,13 +368,13 @@ end
         fig = Figure(; size = (800, 600))
         ax = Axis(fig[1, 1])
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         @test_nowarn begin
             lineageplot!(
-                ax, _IT_ROOT, acc;
+                ax, _IT_BASENODE, acc;
                 lineageunits = :edgeweights,
                 edge_color = :steelblue,
                 edge_linewidth = 2.0,
@@ -387,9 +387,9 @@ end
                 leaf_label_func = node -> node.name,
                 node_label_func = node -> "",
                 node_label_threshold = node -> false,
-                clade_nodes = [_IT_ROOT],
+                clade_nodes = [_IT_BASENODE],
                 clade_highlight_alpha = 0.1,
-                clade_label_func = node -> "root",
+                clade_label_func = node -> "basenode",
                 scalebar_auto_visible = true,
                 scalebar_label = "1 unit",
             )
@@ -424,11 +424,11 @@ end
                         fig = Figure(; size = (800, 600))
                         ax = make_ax(fig)
                         acc = lineagegraph_accessor(
-                            _IT_ROOT;
+                            _IT_BASENODE;
                             children = node -> node.children,
                             acc_extra...,
                         )
-                        lp = lineageplot!(ax, _IT_ROOT, acc; lineageunits = lu_sym)
+                        lp = lineageplot!(ax, _IT_BASENODE, acc; lineageunits = lu_sym)
                         @test lp isa LineagePlot
                         save(tmpfile, fig)
                         @test filesize(tmpfile) > 0
@@ -445,12 +445,12 @@ end
     @testset "polarity_matrix" begin
         # Pre-build accessors outside the loop; both are reusable across sub-testsets.
         acc_el = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         acc_ca = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             coalescenceage = _it_coalescenceage,
         )
@@ -465,7 +465,7 @@ end
             @testset "$ap/$dp" begin
                 fig = Figure(; size = (800, 600))
                 lax = LineageAxis(fig[1, 1]; axis_polarity = ap, display_polarity = dp)
-                @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = lu)
+                @test_nowarn lineageplot!(lax, _IT_BASENODE, acc; lineageunits = lu)
                 @test_nowarn CairoMakie.colorbuffer(fig)
             end
         end
@@ -473,7 +473,7 @@ end
 
     @testset "lineage_orientation" begin
         acc = lineagegraph_accessor(
-            _IT_ROOT;
+            _IT_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
@@ -481,28 +481,28 @@ end
         @testset "left_to_right" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :left_to_right)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
+            @test_nowarn lineageplot!(lax, _IT_BASENODE, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
         @testset "right_to_left" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :right_to_left)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
+            @test_nowarn lineageplot!(lax, _IT_BASENODE, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
         @testset "bottom_to_top" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :bottom_to_top)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
+            @test_nowarn lineageplot!(lax, _IT_BASENODE, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
         @testset "top_to_bottom" begin
             fig = Figure(; size = (800, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :top_to_bottom)
-            @test_nowarn lineageplot!(lax, _IT_ROOT, acc; lineageunits = :edgeweights)
+            @test_nowarn lineageplot!(lax, _IT_BASENODE, acc; lineageunits = :edgeweights)
             @test_nowarn CairoMakie.colorbuffer(fig)
         end
 
@@ -510,7 +510,7 @@ end
             fig = Figure(; size = (600, 600))
             lax = LineageAxis(fig[1, 1]; lineage_orientation = :radial)
             @test_nowarn lineageplot!(
-                lax, _IT_ROOT, acc;
+                lax, _IT_BASENODE, acc;
                 lineageunits = :edgeweights,
                 lineage_orientation = :radial,
             )
@@ -523,8 +523,8 @@ end
     @testset "resize_stability" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
-        lp = lineageplot!(lax, _IT_ROOT, acc)
+        acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
+        lp = lineageplot!(lax, _IT_BASENODE, acc)
         # NodeLayer renders at internal nodes with markerspace = :pixel.
         nl = first(p for p in lp.plots if p isa NodeLayer)
         markersize_before = nl.markersize[]
@@ -538,14 +538,14 @@ end
     @testset "observable_reactivity" begin
         fig = Figure(; size = (800, 600))
         lax = LineageAxis(fig[1, 1])
-        # Same accessor works for both _IT_ROOT and _IT_ROOT6 (both IntegrationTestNode).
-        acc = lineagegraph_accessor(_IT_ROOT; children = node -> node.children)
-        root_obs = CairoMakie.Makie.Observable(_IT_ROOT)
-        lp = lineageplot!(lax, root_obs, acc)
+        # Same accessor works for both _IT_BASENODE and _IT_BASENODE6 (both IntegrationTestNode).
+        acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
+        basenode_obs = CairoMakie.Makie.Observable(_IT_BASENODE)
+        lp = lineageplot!(lax, basenode_obs, acc)
         # 4-leaf tree: leaf_order has 4 entries.
         @test length(lp[:computed_geom][].leaf_order) == 4
         # Update Observable → ComputeGraph recomputes geometry reactively.
-        root_obs[] = _IT_ROOT6
+        basenode_obs[] = _IT_BASENODE6
         # 6-leaf tree: leaf_order has 6 entries after reactive recomputation.
         @test length(lp[:computed_geom][].leaf_order) == 6
     end
@@ -554,12 +554,12 @@ end
         tmpfile = tempname() * ".png"
         try
             acc = lineagegraph_accessor(
-                _IT_ROOT;
+                _IT_BASENODE;
                 children = node -> node.children,
                 edgeweight = (src, dst) -> 1.0,
             )
-            clade_a = _IT_ROOT.children[1]
-            clade_b = _IT_ROOT.children[2]
+            clade_a = _IT_BASENODE.children[1]
+            clade_b = _IT_BASENODE.children[2]
 
             fig = Figure(; size = (1000, 800))
             lax1 = LineageAxis(fig[1, 1]; title = "Forward", show_x_axis = true, xlabel = "distance")
@@ -576,7 +576,7 @@ end
 
             @test_nowarn lineageplot!(
                 lax1,
-                _IT_ROOT,
+                _IT_BASENODE,
                 acc;
                 lineageunits = :edgeweights,
                 leaf_label_func = node -> node.name,
@@ -585,7 +585,7 @@ end
             )
             @test_nowarn lineageplot!(
                 lax2,
-                _IT_ROOT,
+                _IT_BASENODE,
                 acc;
                 lineageunits = :nodeheights,
                 leaf_label_func = node -> node.name,
@@ -594,7 +594,7 @@ end
             )
             lp3 = @test_nowarn lineageplot!(
                 lax3,
-                _IT_ROOT,
+                _IT_BASENODE,
                 acc;
                 lineageunits = :edgeweights,
                 leaf_label_func = node -> node.name,
@@ -603,7 +603,7 @@ end
             )
             @test_nowarn lineageplot!(
                 lax4,
-                _IT_ROOT,
+                _IT_BASENODE,
                 acc;
                 lineageunits = :edgeweights,
                 lineage_orientation = :radial,

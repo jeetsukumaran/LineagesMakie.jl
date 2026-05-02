@@ -19,9 +19,9 @@ Fields:
 - `nodevalue::Union{Nothing, NodeT}`   — optional; `node -> Any`; per-node data
   for labels and color mapping.
 - `branchingtime::Union{Nothing, B}`   — optional; `node -> Float64`; pre-computed
-  cumulative edge-length sum from the rootnode.
+  cumulative edge-length sum from the basenode.
 - `coalescenceage::Union{Nothing, CA}` — optional; `node -> Float64`; pre-computed
-  coalescence age (leaf = 0, increases toward root).
+  coalescence age (leaf = 0, increases toward the basenode).
 - `nodecoordinates::Union{Nothing, NC}`     — optional; `node -> Point2f`; user-supplied
   data coordinates.
 - `nodepos::Union{Nothing, NP}`        — optional; `node -> Point2f`; user-supplied
@@ -44,17 +44,17 @@ struct LineageGraphAccessor{C, E, NodeT, B, CA, NC, NP}
 end
 
 """
-    lineagegraph_accessor(rootnode; children, edgeweight=nothing, nodevalue=nothing,
+    lineagegraph_accessor(basenode; children, edgeweight=nothing, nodevalue=nothing,
                           branchingtime=nothing, coalescenceage=nothing,
                           nodecoordinates=nothing, nodepos=nothing) -> LineageGraphAccessor
 
 Construct a `LineageGraphAccessor` from explicit keyword callables.
 
-The `rootnode` argument is accepted for dispatch and type-inference purposes
+The `basenode` argument is accepted for dispatch and type-inference purposes
 but is not stored. All accessor keyword arguments are stored as fields.
 
 # Arguments
-- `_` (rootnode): the root of the lineage graph; not stored; accepted only for
+- `_` (basenode): the basenode of the lineage graph; not stored; accepted only for
   API symmetry with `abstracttrees_accessor`.
 - `children`: required callable `node -> iterable`; the only mandatory field.
 - `edgeweight`: optional callable `(src, dst) -> value`.
@@ -73,7 +73,7 @@ omitted optionals).
 - `ArgumentError` if `children` is not callable.
 """
 function lineagegraph_accessor(
-        rootnode;
+        basenode;
         children,
         edgeweight = nothing,
         nodevalue = nothing,
@@ -84,7 +84,7 @@ function lineagegraph_accessor(
     )::LineageGraphAccessor
     isa(children, Base.Callable) || throw(
         ArgumentError(
-            "children must be callable for a lineage graph rooted at $(typeof(rootnode)); " *
+            "children must be callable for a lineage graph with basenode of type $(typeof(basenode)); " *
                 "got $(typeof(children)): $(repr(children))",
         ),
     )
@@ -102,7 +102,7 @@ end
 # ── AbstractTrees adapter ──────────────────────────────────────────────────────
 
 """
-    abstracttrees_accessor(rootnode; edgeweight=nothing, nodevalue=nothing,
+    abstracttrees_accessor(basenode; edgeweight=nothing, nodevalue=nothing,
                            branchingtime=nothing, coalescenceage=nothing) -> LineageGraphAccessor
 
 Construct a `LineageGraphAccessor` by wrapping `AbstractTrees.children` as the
@@ -110,13 +110,13 @@ Construct a `LineageGraphAccessor` by wrapping `AbstractTrees.children` as the
 has no dependency on AbstractTrees; the AbstractTrees dependency is confined to
 this function.
 
-The `rootnode` argument is not stored. `AbstractTrees.children` has a
+The `basenode` argument is not stored. `AbstractTrees.children` has a
 universal fallback that returns `()` for any type, so no interface check is
 performed: any value is accepted and types with no explicit `children` method
 will produce a single-leaf lineage graph.
 
 # Arguments
-- `rootnode`: not stored; accepted for API symmetry with `lineagegraph_accessor`.
+- `basenode`: not stored; accepted for API symmetry with `lineagegraph_accessor`.
 - `edgeweight`, `nodevalue`, `branchingtime`, `coalescenceage`: same
   semantics as in `lineagegraph_accessor`.
 
@@ -124,7 +124,7 @@ will produce a single-leaf lineage graph.
 A `LineageGraphAccessor` whose `children` field is `AbstractTrees.children`.
 """
 function abstracttrees_accessor(
-        rootnode;
+        basenode;
         edgeweight = nothing,
         nodevalue = nothing,
         branchingtime = nothing,
@@ -156,9 +156,9 @@ end
 # ── Traversals ─────────────────────────────────────────────────────────────────
 
 """
-    leaves(accessor::LineageGraphAccessor, rootnode) -> Vector{Any}
+    leaves(accessor::LineageGraphAccessor, basenode) -> Vector{Any}
 
-Return all leaf nodes reachable from `rootnode` in a deterministic
+Return all leaf nodes reachable from `basenode` in a deterministic
 depth-first order.
 
 Cycle detection is performed at every step. If any node is encountered more
@@ -168,17 +168,17 @@ returned.
 # Throws
 - `ArgumentError` if a cycle is detected in the lineage graph.
 """
-function leaves(accessor::LineageGraphAccessor, rootnode)::Vector{Any}
+function leaves(accessor::LineageGraphAccessor, basenode)::Vector{Any}
     result = Vector{Any}()
     visited = Set{Any}()
-    _collect_leaves!(result, visited, accessor, rootnode)
+    _collect_leaves!(result, visited, accessor, basenode)
     return result
 end
 
 """
-    preorder(accessor::LineageGraphAccessor, rootnode) -> Vector{Any}
+    preorder(accessor::LineageGraphAccessor, basenode) -> Vector{Any}
 
-Return all nodes reachable from `rootnode` in preorder (parent before
+Return all nodes reachable from `basenode` in preorder (parent before
 children), depth-first, deterministic.
 
 Cycle detection is performed at every step. If any node is encountered more
@@ -188,10 +188,10 @@ returned.
 # Throws
 - `ArgumentError` if a cycle is detected in the lineage graph.
 """
-function preorder(accessor::LineageGraphAccessor, rootnode)::Vector{Any}
+function preorder(accessor::LineageGraphAccessor, basenode)::Vector{Any}
     result = Vector{Any}()
     visited = Set{Any}()
-    _collect_preorder!(result, visited, accessor, rootnode)
+    _collect_preorder!(result, visited, accessor, basenode)
     return result
 end
 

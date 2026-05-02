@@ -1413,10 +1413,10 @@ end
 # ── LineagePlot composite recipe ──────────────────────────────────────────────
 
 """
-    lineageplot!(ax, rootnode, accessor::LineageGraphAccessor; kwargs...) -> LineagePlot
+    lineageplot!(ax, basenode, accessor::LineageGraphAccessor; kwargs...) -> LineagePlot
 
 Composite entry point. Computes a rectangular or circular layout from
-`rootnode` and `accessor` and renders all visual layers: `EdgeLayer`,
+`basenode` and `accessor` and renders all visual layers: `EdgeLayer`,
 `NodeLayer`, `LeafLayer`, `LeafLabelLayer`, `NodeLabelLayer`,
 `CladeHighlightLayer`, `CladeLabelLayer`, and `ScaleBarLayer`.
 
@@ -1432,12 +1432,12 @@ embedding repair for vertical orientations.
 All layer attributes are exposed as namespaced keyword arguments (e.g.,
 `edge_color`, `leaf_label_func`, `node_label_threshold`). All are Observable-
 native: updating `lp.edge_color = :red` changes the rendered edge color without
-re-calling `lineageplot!`. The `rootnode` argument may be a plain value or an
+re-calling `lineageplot!`. The `basenode` argument may be a plain value or an
 `Observable`; Makie wraps plain values in Observables automatically.
 
 # Arguments
 - `ax`: any Makie axis or scene.
-- `rootnode`: the root node of the lineage graph.
+- `basenode`: the basenode of the lineage graph.
 - `accessor::LineageGraphAccessor`: accessor callables supplying `children`
   and optional `edgeweight`, `nodevalue`, etc.
 
@@ -1480,7 +1480,7 @@ For the non-mutating convenience entry point that creates a `Figure` and
 - `lp[:computed_geom][]` — current `LineageGraphGeometry`.
 - `lp[:resolved_lineageunits][]` — resolved `lineageunits` `Symbol`.
 """
-@recipe LineagePlot (rootnode, accessor) begin
+@recipe LineagePlot (basenode, accessor) begin
     "How the lineage axis is embedded in the 2D scene: :left_to_right, :right_to_left, :bottom_to_top, :top_to_bottom, or :radial."
     lineage_orientation = :left_to_right
     "Selects how process coordinates are computed. nothing triggers auto-detection."
@@ -1596,7 +1596,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     # Same pattern as LineageAxis.last_geom::Observable{Any}.
     map!(
         lp.attributes,
-        [:rootnode, :accessor, :resolved_lineageunits, :lineage_orientation, :rectangular_orientation_owner],
+        [:basenode, :accessor, :resolved_lineageunits, :lineage_orientation, :rectangular_orientation_owner],
         :computed_geom,
     ) do rv, acc, lu, lo, orientation_owner
         resolved_acc = acc::LineageGraphAccessor
@@ -1639,7 +1639,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     # as positional arguments where possible.
     #
     # Reactive chain:
-    #   rootnode changes
+    #   basenode changes
     #     → :computed_geom recomputes
     #       → each sub-layer's map! on [:geom, ...] reruns
     #         → render updates

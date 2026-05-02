@@ -134,13 +134,13 @@ independently variable concerns of any lineage graph plot:
   primary dimension. Captured by `lineageunits` and accessor callables passed to
   `lineageplot!`; `axis_polarity` records the resulting direction.
 - **User-centric view** — what the researcher means by those scalars. Recorded by
-  `axis_polarity` (`:forward` for root-relative values, `:backward` for
+  `axis_polarity` (`:forward` for basenode-relative values, `:backward` for
   leaf-relative values) but not further interpreted.
 - **Plotting-centric view** — how the lineage graph appears on screen. Governed by
   `display_polarity` and `lineage_orientation`.
 
 These three views are independent. A coalescent lineage graph (`axis_polarity =
-:backward`) can be displayed with the root at the left by setting
+:backward`) can be displayed with the basenode at the left by setting
 `display_polarity = :reversed`. A forward-time lineage graph can be embedded
 radially by setting `lineage_orientation = :radial`.
 
@@ -179,7 +179,7 @@ using CairoMakie, LineagesMakie
 
 fig = Figure()
 ax  = LineageAxis(fig[1, 1])
-lineageplot!(ax, rootnode, accessor)
+lineageplot!(ax, basenode, accessor)
 display(fig)
 ```
 
@@ -1377,8 +1377,8 @@ end
 Return the `axis_polarity` that corresponds to `lineageunits`.
 
 Backward `lineageunits` values (`:coalescenceage`, `:nodeheights`) assign a
-process coordinate of 0 to leaves and increasing values toward the root.
-All other values are forward (root = 0, increasing toward leaves).
+process coordinate of 0 to leaves and increasing values toward the basenode.
+All other values are forward (basenode = 0, increasing toward leaves).
 """
 function _infer_axis_polarity(lineageunits::Symbol)::Symbol
     lineageunits in (:coalescenceage, :nodeheights) && return :backward
@@ -1668,7 +1668,7 @@ end
 # ── lineageplot! dispatch for LineageAxis ──────────────────────────────────────
 
 """
-    lineageplot(rootnode, accessor::LineageGraphAccessor; figure = NamedTuple(),
+    lineageplot(basenode, accessor::LineageGraphAccessor; figure = NamedTuple(),
                 axis = NamedTuple(), kwargs...) -> Makie.FigureAxisPlot
 
 Non-mutating public entry point for lineage-graph plotting.
@@ -1683,7 +1683,7 @@ to pass keyword arguments to `LineageAxis`.
 For plotting into an existing `Axis` or `LineageAxis`, use `lineageplot!`.
 """
 function lineageplot(
-        rootnode,
+        basenode,
         accessor::LineageGraphAccessor;
         figure = NamedTuple(),
         axis = NamedTuple(),
@@ -1693,12 +1693,12 @@ function lineageplot(
     axis_kwargs   = _layout_kwargs_namedtuple(axis, "axis")
     fig = Figure(; figure_kwargs...)
     lax = LineageAxis(fig[1, 1]; axis_kwargs...)
-    lp = lineageplot!(lax, rootnode, accessor; kwargs...)
+    lp = lineageplot!(lax, basenode, accessor; kwargs...)
     return Makie.FigureAxisPlot(fig, lax, lp)
 end
 
 """
-    lineageplot!(ax::LineageAxis, rootnode, accessor::LineageGraphAccessor;
+    lineageplot!(ax::LineageAxis, basenode, accessor::LineageGraphAccessor;
                  lineageunits=nothing, kwargs...) -> LineagePlot
 
 Render a lineage graph on `ax`.
@@ -1714,21 +1714,21 @@ When `ax` is a `LineageAxis`, this method additionally:
 3. Calls `reset_limits!(ax, geom)` after the recipe sets `lp[:computed_geom]`
    so that axis limits fit the lineage graph bounding box with `display_polarity`
    and `lineage_orientation` applied.
-4. Registers a reactive `on` callback so that if `rootnode` or `lineageunits`
+4. Registers a reactive `on` callback so that if `basenode` or `lineageunits`
    changes later, `reset_limits!` is reapplied automatically.
 
 Node labels are off by default (`node_label_threshold = node -> false`); pass an
 explicit `node_label_threshold` predicate to enable them.
 
 For the non-mutating convenience form that creates a new `Figure` and
-`LineageAxis`, use `lineageplot(rootnode, accessor; kwargs...)`.
+`LineageAxis`, use `lineageplot(basenode, accessor; kwargs...)`.
 
 All keyword arguments are forwarded to the `LineagePlot` composite recipe.
 See `lineageplot!` for the full attribute list.
 """
 function lineageplot!(
         ax::LineageAxis,
-        rootnode,
+        basenode,
         accessor::LineageGraphAccessor;
         lineageunits = nothing,
         kwargs...,
@@ -1744,7 +1744,7 @@ function lineageplot!(
     # reset_limits!(ax) after every sub-layer plot! — wasteful and premature
     # before computed_geom is populated. Going directly to ax.scene bypasses
     # the AbstractAxis protocol; we call reset_limits! manually below.
-    lp = lineageplot!(ax.scene, rootnode, accessor; lineageunits = lineageunits, contract.plot_kwargs...)
+    lp = lineageplot!(ax.scene, basenode, accessor; lineageunits = lineageunits, contract.plot_kwargs...)
 
     _wire_annotation_layout!(ax, lp)
     _sync_annotation_measurements!(ax, lp)
@@ -1753,7 +1753,7 @@ function lineageplot!(
     # map! nodes run synchronously during plot! construction (Makie 0.24).
     reset_limits!(ax, lp[:computed_geom][])
 
-    # Register reactive limit updates: whenever rootnode, accessor, or
+    # Register reactive limit updates: whenever basenode, accessor, or
     # lineageunits changes, computed_geom fires and we re-apply limits.
     on(ax.scene, lp[:computed_geom]) do geom
         reset_limits!(ax, geom)

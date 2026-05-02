@@ -28,8 +28,8 @@ These capacities extend the standard 2D rooted-tree plotting surface:
 - slanted layout with diagonal edge rendering
 - equal-angle unrooted layout
 - rounded or curved edge variants
-- rootnode-specific styling
-- rootnode edge stub
+- basenode-specific styling
+- basenode edge stub
 - edge label layer for edgeweights, support values, or other edge data
 - continuous color and width mapping along edges
 - clade collapse with triangle glyphs

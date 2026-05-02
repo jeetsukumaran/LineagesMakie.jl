@@ -37,7 +37,7 @@ end
 #       ├── sp_B2 (bl=6, leaf)
 #       └── sp_B3 (bl=6, leaf)
 
-const PHYROOT = PhyloNode("root", 0.0, [
+const PHYBASENODE = PhyloNode("root", 0.0, [
     PhyloNode("clade_A", 4.0, [
         PhyloNode("sp_A1",  6.0, PhyloNode[]),
         PhyloNode("clade_A2", 3.0, [
@@ -55,15 +55,15 @@ const PHYROOT = PhyloNode("root", 0.0, [
 # ── Accessor ──────────────────────────────────────────────────────────────────
 
 const PHYACC = lineagegraph_accessor(
-    PHYROOT;
+    PHYBASENODE;
     children   = node -> node.children,
     edgeweight = (src, dst) -> dst.branch_length,
     nodevalue  = node -> node.name,
 )
 
 # Clade roots for highlights and bracket labels.
-const CLADE_A = PHYROOT.children[1]
-const CLADE_B = PHYROOT.children[2]
+const CLADE_A = PHYBASENODE.children[1]
+const CLADE_B = PHYBASENODE.children[2]
 
 # ── Shared style constants ─────────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ lax1 = LineageAxis(
     xlabel = "cumulative branch length (Ma)",
 )
 lineageplot!(
-    lax1, PHYROOT, PHYACC;
+    lax1, PHYBASENODE, PHYACC;
     lineageunits          = :edgeweights,
     edge_color            = EDGE_COLOR,
     edge_linewidth        = EDGE_LW,
@@ -116,7 +116,7 @@ lax2 = LineageAxis(
     xlabel = "edge count to farthest leaf",
 )
 lineageplot!(
-    lax2, PHYROOT, PHYACC;
+    lax2, PHYBASENODE, PHYACC;
     lineageunits        = :nodeheights,
     edge_color          = :steelblue,
     edge_linewidth      = EDGE_LW,
@@ -143,7 +143,7 @@ lax3 = LineageAxis(
     ylabel = "cumulative branch length (Ma)",
 )
 lineageplot!(
-    lax3, PHYROOT, PHYACC;
+    lax3, PHYBASENODE, PHYACC;
     lineageunits          = :edgeweights,
     edge_color            = EDGE_COLOR,
     edge_linewidth        = EDGE_LW,
@@ -167,7 +167,7 @@ lax4 = LineageAxis(
     lineage_orientation = :radial,
 )
 lineageplot!(
-    lax4, PHYROOT, PHYACC;
+    lax4, PHYBASENODE, PHYACC;
     lineageunits        = :edgeweights,
     lineage_orientation = :radial,
     edge_color          = EDGE_COLOR,

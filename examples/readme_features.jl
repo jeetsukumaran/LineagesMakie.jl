@@ -29,17 +29,17 @@ beta = node(
     leaf("beta_1", 1.4),
     leaf("beta_2", 1.2),
 )
-rootnode = node("root", 0.0, alpha, beta)
+basenode = node("root", 0.0, alpha, beta)
 
 accessor = lineagegraph_accessor(
-    rootnode;
+    basenode;
     children = node -> node.children,
     edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
 )
 
 plot_result = lineageplot(
-    rootnode,
+    basenode,
     accessor;
     lineageunits = :edgeweights,
     figure = (; size = (760, 420)),

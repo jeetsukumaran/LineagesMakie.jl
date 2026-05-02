@@ -5,7 +5,7 @@ Overview
 `LineageAxis` is the axis abstraction for representing a branching or merging process along its principal direction of progression.
 It defines the coordinate system for the process index itself, independent of any particular screen orientation or plotting convention.
 
-In a conventional rectangular tree layout with the root on the left and leaves on the right, the `LineageAxis` usually corresponds to the horizontal plotting axis, with increasing coordinate values extending to the right.
+In a conventional rectangular tree layout with the basenode on the left and leaves on the right, the `LineageAxis` usually corresponds to the horizontal plotting axis, with increasing coordinate values extending to the right.
 In many phylogenetic applications, this coordinate is interpreted as time, but the abstraction is intentionally broader.
 The axis may represent any one-dimensional index on the process, including time, age, mutation count, expected substitutions, branching depth, event order, or any other scalar quantity that can be mapped into $\mathbb{R}$.
 It may also represent ordinal scales such as “first branching event”, “second branching event”, and so on.
@@ -32,7 +32,7 @@ Tree-centric view
 This view concerns the combinatorial or geometric structure of the tree or network itself.
 It answers questions such as:
 
-- Which direction is from root to leaves?
+- Which direction is from basenode to leaves?
 - Which axis parameterizes branch extent?
 - What quantity is attached to positions along that direction?
 
@@ -70,7 +70,7 @@ More precisely:
 Forward-time processes
 
 Many evolutionary models are naturally conceived in forward time.
-In such cases, the process begins near the root and progresses toward the leaves as the process index increases.
+In such cases, the process begins near the basenode and progresses toward the leaves as the process index increases.
 A higher axis value corresponds to a later state in the modeled process.
 
 This does not imply that every structural statistic of the tree is monotone in time.
@@ -111,7 +111,7 @@ Therefore the API should explicitly separate:
 - coordinate direction: how process coordinates relate to plotting coordinates
 - screen orientation: how plotting coordinates are embedded in the rendered scene
 
-This separation is necessary to avoid hard-coding assumptions such as “increasing $x$ means forward time” or “root-to-leaf always means left-to-right”.
+This separation is necessary to avoid hard-coding assumptions such as “increasing $x$ means forward time” or “basenode-to-leaf always means left-to-right”.
 
 Domain of the primary axis
 

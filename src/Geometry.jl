@@ -66,7 +66,7 @@ end
 # ── rectangular_layout ─────────────────────────────────────────────────────────
 
 """
-    rectangular_layout(rootnode, accessor::LineageGraphAccessor;
+    rectangular_layout(basenode, accessor::LineageGraphAccessor;
                        leaf_spacing=:equal,
                        lineageunits::Union{Nothing,Symbol}=nothing,
                        nonultrametric::Symbol=:error) -> LineageGraphGeometry
@@ -76,19 +76,19 @@ Compute a rectangular (right-angle) layout for a rooted lineage graph.
 Process coordinates (first `Point2f` component) are determined by `lineageunits`:
 
 - `:edgeweights` — cumulative `edgeweight(src, dst)` from
-  `rootnode`; requires `edgeweight` accessor; `rootnode` = 0, increases
+  `basenode`; requires `edgeweight` accessor; `basenode` = 0, increases
   toward leaves. Missing edge weights emit `@warn` and fall back to 1.0;
   negative edge weights raise `ArgumentError`.
 - `:branchingtime` — per-node branching time read directly from
-  `branchingtime(node)`; requires `branchingtime` accessor; `rootnode` = 0.
+  `branchingtime(node)`; requires `branchingtime` accessor; `basenode` = 0.
 - `:coalescenceage` — per-node coalescence age read from
   `coalescenceage(node)`; requires `coalescenceage` accessor; leaves = 0,
-  increases toward root. Non-ultrametric inputs are controlled by `nonultrametric`.
-- `:nodedepths` — integer edge count from `rootnode`; `rootnode` = 0,
+  increases toward the basenode. Non-ultrametric inputs are controlled by `nonultrametric`.
+- `:nodedepths` — integer edge count from `basenode`; `basenode` = 0,
   increases by 1 per edge. No accessor required.
 - `:nodeheights` — per-node height: edge count to the farthest descendant
-  leaf. Leaves = 0, root = maximum. No accessor required.
-- `:nodelevels` — edge count from `rootnode`: root = 0, leaves = maximum.
+  leaf. Leaves = 0, basenode = maximum. No accessor required.
+- `:nodelevels` — edge count from `basenode`: basenode = 0, leaves = maximum.
   Equal inter-level spacing. No accessor required.
 - `:nodecoordinates` — user-supplied `Point2f` data coordinates read from
   `nodecoordinates(node)`; requires `nodecoordinates` accessor. Bypasses layout
@@ -112,7 +112,7 @@ Each edge `src → dst` contributes a right-angle polyline:
 followed by a `Point2f(NaN, NaN)` separator.
 
 # Arguments
-- `rootnode`: root of the lineage graph; first positional argument.
+- `basenode`: basenode of the lineage graph; first positional argument.
 - `accessor::LineageGraphAccessor`: supplies the `children` callable and
   optional accessor fields.
 - `leaf_spacing`: `:equal` (default) for unit inter-leaf spacing, or a
@@ -137,7 +137,7 @@ A `LineageGraphGeometry` with fully populated fields.
   and `nonultrametric = :error`.
 """
 function rectangular_layout(
-        rootnode,
+        basenode,
         accessor::LineageGraphAccessor;
         leaf_spacing = :equal,
         lineageunits::Union{Nothing, Symbol} = nothing,
@@ -146,15 +146,15 @@ function rectangular_layout(
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
     step = _validate_leaf_spacing(leaf_spacing)
 
-    leaf_list = leaves(accessor, rootnode)
+    leaf_list = leaves(accessor, basenode)
     isempty(leaf_list) && throw(
         ArgumentError(
-            "lineage graph rooted at $(repr(rootnode)) has zero leaves; " *
+            "lineage graph with basenode $(repr(basenode)) has zero leaves; " *
                 "a layout requires at least one leaf",
         ),
     )
 
-    all_nodes = preorder(accessor, rootnode)
+    all_nodes = preorder(accessor, basenode)
 
     # Bypass modes: both process and transverse coordinates come from the accessor.
     if lineageunits === :nodecoordinates || lineageunits === :nodepos
@@ -174,7 +174,7 @@ function rectangular_layout(
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coordinates = _process_coordinates(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
+    process_coordinates = _process_coordinates(basenode, accessor, lineageunits, all_nodes, nonultrametric)
     transverse_coordinates = _assign_transverse(leaf_list, accessor, all_nodes, step)
 
     node_positions = _build_node_positions(all_nodes, process_coordinates, transverse_coordinates)
@@ -229,7 +229,7 @@ end
 # ── Internal: process coordinate computation ───────────────────────────────────
 
 function _process_coordinates(
-        rootnode,
+        basenode,
         accessor::LineageGraphAccessor,
         lineageunits::Symbol,
         all_nodes::Vector,
@@ -238,7 +238,7 @@ function _process_coordinates(
     if lineageunits === :nodeheights
         return _nodeheights(all_nodes, accessor)
     elseif lineageunits === :nodelevels
-        return _nodelevels(rootnode, all_nodes, accessor)
+        return _nodelevels(basenode, all_nodes, accessor)
     elseif lineageunits === :edgeweights
         accessor.edgeweight === nothing && throw(
             ArgumentError(
@@ -247,7 +247,7 @@ function _process_coordinates(
             ),
         )
         return _cumulative_preorder(
-            rootnode,
+            basenode,
             all_nodes,
             accessor,
             (src, dst) -> _safe_edgeweight(accessor, src, dst),
@@ -261,13 +261,13 @@ function _process_coordinates(
         )
         bt = accessor.branchingtime
         return _cumulative_preorder(
-            rootnode,
+            basenode,
             all_nodes,
             accessor,
             (src, dst) -> bt(dst) - bt(src),
         )
     elseif lineageunits === :nodedepths
-        return _node_depths(rootnode, all_nodes, accessor)
+        return _node_depths(basenode, all_nodes, accessor)
     elseif lineageunits === :coalescenceage
         accessor.coalescenceage === nothing && throw(
             ArgumentError(
@@ -332,11 +332,11 @@ end
 # ── Internal: shared preorder cumulative-sum traversal ────────────────────────
 
 """
-    _cumulative_preorder(rootnode, all_nodes, accessor, edge_increment) -> Dict{Any,Float64}
+    _cumulative_preorder(basenode, all_nodes, accessor, edge_increment) -> Dict{Any,Float64}
 
 Preorder cumulative-sum traversal used by both `:edgeweights` and `:branchingtime`.
 
-Seeds `rootnode` at 0.0. For each node in preorder order, sets each child's
+Seeds `basenode` at 0.0. For each node in preorder order, sets each child's
 coordinate to:
 
     coordinates[child] = coordinates[node] + edge_increment(node, child)
@@ -351,13 +351,13 @@ The caller is responsible for ensuring that `edge_increment` returns non-negativ
 values where required.
 """
 function _cumulative_preorder(
-        rootnode,
+        basenode,
         all_nodes::Vector,
         accessor::LineageGraphAccessor,
         edge_increment,
     )::Dict{Any, Float64}
     coordinates = Dict{Any, Float64}()
-    coordinates[rootnode] = 0.0
+    coordinates[basenode] = 0.0
     for node in all_nodes
         coordinate = coordinates[node]
         for child in accessor.children(node)
@@ -384,15 +384,15 @@ function _nodeheights(all_nodes::Vector, accessor::LineageGraphAccessor)::Dict{A
     return heights
 end
 
-# ── Internal: :nodelevels — preorder, root = 0, each child = parent + 1
+# ── Internal: :nodelevels — preorder, basenode = 0, each child = parent + 1
 
 function _nodelevels(
-        rootnode,
+        basenode,
         all_nodes::Vector,
         accessor::LineageGraphAccessor,
     )::Dict{Any, Float64}
     levels = Dict{Any, Float64}()
-    levels[rootnode] = 0.0
+    levels[basenode] = 0.0
     for node in all_nodes
         level = levels[node]
         for child in accessor.children(node)
@@ -402,27 +402,27 @@ function _nodelevels(
     return levels
 end
 
-# ── Internal: :nodedepths — preorder, root = 0, each child = parent + 1 ───────
+# ── Internal: :nodedepths — preorder, basenode = 0, each child = parent + 1 ───────
 
 """
-    _node_depths(rootnode, all_nodes, accessor) -> Dict{Any,Float64}
+    _node_depths(basenode, all_nodes, accessor) -> Dict{Any,Float64}
 
-Compute per-node integer edge-count depths from `rootnode` in a preorder pass.
+Compute per-node integer edge-count depths from `basenode` in a preorder pass.
 
-`rootnode` is assigned depth 0. Each child's depth is its parent's depth plus 1.
+`basenode` is assigned depth 0. Each child's depth is its parent's depth plus 1.
 The result is always integer-valued (stored as `Float64`).
 
 This is distinct from `_nodelevels` (which assigns equal inter-level spacing for
 display) in that `_node_depths` records the raw edge count along the path from
-`rootnode` with no further transformation.
+`basenode` with no further transformation.
 """
 function _node_depths(
-        rootnode,
+        basenode,
         all_nodes::Vector,
         accessor::LineageGraphAccessor,
     )::Dict{Any, Float64}
     depths = Dict{Any, Float64}()
-    depths[rootnode] = 0.0
+    depths[basenode] = 0.0
     for node in all_nodes
         depth = depths[node]
         for child in accessor.children(node)
@@ -600,7 +600,7 @@ end
 # ── circular_layout ────────────────────────────────────────────────────────────
 
 """
-    circular_layout(rootnode, accessor::LineageGraphAccessor;
+    circular_layout(basenode, accessor::LineageGraphAccessor;
                     leaf_spacing=:equal,
                     lineageunits::Union{Nothing,Symbol}=nothing,
                     nonultrametric::Symbol=:error,
@@ -629,7 +629,7 @@ followed by a radial segment from that connector point to the child's position. 
 coordinates directly, bypassing angular computation (same as `rectangular_layout`).
 
 # Arguments
-- `rootnode`: root of the lineage graph.
+- `basenode`: basenode of the lineage graph.
 - `accessor::LineageGraphAccessor`: supplies the `children` callable and optional
   accessor fields.
 - `leaf_spacing`: `:equal` (default) or a positive `Float64` angular step in radians.
@@ -657,7 +657,7 @@ preorder traversal order, and `boundingbox` enclosing all node positions.
   and `nonultrametric = :error`.
 """
 function circular_layout(
-        rootnode,
+        basenode,
         accessor::LineageGraphAccessor;
         leaf_spacing = :equal,
         lineageunits::Union{Nothing, Symbol} = nothing,
@@ -674,15 +674,15 @@ function circular_layout(
 
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
 
-    leaf_list = leaves(accessor, rootnode)
+    leaf_list = leaves(accessor, basenode)
     isempty(leaf_list) && throw(
         ArgumentError(
-            "lineage graph rooted at $(repr(rootnode)) has zero leaves; " *
+            "lineage graph with basenode $(repr(basenode)) has zero leaves; " *
                 "a layout requires at least one leaf",
         ),
     )
 
-    all_nodes = preorder(accessor, rootnode)
+    all_nodes = preorder(accessor, basenode)
 
     # Bypass modes: both coordinates come from the accessor; no angular computation.
     if lineageunits === :nodecoordinates || lineageunits === :nodepos
@@ -702,7 +702,7 @@ function circular_layout(
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coordinates = _process_coordinates(rootnode, accessor, lineageunits, all_nodes, nonultrametric)
+    process_coordinates = _process_coordinates(basenode, accessor, lineageunits, all_nodes, nonultrametric)
 
     θ_step = _angular_leaf_step(leaf_spacing, length(leaf_list), min_leaf_angle)
     angles = _angular_positions(leaf_list, all_nodes, accessor, θ_step)

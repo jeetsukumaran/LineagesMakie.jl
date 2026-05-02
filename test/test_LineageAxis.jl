@@ -23,7 +23,7 @@ end
 #   └── cd
 #       ├── c
 #       └── d
-const _LA_BALANCED_ROOT = LATestNode("root", [
+const _LA_BALANCED_BASENODE = LATestNode("root", [
     LATestNode("ab", [
         LATestNode("a", LATestNode[]),
         LATestNode("b", LATestNode[]),
@@ -34,8 +34,8 @@ const _LA_BALANCED_ROOT = LATestNode("root", [
     ]),
 ])
 
-const _LA_ACC = lineagegraph_accessor(_LA_BALANCED_ROOT; children = node -> node.children)
-const _LA_NONROOT_CLADE = _LA_BALANCED_ROOT.children[1]
+const _LA_ACC = lineagegraph_accessor(_LA_BALANCED_BASENODE; children = node -> node.children)
+const _LA_NONBASENODE_CLADE = _LA_BALANCED_BASENODE.children[1]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ end
 
 function _plotted_lax(; lineageunits = nothing, lax_kwargs...)
     fig, lax = _fresh_lax(; lax_kwargs...)
-    lp = lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = lineageunits)
+    lp = lineageplot!(lax, _LA_BALANCED_BASENODE, _LA_ACC; lineageunits = lineageunits)
     return fig, lax, lp
 end
 
@@ -94,8 +94,8 @@ end
     @testset "lineageplot! on plain Axis (no regression)" begin
         fig = Figure(; size = (400, 300))
         ax = Axis(fig[1, 1])
-        acc = lineagegraph_accessor(_LA_BALANCED_ROOT; children = node -> node.children)
-        lp = lineageplot!(ax, _LA_BALANCED_ROOT, acc)
+        acc = lineagegraph_accessor(_LA_BALANCED_BASENODE; children = node -> node.children)
+        lp = lineageplot!(ax, _LA_BALANCED_BASENODE, acc)
         @test lp isa LineagePlot
         @test_nowarn colorbuffer(fig)
     end
@@ -105,7 +105,7 @@ end
         ax = Axis(fig[1, 1])
         lp = lineageplot!(
             ax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineageunits = :nodelevels,
             lineage_orientation = :top_to_bottom,
@@ -161,7 +161,7 @@ end
 
     @testset "axis-owned vertical orientation propagates into computed geometry" begin
         fig, lax = _fresh_lax(; lineage_orientation = :top_to_bottom)
-        lp = lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = :nodelevels)
+        lp = lineageplot!(lax, _LA_BALANCED_BASENODE, _LA_ACC; lineageunits = :nodelevels)
         geom = lp[:computed_geom][]
         leaf_positions = [geom.node_positions[node] for node in geom.leaf_order]
         leaf_ys = unique(round(pos[2]; digits = 5) for pos in leaf_positions)
@@ -175,7 +175,7 @@ end
         fig, lax = _fresh_lax(; lineage_orientation = :left_to_right)
         lp = lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineageunits = :nodelevels,
             lineage_orientation = :top_to_bottom,
@@ -225,7 +225,7 @@ end
         @test lax._polarity_locked[]
         # lineageplot! with :nodelevels would infer :forward, but lock prevents it.
         # :nodelevels works with a children-only accessor.
-        lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC; lineageunits = :nodelevels)
+        lineageplot!(lax, _LA_BALANCED_BASENODE, _LA_ACC; lineageunits = :nodelevels)
         @test lax.axis_polarity[] === :backward
     end
 
@@ -298,7 +298,7 @@ end
         fig, lax = _fresh_lax()
         @test_throws r"unsupported lineage_orientation" lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineage_orientation = :diagonal,
         )
@@ -308,11 +308,11 @@ end
         fig, lax = _fresh_lax()
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineageunits = :nodelevels,
             leaf_label_func = node -> "species_" * node.name,
-            clade_nodes = [_LA_NONROOT_CLADE],
+            clade_nodes = [_LA_NONBASENODE_CLADE],
             clade_label_func = node -> "clade_" * node.name,
         )
         colorbuffer(fig)
@@ -329,11 +329,11 @@ end
         fig, lax = _fresh_lax(; lineage_orientation = :right_to_left)
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineageunits = :nodelevels,
             leaf_label_func = node -> "species_" * node.name,
-            clade_nodes = [_LA_NONROOT_CLADE],
+            clade_nodes = [_LA_NONBASENODE_CLADE],
             clade_label_func = node -> "clade_" * node.name,
         )
         colorbuffer(fig)
@@ -350,11 +350,11 @@ end
         fig, lax = _fresh_lax(; lineage_orientation = :bottom_to_top)
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineageunits = :nodelevels,
             leaf_label_func = node -> "species_" * node.name,
-            clade_nodes = [_LA_NONROOT_CLADE],
+            clade_nodes = [_LA_NONBASENODE_CLADE],
             clade_label_func = node -> "clade_" * node.name,
         )
         colorbuffer(fig)
@@ -371,11 +371,11 @@ end
         fig, lax = _fresh_lax(; lineage_orientation = :top_to_bottom)
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineageunits = :nodelevels,
             leaf_label_func = node -> "species_" * node.name,
-            clade_nodes = [_LA_NONROOT_CLADE],
+            clade_nodes = [_LA_NONBASENODE_CLADE],
             clade_label_func = node -> "clade_" * node.name,
         )
         colorbuffer(fig)
@@ -392,7 +392,7 @@ end
         fig, lax = _fresh_lax(; lineage_orientation = :radial)
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             lineage_orientation = :radial,
             leaf_label_func = node -> "species_" * node.name * "_label",
@@ -409,9 +409,9 @@ end
         fig, lax = _fresh_lax(; show_x_axis = true)
         lp = lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             lineagegraph_accessor(
-                _LA_BALANCED_ROOT;
+                _LA_BALANCED_BASENODE;
                 children = node -> node.children,
                 edgeweight = (src, dst) -> 1.0,
             );
@@ -439,9 +439,9 @@ end
         fig, lax = _fresh_lax(; lineage_orientation = :radial)
         lp = lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             lineagegraph_accessor(
-                _LA_BALANCED_ROOT;
+                _LA_BALANCED_BASENODE;
                 children = node -> node.children,
                 edgeweight = (src, dst) -> 1.0,
             );
@@ -516,9 +516,9 @@ end
 
     @testset "multiple lineageplot! calls do not error" begin
         fig, lax = _fresh_lax()
-        acc = lineagegraph_accessor(_LA_BALANCED_ROOT; children = node -> node.children)
-        @test_nowarn lineageplot!(lax, _LA_BALANCED_ROOT, acc)
-        @test_nowarn lineageplot!(lax, _LA_BALANCED_ROOT, acc)
+        acc = lineagegraph_accessor(_LA_BALANCED_BASENODE; children = node -> node.children)
+        @test_nowarn lineageplot!(lax, _LA_BALANCED_BASENODE, acc)
+        @test_nowarn lineageplot!(lax, _LA_BALANCED_BASENODE, acc)
     end
 
     @testset "get_scene returns the plotting scene" begin
@@ -528,7 +528,7 @@ end
 
     @testset "lineageplot! orientation-aware leaf label defaults" begin
         acc_el = lineagegraph_accessor(
-            _LA_BALANCED_ROOT;
+            _LA_BALANCED_BASENODE;
             children   = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
@@ -537,7 +537,7 @@ end
         # labels offset leftward, right-aligned.
         fig1 = Figure()
         lax1 = LineageAxis(fig1[1, 1])
-        lp1  = lineageplot!(lax1, _LA_BALANCED_ROOT, _LA_ACC;
+        lp1  = lineageplot!(lax1, _LA_BALANCED_BASENODE, _LA_ACC;
                              leaf_label_func = node -> string(node.name))
         ll1  = only(filter(p -> p isa LeafLabelLayer, lp1.plots))
         @test ll1[:offset][] == Makie.Vec2f(-4, 0)
@@ -547,7 +547,7 @@ end
         # recipe defaults (4 px rightward, left-aligned).
         fig2 = Figure()
         lax2 = LineageAxis(fig2[1, 1])
-        lp2  = lineageplot!(lax2, _LA_BALANCED_ROOT, acc_el;
+        lp2  = lineageplot!(lax2, _LA_BALANCED_BASENODE, acc_el;
                              leaf_label_func = node -> string(node.name))
         ll2  = only(filter(p -> p isa LeafLabelLayer, lp2.plots))
         @test ll2[:offset][] == Makie.Vec2f(4, 0)
@@ -557,7 +557,7 @@ end
         # on right → recipe defaults.
         fig3 = Figure()
         lax3 = LineageAxis(fig3[1, 1]; lineage_orientation = :right_to_left)
-        lp3  = lineageplot!(lax3, _LA_BALANCED_ROOT, _LA_ACC;
+        lp3  = lineageplot!(lax3, _LA_BALANCED_BASENODE, _LA_ACC;
                              leaf_label_func = node -> string(node.name))
         ll3  = only(filter(p -> p isa LeafLabelLayer, lp3.plots))
         @test ll3[:offset][] == Makie.Vec2f(4, 0)
@@ -566,7 +566,7 @@ end
         # Forward + :bottom_to_top → leaves on top → upward labels.
         fig4 = Figure()
         lax4 = LineageAxis(fig4[1, 1]; lineage_orientation = :bottom_to_top)
-        lp4  = lineageplot!(lax4, _LA_BALANCED_ROOT, acc_el;
+        lp4  = lineageplot!(lax4, _LA_BALANCED_BASENODE, acc_el;
                              leaf_label_func = node -> string(node.name))
         ll4  = only(filter(p -> p isa LeafLabelLayer, lp4.plots))
         @test ll4[:offset][] == Makie.Vec2f(0, 4)
@@ -575,7 +575,7 @@ end
         # Forward + :top_to_bottom → leaves on bottom → downward labels.
         fig5 = Figure()
         lax5 = LineageAxis(fig5[1, 1]; lineage_orientation = :top_to_bottom)
-        lp5  = lineageplot!(lax5, _LA_BALANCED_ROOT, acc_el;
+        lp5  = lineageplot!(lax5, _LA_BALANCED_BASENODE, acc_el;
                              leaf_label_func = node -> string(node.name))
         ll5  = only(filter(p -> p isa LeafLabelLayer, lp5.plots))
         @test ll5[:offset][] == Makie.Vec2f(0, -4)
@@ -584,7 +584,7 @@ end
 
     @testset "lineageplot! orientation-aware clade_label_side" begin
         acc_el = lineagegraph_accessor(
-            _LA_BALANCED_ROOT;
+            _LA_BALANCED_BASENODE;
             children   = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
@@ -592,36 +592,36 @@ end
         # Backward + standard → leaves on left → bracket on left.
         fig1 = Figure()
         lax1 = LineageAxis(fig1[1, 1])
-        lp1  = lineageplot!(lax1, _LA_BALANCED_ROOT, _LA_ACC;
-                             clade_nodes = [_LA_BALANCED_ROOT])
+        lp1  = lineageplot!(lax1, _LA_BALANCED_BASENODE, _LA_ACC;
+                             clade_nodes = [_LA_BALANCED_BASENODE])
         @test lp1[:clade_label_side][] === :left
 
         # Forward + standard → leaves on right → bracket on right.
         fig2 = Figure()
         lax2 = LineageAxis(fig2[1, 1])
-        lp2  = lineageplot!(lax2, _LA_BALANCED_ROOT, acc_el;
-                             clade_nodes = [_LA_BALANCED_ROOT])
+        lp2  = lineageplot!(lax2, _LA_BALANCED_BASENODE, acc_el;
+                             clade_nodes = [_LA_BALANCED_BASENODE])
         @test lp2[:clade_label_side][] === :right
 
         # Forward + :bottom_to_top → leaves on top → bracket on top.
         fig3 = Figure()
         lax3 = LineageAxis(fig3[1, 1]; lineage_orientation = :bottom_to_top)
-        lp3  = lineageplot!(lax3, _LA_BALANCED_ROOT, acc_el;
-                             clade_nodes = [_LA_BALANCED_ROOT])
+        lp3  = lineageplot!(lax3, _LA_BALANCED_BASENODE, acc_el;
+                             clade_nodes = [_LA_BALANCED_BASENODE])
         @test lp3[:clade_label_side][] === :top
 
         # Forward + :top_to_bottom → leaves on bottom → bracket on bottom.
         fig4 = Figure()
         lax4 = LineageAxis(fig4[1, 1]; lineage_orientation = :top_to_bottom)
-        lp4  = lineageplot!(lax4, _LA_BALANCED_ROOT, acc_el;
-                             clade_nodes = [_LA_BALANCED_ROOT])
+        lp4  = lineageplot!(lax4, _LA_BALANCED_BASENODE, acc_el;
+                             clade_nodes = [_LA_BALANCED_BASENODE])
         @test lp4[:clade_label_side][] === :bottom
     end
 
     @testset "x-axis ticks in blockscene pixel space when show_x_axis = true" begin
         fig = Figure()
         lax = LineageAxis(fig[1, 1]; show_x_axis = true)
-        lineageplot!(lax, _LA_BALANCED_ROOT, _LA_ACC)
+        lineageplot!(lax, _LA_BALANCED_BASENODE, _LA_ACC)
         colorbuffer(fig)
         vp = Makie.viewport(lax.scene)[]
         # After rendering, scene viewport must have non-zero width.
@@ -633,9 +633,9 @@ end
     @testset "clade bracket pixel shapes non-empty after lineageplot! on LineageAxis" begin
         fig2 = Figure(; size = (400, 300))
         lax2 = LineageAxis(fig2[1, 1])
-        lp2  = lineageplot!(lax2, _LA_BALANCED_ROOT, _LA_ACC;
-                            clade_nodes = [_LA_BALANCED_ROOT],
-                            clade_label_func = node -> "root")
+        lp2  = lineageplot!(lax2, _LA_BALANCED_BASENODE, _LA_ACC;
+                            clade_nodes = [_LA_BALANCED_BASENODE],
+                            clade_label_func = node -> "basenode")
         colorbuffer(fig2)
         cll2 = only(filter(p -> p isa CladeLabelLayer, lp2.plots))
         @test !isempty(cll2[:bracket_pixel_shapes][])
@@ -650,7 +650,7 @@ end
         lax = LineageAxis(fig[1, 1]; title = "Panel title")
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             leaf_label_visible = false,
         )
@@ -663,7 +663,7 @@ end
         lax = LineageAxis(fig[1, 1]; xlabel = "distance")
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             leaf_label_visible = false,
         )
@@ -681,7 +681,7 @@ end
         )
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             leaf_label_visible = false,
         )
@@ -704,7 +704,7 @@ end
         )
         lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             _LA_ACC;
             leaf_label_visible = false,
         )
@@ -730,20 +730,20 @@ end
         end
     end
 
-    @testset "non-root clade highlight remains narrower than full geometry on LineageAxis" begin
+    @testset "non-basenode-clade highlight remains narrower than full geometry on LineageAxis" begin
         fig = Figure(; size = (400, 300))
         lax = LineageAxis(fig[1, 1])
         acc = lineagegraph_accessor(
-            _LA_BALANCED_ROOT;
+            _LA_BALANCED_BASENODE;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
         )
         lp = lineageplot!(
             lax,
-            _LA_BALANCED_ROOT,
+            _LA_BALANCED_BASENODE,
             acc;
             lineageunits = :edgeweights,
-            clade_nodes = [_LA_NONROOT_CLADE],
+            clade_nodes = [_LA_NONBASENODE_CLADE],
         )
         colorbuffer(fig)
 
@@ -751,8 +751,8 @@ end
         rect = only(chl[:highlight_rects][])
         geom = lp[:computed_geom][]
 
-        clade_pts = [geom.node_positions[node] for node in leaves(acc, _LA_NONROOT_CLADE)]
-        push!(clade_pts, geom.node_positions[_LA_NONROOT_CLADE])
+        clade_pts = [geom.node_positions[node] for node in leaves(acc, _LA_NONBASENODE_CLADE)]
+        push!(clade_pts, geom.node_positions[_LA_NONBASENODE_CLADE])
         raw_span = maximum(pt[1] for pt in clade_pts) - minimum(pt[1] for pt in clade_pts)
         full_span = Float32(geom.boundingbox.widths[1])
 

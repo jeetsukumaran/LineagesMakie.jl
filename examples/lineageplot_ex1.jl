@@ -25,19 +25,19 @@ end
 #       ├── b1
 #       └── b2
 
-const ROOT = MWENode("root", [
+const BASENODE = MWENode("root", [
     MWENode("A", [MWENode("a1", MWENode[]), MWENode("a2", MWENode[])]),
     MWENode("B", [MWENode("b1", MWENode[]), MWENode("b2", MWENode[])]),
 ])
 
 # ── Accessor ──────────────────────────────────────────────────────────────────
 
-const ACC = lineagegraph_accessor(ROOT; children = node -> node.children)
+const ACC = lineagegraph_accessor(BASENODE; children = node -> node.children)
 
 # ── Figure ────────────────────────────────────────────────────────────────────
 
 plot_result = lineageplot(
-    ROOT,
+    BASENODE,
     ACC;
     figure = (; size = (600, 400)),
     axis = (; title = "Lineage tree (MWE)"),

@@ -17,17 +17,17 @@ end
 leaf(name, edgeweight) = Node(name, edgeweight, Node[])
 node(name, edgeweight, children::Node...) = Node(name, edgeweight, Node[children...])
 
-rootnode = node(
+basenode = node(
     "root",
     0.0,
     node("alpha", 0.0, leaf("alpha_1", 0.0), leaf("alpha_2", 0.0)),
     node("beta", 0.0, leaf("beta_1", 0.0), leaf("beta_2", 0.0)),
 )
 
-accessor = lineagegraph_accessor(rootnode; children = node -> node.children)
+accessor = lineagegraph_accessor(basenode; children = node -> node.children)
 
 plot_result = lineageplot(
-    rootnode,
+    basenode,
     accessor;
     figure = (; size = (640, 360)),
     axis = (; title = "Default leaf-aligned layout"),

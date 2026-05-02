@@ -25,7 +25,7 @@ the design.
 ### Lineage graph-centric view
 
 The lineage graph-centric view concerns the combinatorial and geometric structure
-of the lineage graph itself. It answers: which direction is root-to-leaf? What
+of the lineage graph itself. It answers: which direction is basenode-to-leaf? What
 scalar is attached to each node along its primary dimension? What branching
 structure (clade graph) connects the nodes?
 
@@ -35,11 +35,11 @@ This view is captured by the **`lineageunits`** selection and **accessor callabl
 of each node along the lineage axis.
 
 Two canonical process-coordinate types exist with opposite polarity:
-- `branchingtime` — cumulative edge weight from rootnode; root = 0, increases
-  toward leaves. The process moves forward from root to leaf.
+- `branchingtime` — cumulative edge weight from the basenode; basenode = 0,
+  increases toward leaves. The process moves forward from basenode to leaf.
 - `coalescenceage` — cumulative edge weight from node to leaf; leaf = 0,
-  increases toward root. The process moves backward from leaf to root
-  (coalescent model). Requires an ultrametric tree.
+  increases toward the basenode. The process moves backward from leaf to the
+  basenode (coalescent model). Requires an ultrametric tree.
 
 ### User-centric view
 
@@ -64,7 +64,7 @@ What is the axis label?
 
 This view is governed by `LineageAxis` attributes and is **independent of the
 lineage graph-centric and user-centric views**. A researcher may have a
-forward-time lineage graph but prefer a root-at-right layout (common in
+forward-time lineage graph but prefer a basenode-at-right layout (common in
 paleontology). A coalescent lineage graph with leaf-relative process coordinates
 can be displayed either way.
 
@@ -92,7 +92,7 @@ When no edge-length data is available, the default `lineageunits`
 rendered as a graph up to label-preserving isomorphism (the phylogenetic
 "topology"), with all
 leaves at x = 0 and internal nodes spaced by path distance (unweighted path
-distance from root; number of edges). This requires only a `children` function.
+distance from the basenode; number of edges). This requires only a `children` function.
 
 ```julia
 using LineagesMakie, CairoMakie
@@ -103,13 +103,13 @@ struct MyNode
     children::Vector{MyNode}
 end
 
-root = MyNode("root", [
+basenode = MyNode("root", [
     MyNode("A", [MyNode("A1", []), MyNode("A2", [])]),
     MyNode("B", [MyNode("B1", []), MyNode("B2", [])]),
 ])
 
 fig, ax, plt = lineageplot(
-    root;
+    basenode;
     children = node -> node.children,
 )
 save("cladegraph.pdf", fig)
@@ -118,7 +118,7 @@ save("cladegraph.pdf", fig)
 ### Edge-length proportional layout
 
 Supply `edgeweight` and the default `lineageunits` shifts to `:edgeweights`,
-placing nodes at x = cumulative edge weight from the rootnode
+placing nodes at x = cumulative edge weight from the basenode
 (`branchingtime`).
 
 ```julia
@@ -129,7 +129,7 @@ struct PhyloNode
 end
 
 fig, ax, plt = lineageplot(
-    root;
+    basenode;
     children   = node -> node.children,
     edgeweight = (src, dst) -> dst.branch_length,
     nodevalue  = node -> node.name,
@@ -137,7 +137,7 @@ fig, ax, plt = lineageplot(
 ```
 
 The resulting layout places each node at its cumulative branch length from the
-root. The `nodevalue` accessor drives the `LeafLabelLayer` text by default.
+basenode. The `nodevalue` accessor drives the `LeafLabelLayer` text by default.
 
 ### Pre-computed branching times
 
@@ -149,7 +149,7 @@ analysis) and does not want to re-derive them from per-edge weights, supply
 divergence_times = Dict(node_id => time_ma for ...)   # millions of years
 
 fig, ax, plt = lineageplot(
-    root;
+    basenode;
     children       = node -> node.children,
     branchingtime  = node -> divergence_times[node.id],
     lineageunits   = :branchingtime,
@@ -162,22 +162,22 @@ per-edge summation.
 ### Coalescent lineage graph (backward time)
 
 A coalescent lineage graph has process coordinates measured from the leaves
-backward to the root. Supply `coalescenceage` and set
+backward to the basenode. Supply `coalescenceage` and set
 `lineageunits = :coalescenceage`. The lineage graph must be ultrametric (all
-root-to-leaf path lengths equal) or a `nonultrametric` policy must be specified.
+basenode-to-leaf path lengths equal) or a `nonultrametric` policy must be specified.
 
 ```julia
 # Ultrametric coalescent lineage graph
 fig, ax, plt = lineageplot(
-    root;
+    basenode;
     children       = node -> node.children,
-    coalescenceage = node -> node.coalescent_age,   # leaf = 0, root = maximum
+    coalescenceage = node -> node.coalescent_age,   # leaf = 0, basenode = maximum
     lineageunits   = :coalescenceage,
 )
 
 # Non-ultrametric with fallback policy
 fig, ax, plt = lineageplot(
-    root;
+    basenode;
     children          = node -> node.children,
     coalescenceage    = node -> node.coalescent_age,
     lineageunits      = :coalescenceage,
@@ -187,7 +187,7 @@ fig, ax, plt = lineageplot(
 
 In the default `LineageAxis` configuration (`:left_to_right` orientation,
 `:standard` display polarity), leaves appear at x = 0 on the left and the
-rootnode appears at the right. This matches the standard coalescent tree
+basenode appears at the right. This matches the standard coalescent tree
 convention where the present is at the left and the past is at the right.
 
 ### AbstractTrees.jl input
@@ -208,7 +208,7 @@ AbstractTrees.children(t::NewickTree) = t.children
 AbstractTrees.nodevalue(t::NewickTree) = (name = t.label, brlen = t.branch_length)
 
 fig, ax, plt = lineageplot(
-    lineagegraph_root;
+    lineagegraph_basenode;
     edgeweight = (src, dst) -> AbstractTrees.nodevalue(dst).brlen,
     nodevalue  = node -> AbstractTrees.nodevalue(node).name,
 )
@@ -233,16 +233,16 @@ ax1 = LineageAxis(fig[1, 1];
     show_x_axis         = true,
     xlabel              = "Divergence time (Ma)",
 )
-lineageplot!(ax1, root; edgeweight = (src, dst) -> dst.branch_length)
+lineageplot!(ax1, basenode; edgeweight = (src, dst) -> dst.branch_length)
 
-# Same lineage graph, displayed right-to-left (paleontological convention: root at right)
+# Same lineage graph, displayed right-to-left (paleontological convention: basenode at right)
 ax2 = LineageAxis(fig[1, 2];
     lineage_orientation = :left_to_right,
     display_polarity    = :reversed,
     show_x_axis         = true,
     xlabel              = "Time before present (Ma)",
 )
-lineageplot!(ax2, root; edgeweight = (src, dst) -> dst.branch_length)
+lineageplot!(ax2, basenode; edgeweight = (src, dst) -> dst.branch_length)
 
 # Coalescent lineage graph: axis_polarity = :backward; leaves appear at left by default
 ax3 = LineageAxis(fig[2, 1];
@@ -250,19 +250,19 @@ ax3 = LineageAxis(fig[2, 1];
     show_x_axis         = true,
     xlabel              = "Coalescence age",
 )
-lineageplot!(ax3, root;
+lineageplot!(ax3, basenode;
     coalescenceage = node -> node.coal_age,
     lineageunits   = :coalescenceage,
 )
 
-# Coalescent lineage graph, displayed reversed: root at left, leaves at right
+# Coalescent lineage graph, displayed reversed: basenode at left, leaves at right
 # (non-standard but user-requested)
 ax4 = LineageAxis(fig[2, 2];
     lineage_orientation = :left_to_right,
     display_polarity    = :reversed,
     show_x_axis         = true,
 )
-lineageplot!(ax4, root;
+lineageplot!(ax4, basenode;
     coalescenceage = node -> node.coal_age,
     lineageunits   = :coalescenceage,
 )
@@ -274,7 +274,7 @@ fig
 
 The `lineage_orientation` attribute controls which screen axis carries the
 process coordinate. A top-down dendrogram is a vertical rectangular embedding
-that places the rootnode at the top with leaves descending:
+that places the basenode at the top with leaves descending:
 
 ```julia
 fig = Figure()
@@ -284,7 +284,7 @@ ax = LineageAxis(fig[1, 1];
     show_grid           = true,
     ylabel              = "Branch length",
 )
-lineageplot!(ax, root; children = node -> node.children)
+lineageplot!(ax, basenode; children = node -> node.children)
 ```
 
 `show_x_axis` and `xlabel` are screen x-axis controls. `show_y_axis` and
@@ -303,7 +303,7 @@ using CairoMakie
 
 # Compute geometry once; reuse across layers
 geom = rectangular_layout(
-    root;
+    basenode;
     children     = node -> node.children,
     edgeweight   = (src, dst) -> dst.branch_length,
     lineageunits = :edgeweights,
@@ -357,7 +357,7 @@ in Observable reactivity.
 
 ```julia
 # Edges colored by evolutionary rate; width by bootstrap support
-lineageplot!(ax, root;
+lineageplot!(ax, basenode;
     edgeweight         = (src, dst) -> dst.branch_length,
     nodevalue          = node -> node.bootstrap,
     edge_color         = (src, dst) -> rate_colormap(dst.rate),
@@ -418,7 +418,7 @@ work with all layout geometries.
 
 ```julia
 fig, ax, plt = lineageplot(
-    root;
+    basenode;
     layout     = :circular,
     edgeweight = (src, dst) -> dst.branch_length,
     nodevalue  = node -> node.name,

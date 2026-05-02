@@ -56,10 +56,10 @@ Pkg.develop(path = ".")
 
 ## Quick start
 
-Start with a root node and a function that returns each node's children. In the
-example below, the code names the root node `rootnode` to follow package
+Start with a basenode and a function that returns each node's children. In the
+example below, the code names the basenode `basenode` to follow package
 identifier conventions. The package receives that object through
-`lineageplot(rootnode, accessor)` and
+`lineageplot(basenode, accessor)` and
 uses `children = node -> node.children` to traverse the graph.
 
 This first example does not supply edge weights, so LineagesMakie.jl uses a
@@ -81,17 +81,17 @@ end
 leaf(name, edgeweight) = Node(name, edgeweight, Node[])
 node(name, edgeweight, children::Node...) = Node(name, edgeweight, Node[children...])
 
-rootnode = node(
+basenode = node(
     "root",
     0.0,
     node("alpha", 0.0, leaf("alpha_1", 0.0), leaf("alpha_2", 0.0)),
     node("beta", 0.0, leaf("beta_1", 0.0), leaf("beta_2", 0.0)),
 )
 
-accessor = lineagegraph_accessor(rootnode; children = node -> node.children)
+accessor = lineagegraph_accessor(basenode; children = node -> node.children)
 
 plot_result = lineageplot(
-    rootnode,
+    basenode,
     accessor;
     figure = (; size = (640, 360)),
     axis = (; title = "Default leaf-aligned layout"),
@@ -137,17 +137,17 @@ alpha = node(
     node("alpha_2", 0.8, leaf("alpha_2a", 0.7), leaf("alpha_2b", 0.7)),
 )
 beta = node("beta", 0.9, leaf("beta_1", 1.4), leaf("beta_2", 1.2))
-rootnode = node("root", 0.0, alpha, beta)
+basenode = node("root", 0.0, alpha, beta)
 
 accessor = lineagegraph_accessor(
-    rootnode;
+    basenode;
     children = node -> node.children,
     edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
 )
 
 plot_result = lineageplot(
-    rootnode,
+    basenode,
     accessor;
     lineageunits = :edgeweights,
     figure = (; size = (760, 420)),
@@ -186,7 +186,7 @@ lineage graph. The left column lists exact API names.
 | `children(node)` | Yes | Return zero or more child nodes. A node with no children is a leaf. |
 | `edgeweight(src, dst)` | No | Return the edge weight from source node `src` to destination node `dst`. |
 | `nodevalue(node)` | No | Return a node value used by labels or mappings. |
-| `branchingtime(node)` | No | Return a precomputed coordinate measured from the root node. |
+| `branchingtime(node)` | No | Return a precomputed coordinate measured from the basenode. |
 | `coalescenceage(node)` | No | Return a precomputed leaf-relative process coordinate. |
 | `nodecoordinates(node)` | No | Return a user-supplied data-space `Point2f`. |
 | `nodepos(node)` | No | Return a user-supplied pixel-space `Point2f`. |
@@ -195,7 +195,7 @@ Create an accessor from explicit callables:
 
 ```julia
 accessor = lineagegraph_accessor(
-    rootnode;
+    basenode;
     children = node -> node.children,
     edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
@@ -212,7 +212,7 @@ using LineagesMakie
 AbstractTrees.children(node::Node) = node.children
 
 accessor = abstracttrees_accessor(
-    rootnode;
+    basenode;
     edgeweight = (src, dst) -> dst.edgeweight,
     nodevalue = node -> node.name,
 )
@@ -228,7 +228,7 @@ Use `lineageplot` when you want LineagesMakie.jl to create the `Figure` and
 `LineageAxis`:
 
 ```julia
-plot_result = lineageplot(rootnode, accessor; axis = (; title = "Lineage plot"))
+plot_result = lineageplot(basenode, accessor; axis = (; title = "Lineage plot"))
 fig, lax, lp = plot_result
 ```
 
@@ -237,7 +237,7 @@ Use `lineageplot!` when you already own the plotting context:
 ```julia
 fig = Figure()
 lax = LineageAxis(fig[1, 1]; show_x_axis = true, xlabel = "edge weight")
-lp = lineageplot!(lax, rootnode, accessor; lineageunits = :edgeweights)
+lp = lineageplot!(lax, basenode, accessor; lineageunits = :edgeweights)
 ```
 
 You can also target a standard Makie `Axis` when you do not need
@@ -246,7 +246,7 @@ You can also target a standard Makie `Axis` when you do not need
 ```julia
 fig = Figure()
 ax = Axis(fig[1, 1])
-lp = lineageplot!(ax, rootnode, accessor; leaf_label_func = node -> node.name)
+lp = lineageplot!(ax, basenode, accessor; leaf_label_func = node -> node.name)
 ```
 
 The returned `lp` is a Makie plot object. Its derived attributes include:
@@ -265,19 +265,19 @@ otherwise.
 
 | `lineageunits` | Required accessor | Process coordinate | Axis polarity |
 |---|---|---|---|
-| `:edgeweights` | `edgeweight` | Cumulative edge weight from the root node. | `:forward` |
-| `:branchingtime` | `branchingtime` | Precomputed coordinate measured from the root node. | `:forward` |
+| `:edgeweights` | `edgeweight` | Cumulative edge weight from the basenode. | `:forward` |
+| `:branchingtime` | `branchingtime` | Precomputed coordinate measured from the basenode. | `:forward` |
 | `:coalescenceage` | `coalescenceage` | Leaf-relative coordinate; leaves have value 0. | `:backward` |
-| `:nodedepths` | None | Edge count from the root node. | `:forward` |
+| `:nodedepths` | None | Edge count from the basenode. | `:forward` |
 | `:nodeheights` | None | Edge count to farthest descendant leaf; leaves have value 0. | `:backward` |
-| `:nodelevels` | None | Integer level from the root node. | `:forward` |
+| `:nodelevels` | None | Integer level from the basenode. | `:forward` |
 | `:nodecoordinates` | `nodecoordinates` | User-supplied data coordinates. | User-defined |
 | `:nodepos` | `nodepos` | User-supplied pixel coordinates. | User-defined |
 
 Use the layout functions directly when you need geometry before plotting:
 
 ```julia
-geom = rectangular_layout(rootnode, accessor; lineageunits = :edgeweights)
+geom = rectangular_layout(basenode, accessor; lineageunits = :edgeweights)
 bb = boundingbox(geom)
 leaf_order = geom.leaf_order
 node_positions = geom.node_positions
@@ -288,8 +288,8 @@ node_positions = geom.node_positions
 The plotting contract has 4 related pieces:
 
 - `lineageunits` chooses the process coordinate for each node.
-- `axis_polarity` records whether the coordinate increases from the root node
-  toward the leaves or from the leaves toward the root node.
+- `axis_polarity` records whether the coordinate increases from the basenode
+  toward the leaves or from the leaves toward the basenode.
 - `display_polarity` controls whether increasing coordinates map to increasing
   screen position.
 - `lineage_orientation` chooses which screen axis carries the process
@@ -307,7 +307,7 @@ lax = LineageAxis(
     show_grid = true,
     ylabel = "cumulative edge weight",
 )
-lineageplot!(lax, rootnode, accessor; lineageunits = :edgeweights)
+lineageplot!(lax, basenode, accessor; lineageunits = :edgeweights)
 ```
 
 Use `display_polarity = :reversed` when the same process coordinates should
@@ -315,14 +315,14 @@ run in the opposite screen direction:
 
 ```julia
 lax = LineageAxis(fig[1, 1]; display_polarity = :reversed)
-lineageplot!(lax, rootnode, accessor; lineageunits = :edgeweights)
+lineageplot!(lax, basenode, accessor; lineageunits = :edgeweights)
 ```
 
 Use `:radial` for circular layouts:
 
 ```julia
 plot_result = lineageplot(
-    rootnode,
+    basenode,
     accessor;
     axis = (; lineage_orientation = :radial, title = "Radial layout"),
     lineage_orientation = :radial,
@@ -352,7 +352,7 @@ its layers.
 ```julia
 lineageplot!(
     lax,
-    rootnode,
+    basenode,
     accessor;
     edge_color = (src, dst) -> dst.edgeweight > 1.0 ? :tomato : :gray50,
     leaf_label_func = node -> node.name,
@@ -364,7 +364,7 @@ Node labels are opt-in. Enable them with `node_label_threshold`:
 ```julia
 lineageplot!(
     lax,
-    rootnode,
+    basenode,
     accessor;
     node_label_func = node -> node.name,
     node_label_threshold = node -> !isempty(node.children),
@@ -378,7 +378,7 @@ Use lower-level layout and layer recipes when you want to compose the plot
 yourself.
 
 ```julia
-geom = rectangular_layout(rootnode, accessor; lineageunits = :edgeweights)
+geom = rectangular_layout(basenode, accessor; lineageunits = :edgeweights)
 
 fig = Figure()
 ax = Axis(fig[1, 1])
@@ -396,14 +396,14 @@ Manual layer composition uses public layer functions. Prefer `lineageplot` or
 
 ## Observable updates
 
-The root node and plot attributes can be Observables. This follows standard Makie
+The basenode and plot attributes can be Observables. This follows standard Makie
 reactivity.
 
 ```julia
-rootnode_observable = Observable(rootnode)
+basenode_observable = Observable(basenode)
 
 plot_result = lineageplot(
-    rootnode_observable,
+    basenode_observable,
     accessor;
     lineageunits = :edgeweights,
     leaf_label_func = node -> node.name,
@@ -412,10 +412,10 @@ plot_result = lineageplot(
 fig, lax, lp = plot_result
 
 lp.edge_color = :steelblue
-rootnode_observable[] = another_rootnode
+basenode_observable[] = another_basenode
 ```
 
-Use the same accessor contract for every root node value assigned to the
+Use the same accessor contract for every basenode value assigned to the
 Observable.
 
 ## Examples

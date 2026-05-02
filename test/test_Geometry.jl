@@ -49,12 +49,12 @@ const GEO_POLYTOMY = TestNode("root", [
     TestNode("d", TestNode[]),
 ])
 
-# Single node: rootnode is also the only leaf
+# Single node: basenode is also the only leaf
 const GEO_SINGLE = TestNode("root", TestNode[])
 
 # Helper: build a LineageGraphAccessor with only children
-function _acc(rootnode)
-    return lineagegraph_accessor(rootnode; children = node -> node.children)
+function _acc(basenode)
+    return lineagegraph_accessor(basenode; children = node -> node.children)
 end
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
@@ -165,16 +165,16 @@ end
         #   bc    (1) → b (2), c (2)
         #   def   (1) → d (2), ef (2)
         #   ef    (2) → e (3), f (3)
-        root = GEO_UNBALANCED
-        a    = root.children[1]
-        bc   = root.children[2]
+        basenode = GEO_UNBALANCED
+        a    = basenode.children[1]
+        bc   = basenode.children[2]
         b, c = bc.children[1], bc.children[2]
-        def  = root.children[3]
+        def  = basenode.children[3]
         d    = def.children[1]
         ef   = def.children[2]
         e, f = ef.children[1], ef.children[2]
 
-        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[basenode][1] ≈ 0.0
         @test node_pos[a][1]   ≈ 1.0
         @test node_pos[bc][1]  ≈ 1.0
         @test node_pos[b][1]   ≈ 2.0
@@ -331,13 +331,13 @@ end
         geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgeweights)
         node_pos = geom.node_positions
 
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
 
-        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[basenode][1] ≈ 0.0
         @test node_pos[ab][1]   ≈ 1.0
         @test node_pos[cd][1]   ≈ 1.0
         @test node_pos[a][1]    ≈ 3.0
@@ -354,19 +354,19 @@ end
         geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgeweights)
         node_pos = geom.node_positions
 
-        root = GEO_BALANCED
-        ab   = root.children[1]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
         a    = ab.children[1]
 
-        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[basenode][1] ≈ 0.0
         @test node_pos[ab][1]   ≈ 2.0
         @test node_pos[a][1]    ≈ 4.0
     end
 
     @testset "rectangular_layout :edgeweights — missing edge weight warns and falls back to 1.0" begin
         # Only the ab→a edge returns nothing; all others return 1.0.
-        root = GEO_BALANCED
-        ab   = root.children[1]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
         a    = ab.children[1]
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
@@ -399,12 +399,12 @@ end
     # ── :branchingtime ──────────────────────────────────────────────────────────
 
     @testset "rectangular_layout :branchingtime — process coordinates match accessor" begin
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
-        bt = Dict(root => 0.0, ab => 5.0, cd => 5.0, a => 10.0, b => 10.0, c => 12.0, d => 12.0)
+        bt = Dict(basenode =>0.0, ab => 5.0, cd => 5.0, a => 10.0, b => 10.0, c => 12.0, d => 12.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
             branchingtime = node -> bt[node],
@@ -426,18 +426,18 @@ end
 
     # ── :nodedepths ─────────────────────────────────────────────────────────────
 
-    @testset "rectangular_layout :nodedepths — root at 0, integer depths" begin
+    @testset "rectangular_layout :nodedepths — basenode at 0, integer depths" begin
         acc      = _acc(GEO_BALANCED)
         geom     = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodedepths)
         node_pos = geom.node_positions
 
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
 
-        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[basenode][1] ≈ 0.0
         @test node_pos[ab][1]   ≈ 1.0
         @test node_pos[cd][1]   ≈ 1.0
         @test node_pos[a][1]    ≈ 2.0
@@ -451,12 +451,12 @@ end
         geom     = rectangular_layout(GEO_UNBALANCED, acc; lineageunits = :nodedepths)
         node_pos = geom.node_positions
 
-        root = GEO_UNBALANCED
-        a    = root.children[1]   # depth 1
-        ef   = root.children[3].children[2]  # depth 3
+        basenode = GEO_UNBALANCED
+        a    = basenode.children[1]   # depth 1
+        ef   = basenode.children[3].children[2]  # depth 3
         e    = ef.children[1]    # depth 3
 
-        @test node_pos[root][1] ≈ 0.0
+        @test node_pos[basenode][1] ≈ 0.0
         @test node_pos[a][1]    ≈ 1.0
         @test node_pos[e][1]    ≈ 3.0
     end
@@ -466,12 +466,12 @@ end
     @testset "rectangular_layout :coalescenceage — ultrametric, leaves at 0" begin
         # GEO_BALANCED: all leaves have coalescenceage 0.
         # Ultrametric: all children of each internal node share the same age.
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
-        ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 0.0, c => 0.0, d => 0.0)
+        ca = Dict(basenode =>3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 0.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
             coalescenceage = node -> ca[node],
@@ -482,17 +482,17 @@ end
         for leaf in (a, b, c, d)
             @test node_pos[leaf][1] ≈ 0.0
         end
-        @test node_pos[root][1] ≈ 3.0
+        @test node_pos[basenode][1] ≈ 3.0
     end
 
     @testset "rectangular_layout :coalescenceage — non-ultrametric, :error raises ArgumentError" begin
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
         # ab has children with ages 0.0 and 1.0 → non-ultrametric
-        ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
+        ca = Dict(basenode =>3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
             coalescenceage = node -> ca[node],
@@ -505,12 +505,12 @@ end
     end
 
     @testset "rectangular_layout :coalescenceage — non-ultrametric, :minimum does not raise" begin
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
-        ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
+        ca = Dict(basenode =>3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
             coalescenceage = node -> ca[node],
@@ -523,12 +523,12 @@ end
     end
 
     @testset "rectangular_layout :coalescenceage — non-ultrametric, :maximum does not raise" begin
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
-        ca = Dict(root => 3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
+        ca = Dict(basenode =>3.0, ab => 2.0, cd => 2.0, a => 0.0, b => 1.0, c => 0.0, d => 0.0)
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
             coalescenceage = node -> ca[node],
@@ -550,13 +550,13 @@ end
     # ── :nodecoordinates ─────────────────────────────────────────────────────────────
 
     @testset "rectangular_layout :nodecoordinates — node_positions match accessor" begin
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
         node_coordinates = Dict(
-            root => Point2f(0, 2.5),
+            basenode => Point2f(0, 2.5),
             ab => Point2f(1, 1.5),
             cd => Point2f(1, 3.5),
             a => Point2f(2, 1.0),
@@ -586,13 +586,13 @@ end
     # ── :nodepos ────────────────────────────────────────────────────────────────
 
     @testset "rectangular_layout :nodepos — node_positions match accessor" begin
-        root = GEO_BALANCED
-        ab   = root.children[1]
-        cd   = root.children[2]
+        basenode = GEO_BALANCED
+        ab   = basenode.children[1]
+        cd   = basenode.children[2]
         a, b = ab.children[1], ab.children[2]
         c, d = cd.children[1], cd.children[2]
         node_pos_src = Dict(
-            root => Point2f(0, 2.5),
+            basenode => Point2f(0, 2.5),
             ab => Point2f(10, 15),
             cd => Point2f(10, 35),
             a => Point2f(20, 10),
@@ -621,7 +621,7 @@ end
 
     # ── Default lineageunits detection ──────────────────────────────────────────
 
-    @testset "default lineageunits — edgeweight present → :edgeweights (root at 0)" begin
+    @testset "default lineageunits — edgeweight present → :edgeweights (basenode at 0)" begin
         acc = lineagegraph_accessor(GEO_BALANCED;
             children = node -> node.children,
             edgeweight = (src, dst) -> 1.0,
@@ -671,7 +671,7 @@ end
             end
         end
 
-        @testset ":nodelevels — rootnode at radial distance 0.0" begin
+        @testset ":nodelevels — basenode at radial distance 0.0" begin
             acc  = _acc(GEO_BALANCED)
             geom = circular_layout(GEO_BALANCED, acc; lineageunits = :nodelevels)
             p    = geom.node_positions[GEO_BALANCED]
@@ -717,7 +717,7 @@ end
             @test circular_layout(GEO_SINGLE, acc) isa LineageGraphGeometry
         end
 
-        @testset "polytomy (4 direct leaves) — root at radius 0 for :nodelevels" begin
+        @testset "polytomy (4 direct leaves) — basenode at radius 0 for :nodelevels" begin
             acc  = _acc(GEO_POLYTOMY)
             geom = circular_layout(GEO_POLYTOMY, acc; lineageunits = :nodelevels)
             p    = geom.node_positions[GEO_POLYTOMY]
