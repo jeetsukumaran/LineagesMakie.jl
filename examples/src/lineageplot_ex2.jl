@@ -181,8 +181,3 @@ lineageplot!(
     leaf_label_fontsize = 11,
 )
 
-# ── Save ──────────────────────────────────────────────────────────────────────
-
-outfile = joinpath(dirname(@__FILE__), "lineageplot_ex2.png")
-save(outfile, fig)
-@info "Saved $outfile"

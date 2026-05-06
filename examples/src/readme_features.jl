@@ -64,6 +64,3 @@ plot_result = lineageplot(
     scalebar_label = "1 unit",
     scalebar_auto_visible = true,
 )
-
-fig, _, _ = plot_result
-save(joinpath(@__DIR__, "readme_features.png"), fig)

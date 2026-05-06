@@ -65,9 +65,6 @@ uses `children = node -> node.children` to traverse the graph.
 This first example does not supply edge weights, so LineagesMakie.jl uses a
 default layout that aligns the leaves.
 
-The following example is available as
-[`examples/readme_quickstart.jl`](examples/readme_quickstart.jl).
-
 ```julia
 using CairoMakie
 using LineagesMakie
@@ -101,21 +98,14 @@ plot_result = lineageplot(
     leaf_color = :gray10,
     edge_color = :gray35,
 )
-
-fig, lax, lp = plot_result
-save("readme_quickstart.png", fig)
 ```
 
-![Default leaf-aligned layout](examples/readme_quickstart.png)
 
 ## Edge lengths and annotations
 
 Add the `edgeweight(src, dst)` accessor when horizontal distance should reflect
 edge weight. The same example also shows leaf labels, clade highlighting, a
 clade bracket label, a quantitative x-axis, and a scale bar.
-
-The full script is available as
-[`examples/readme_features.jl`](examples/readme_features.jl).
 
 ```julia
 using CairoMakie
@@ -168,12 +158,7 @@ plot_result = lineageplot(
     scalebar_label = "1 unit",
     scalebar_auto_visible = true,
 )
-
-fig, lax, lp = plot_result
-save("readme_features.png", fig)
 ```
-
-![Edge lengths, labels, clade annotation, and scale bar](examples/readme_features.png)
 
 ## Input contract
 
@@ -420,14 +405,8 @@ Observable.
 
 ## Examples
 
-The `examples` project contains runnable scripts:
-
-- [`examples/readme_quickstart.jl`](examples/readme_quickstart.jl) generates the first README image.
-- [`examples/readme_features.jl`](examples/readme_features.jl) generates the annotated README image.
-- [`examples/lineageplot_ex1.jl`](examples/lineageplot_ex1.jl) is a compact starter example.
-- [`examples/lineageplot_ex2.jl`](examples/lineageplot_ex2.jl) is a denser multi-panel feature smoke example.
-
-Run an example from the repository root:
+The `examples` project contains runnable scripts.
+To run an example from the repository root:
 
 ```sh
 julia --project=examples examples/readme_quickstart.jl
@@ -439,8 +418,7 @@ The package uses separate projects for tests, examples, and documentation.
 
 ```sh
 julia --project=test test/runtests.jl
-julia --project=examples examples/readme_quickstart.jl
-julia --project=examples examples/readme_features.jl
+julia --project=examples examples/src/lineageplot_ex2.jl
 julia --project=docs docs/make.jl
 ```
 

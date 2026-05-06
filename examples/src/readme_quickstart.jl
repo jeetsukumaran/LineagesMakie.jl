@@ -37,6 +37,3 @@ plot_result = lineageplot(
     leaf_color = :gray10,
     edge_color = :gray35,
 )
-
-fig, _, _ = plot_result
-save(joinpath(@__DIR__, "readme_quickstart.png"), fig)

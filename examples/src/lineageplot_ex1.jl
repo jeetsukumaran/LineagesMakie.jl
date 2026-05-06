@@ -44,7 +44,3 @@ plot_result = lineageplot(
     leaf_label_func = node -> node.label,
 )
 fig, lax, lp = plot_result
-
-outfile = joinpath(dirname(@__FILE__), "lineageplot_ex1.png")
-save(outfile, fig)
-@info "Saved $outfile"
