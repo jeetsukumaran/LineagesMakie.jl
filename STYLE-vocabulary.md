@@ -812,6 +812,117 @@ as a substitute for a real downstream governance block.
 
 ---
 
+### `handoff packet`
+
+**Part of speech:** noun (workflow-governance concept)
+
+**Definition:** The concise structured control block inside a workflow
+document, delegated task, or agent handoff that restates the exact execution
+inputs a downstream actor must use.
+
+**Usage notes:** A handoff packet normally includes active authorities, parent
+documents, settled decisions, authorization boundaries, current-state
+diagnosis, primary-goal lock items, direct red-state repros, scope limits,
+required upstream primary sources, green-state gates, and stop conditions. It
+is not a link-only pointer back to a parent document.
+
+**Proscribed alternates:** `summary` when execution controls are required;
+`context dump`; `see parent`.
+
+---
+
+### `lock item`
+
+**Part of speech:** noun (workflow and verification concept)
+
+**Definition:** A separately named workflow item that turns one primary goal,
+review finding, compatibility boundary, migration boundary, or explicit
+non-negotiable into a concrete non-completion condition with its own red-state
+repro and proof obligation.
+
+**Usage notes:** A lock item must say what surviving shape is forbidden, how
+the historical or current bad behavior is reproduced, what task or owner closes
+it, and what verification artifact fails the bad implementation or fake-fix
+shape. Use separate lock items whenever one goal could survive while another
+is fixed.
+
+**Proscribed alternates:** `goal` when a tracked proof obligation is intended;
+`note`; `intent`.
+
+---
+
+### `red-state repro`
+
+**Part of speech:** noun (verification concept)
+
+**Definition:** The direct reproduction of the current or historical bad
+behavior that a real fix must make impossible or explicitly reject.
+
+**Usage notes:** A red-state repro is stronger than a broad negative test idea.
+It should fail the current bad implementation or forbidden regression shape in
+the same way the real bug, drift, or contract violation fails. Use it as part
+of lock-item verification and handoff packets when a downstream actor must
+prove that a known bad shape is gone.
+
+**Proscribed alternates:** `negative case` when the historical bad behavior is
+more specific; `failing scenario` when the repro itself is the contract anchor.
+
+---
+
+### `primary-goal lock`
+
+**Part of speech:** noun (workflow-governance concept)
+
+**Definition:** The workflow discipline and corresponding document section that
+enumerate the lock items for the primary goals in a PRD, tranche file, tasking
+file, review scope, or remediation plan.
+
+**Usage notes:** A primary-goal lock is incomplete if a fresh implementing
+agent could still declare success while one of its lock items survives behind a
+green suite, docs build, or source-text audit. A primary-goal lock is stronger
+than a summary of goals because it records direct non-completion conditions and
+proof obligations.
+
+**Proscribed alternates:** `goal summary` when direct proof obligations are
+required; `acceptance criteria` when the red-state repro and non-completion
+condition are omitted.
+
+---
+
+### `settled decision`
+
+**Part of speech:** noun (workflow-control concept)
+
+**Definition:** A design, migration, compatibility, naming, authorization, or
+environment decision that has already been resolved and must be treated as
+fixed input by downstream work unless the user explicitly reopens it.
+
+**Usage notes:** Settled decisions belong in handoff packets and workflow
+documents whenever a fresh agent could otherwise reopen them under the label of
+implementation detail.
+
+**Proscribed alternates:** `assumption` when the decision is already ratified;
+`suggestion` when the downstream actor is not free to choose.
+
+---
+
+### `stop condition`
+
+**Part of speech:** noun (workflow-control concept)
+
+**Definition:** The explicit condition under which an agent or contributor must
+halt, escalate, or request clarification instead of continuing the workflow.
+
+**Usage notes:** Stop conditions are part of honest handoff packets. They
+prevent downstream actors from proceeding through misdiagnosis, governance
+conflicts, stale inputs, or unresolved design choices while preserving the
+appearance of progress.
+
+**Proscribed alternates:** `edge case` when the condition actually governs
+whether work may continue; `note` when the effect is mandatory halting.
+
+---
+
 ### `task`
 
 **Part of speech:** noun (workflow concept)
