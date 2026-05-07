@@ -4,7 +4,9 @@ Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 LineagesMakie = "442c8a50-53a9-4dd6-b3a1-02ab81198c2d"
+PhyloNetworks = "33ad39ac-ed31-50eb-9b15-43d0656eaa72"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [sources]
 LineagesMakie = {path = ".."}
+PhyloNetworks = {path = "/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl"}

@@ -1,5 +1,7 @@
 module LineagesMakie
 
+include("Topology.jl")
+
 include("Accessors.jl")
 using .Accessors: LineageGraphAccessor, lineagegraph_accessor, abstracttrees_accessor, is_leaf, leaves, preorder
 export LineageGraphAccessor, lineagegraph_accessor, abstracttrees_accessor, is_leaf, leaves, preorder

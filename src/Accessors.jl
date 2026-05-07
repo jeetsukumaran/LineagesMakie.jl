@@ -1,6 +1,7 @@
 module Accessors
 
 using AbstractTrees: children as abstracttrees_children
+using ..Topology: normalize_topology, source_nodes
 
 # ── LineageGraphAccessor ────────────────────────────────────────────────────────
 
@@ -158,77 +159,33 @@ end
 """
     leaves(accessor::LineageGraphAccessor, basenode) -> Vector{Any}
 
-Return all leaf nodes reachable from `basenode` in a deterministic
-depth-first order.
+Return all leaf nodes reachable from `basenode` in deterministic sink order.
 
-Cycle detection is performed at every step. If any node is encountered more
-than once, `ArgumentError` is raised immediately before any partial result is
-returned.
+A valid shared-descendant DAG is accepted. A true directed cycle raises
+`ArgumentError`.
 
 # Throws
-- `ArgumentError` if a cycle is detected in the lineage graph.
+- `ArgumentError` if a true directed cycle is detected in the lineage graph.
 """
 function leaves(accessor::LineageGraphAccessor, basenode)::Vector{Any}
-    result = Vector{Any}()
-    visited = Set{Any}()
-    _collect_leaves!(result, visited, accessor, basenode)
-    return result
+    topology = normalize_topology(accessor, basenode)
+    return source_nodes(topology.sink_order)
 end
 
 """
     preorder(accessor::LineageGraphAccessor, basenode) -> Vector{Any}
 
-Return all nodes reachable from `basenode` in preorder (parent before
-children), depth-first, deterministic.
+Return all nodes reachable from `basenode` in deterministic topological order.
 
-Cycle detection is performed at every step. If any node is encountered more
-than once, `ArgumentError` is raised immediately before any partial result is
-returned.
+A valid shared-descendant DAG is accepted. A true directed cycle raises
+`ArgumentError`.
 
 # Throws
-- `ArgumentError` if a cycle is detected in the lineage graph.
+- `ArgumentError` if a true directed cycle is detected in the lineage graph.
 """
 function preorder(accessor::LineageGraphAccessor, basenode)::Vector{Any}
-    result = Vector{Any}()
-    visited = Set{Any}()
-    _collect_preorder!(result, visited, accessor, basenode)
-    return result
-end
-
-# ── Internal traversal helpers ─────────────────────────────────────────────────
-
-function _check_cycle!(visited::Set, node)::Nothing
-    # Shared ancestry (reticulation) is not yet supported; acyclicity is required.
-    node ∈ visited && throw(
-        ArgumentError(
-            "cycle detected in lineage graph: node $(repr(node)) was encountered " *
-                "more than once during traversal; the lineage graph must be acyclic",
-        ),
-    )
-    push!(visited, node)
-    return nothing
-end
-
-function _collect_leaves!(result, visited, accessor, node)::Nothing
-    _check_cycle!(visited, node)
-    child_collection = accessor.children(node)
-    if isempty(child_collection)
-        push!(result, node)
-    else
-        for child in child_collection
-            _collect_leaves!(result, visited, accessor, child)
-        end
-    end
-    return nothing
-end
-
-function _collect_preorder!(result, visited, accessor, node)::Nothing
-    _check_cycle!(visited, node)
-    push!(result, node)
-    for child in accessor.children(node)
-        _collect_preorder!(result, visited, accessor, child)
-    end
-    return nothing
+    topology = normalize_topology(accessor, basenode)
+    return source_nodes(topology.node_order)
 end
 
 # ── Exports ────────────────────────────────────────────────────────────────────

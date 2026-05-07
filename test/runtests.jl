@@ -12,9 +12,11 @@ using JET
         JET.test_package(LineagesMakie; target_modules = (LineagesMakie,))
     end
     include("test_Accessors.jl")
+    include("test_Topology.jl")
     include("test_Geometry.jl")
     include("test_CoordinateTransform.jl")
     include("test_Layers.jl")
     include("test_LineageAxis.jl")
     include("test_Integration.jl")
+    include("test_ExtensionBoundary.jl")
 end

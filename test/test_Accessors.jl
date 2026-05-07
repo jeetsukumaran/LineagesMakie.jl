@@ -53,6 +53,18 @@ const POLYTOMY_BASENODE = TestNode("root", [
 # single node; it is both the basenode and the only leaf
 const SINGLE_BASENODE = TestNode("root", TestNode[])
 
+mutable struct DagTestNode
+    name::String
+    children::Vector{DagTestNode}
+end
+
+const SHARED_DESCENDANT_DAG = let
+    shared = DagTestNode("shared", DagTestNode[])
+    left = DagTestNode("left", DagTestNode[shared])
+    right = DagTestNode("right", DagTestNode[shared])
+    DagTestNode("root", DagTestNode[left, right])
+end
+
 # mutable struct for constructing cycles
 mutable struct CyclicNode
     name::String
@@ -143,6 +155,7 @@ end
         ls  = leaves(acc, BALANCED_BASENODE)
         @test length(ls) == 4
         @test all(is_leaf(acc, node) for node in ls)
+        @test [node.name for node in ls] == ["a", "b", "c", "d"]
         # deterministic: same call returns identical order
         @test ls == leaves(acc, BALANCED_BASENODE)
     end
@@ -169,12 +182,28 @@ end
         po  = preorder(acc, BALANCED_BASENODE)
         @test length(po) == 7
         @test po[1] === BALANCED_BASENODE
+        @test [node.name for node in po] == ["root", "ab", "a", "b", "cd", "c", "d"]
         # all leaves appear somewhere in preorder
         ls = leaves(acc, BALANCED_BASENODE)
         po_set = Set(po)
         @test all(node ∈ po_set for node in ls)
         # deterministic
         @test po == preorder(acc, BALANCED_BASENODE)
+    end
+
+    @testset "shared-descendant DAG — leaves returns each sink once" begin
+        acc = lineagegraph_accessor(SHARED_DESCENDANT_DAG; children = node -> node.children)
+        ls = leaves(acc, SHARED_DESCENDANT_DAG)
+        @test length(ls) == 1
+        @test ls[1] === SHARED_DESCENDANT_DAG.children[1].children[1]
+        @test [node.name for node in ls] == ["shared"]
+    end
+
+    @testset "shared-descendant DAG — preorder is topology-backed" begin
+        acc = lineagegraph_accessor(SHARED_DESCENDANT_DAG; children = node -> node.children)
+        po = preorder(acc, SHARED_DESCENDANT_DAG)
+        @test length(po) == 4
+        @test [node.name for node in po] == ["root", "left", "right", "shared"]
     end
 
     @testset "preorder — single node" begin
