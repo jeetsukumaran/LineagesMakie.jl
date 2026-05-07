@@ -46,6 +46,9 @@ Parent PRD:
 - No tranche may describe Tier 3 as a thin adapter project.
 - Any externally visible breaking change requires explicit user approval and a
   migration note in the same tranche.
+- Lock item 4 is already closed by the parent PRD plus this tranche file;
+  later tranches preserve that boundary rather than claiming to reopen or
+  newly close it.
 - Every tranche must pass forward governance, vocabulary, upstream-reading,
   authorization-boundary, and verification obligations.
 - The parent PRD defines numbered lock items rather than numbered user stories.
@@ -74,6 +77,10 @@ Parent PRD:
    Type: `HITL`
    Blocked by: `Tranche 4`
    PRD lock coverage: `2`, `4`, `5`, `6`
+
+Lock item 4 is intentionally closed here, at trancheing time. Tranches 1
+through 5 preserve that planning boundary by obeying the dependency order
+above; none of them may claim to reopen or newly close it.
 
 ## Tranche 1: topology owner and optional extension boundary
 
@@ -112,8 +119,9 @@ Parent PRD:
 - Owns lock item 1 at the topology-owner level.
 - Owns the Tier 2 portion of lock item 3 by establishing the optional package
   extension boundary before source-specific integration exists.
-- Owns the tranche-ordering proof for lock item 4 by making Tier 2 start with
-  foundational owner repair rather than a feature patch.
+- Preserves lock item 4, which is already closed by the parent PRD plus this
+  tranche file, by making Tier 2 start with foundational owner repair rather
+  than a feature patch.
 - Preserves lock item 6 by keeping rooted-tree traversal on the same owner path
   as DAG traversal.
 - Tranche-specific non-completion condition:
@@ -141,12 +149,20 @@ either valid shared ancestry or an actual directed cycle based on the topology
 owner's state, not based on a global visited-set shortcut. Rooted-tree callers
 must still use the same public access pattern where possible, but their
 compatibility path may be reduced to a thin wrapper over the normalized owner.
+Because `LineagesMakie.leaves` and `LineagesMakie.preorder` are currently
+exported package-root compatibility surfaces, this tranche may demote their
+implementation ownership internally but must preserve them as public
+compatibility wrappers unless a better design or conflicting contract makes
+that impossible; in that case the tranche must stop for explicit approval or a
+named `REVIEW` gate before removal or public breakage.
 
 ### Legacy artifacts to retire or demote
 
 - Retire `Accessors.leaves` and `Accessors.preorder` as owner-level traversal
-  authorities; they may survive only as topology-backed wrappers or
-  compatibility helpers.
+  authorities; while `LineagesMakie.leaves` and `LineagesMakie.preorder`
+  remain exported, they may survive only as topology-backed public
+  compatibility wrappers unless explicit approval or a named `REVIEW` gate
+  authorizes removal or another public break.
 - Retire `_check_cycle!` in `src/Accessors.jl` as the owner of graph validity.
 - Retire the notion that a second node encounter is itself a cycle.
 - Demote direct recursive child walking on raw source objects to an input-side
@@ -189,8 +205,10 @@ compatibility path may be reduced to a thin wrapper over the normalized owner.
   `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/01_prd.md`.
 - **Settled decisions and non-negotiables**:
   DAG is first-class in the core, rooted trees are the single-parent special
-  case, the extension boundary is optional, and no source-specific shadow owner
-  is allowed.
+  case, the extension boundary is optional, no source-specific shadow owner is
+  allowed, and exported package-root traversal helpers remain compatibility
+  wrappers unless explicit approval or a named `REVIEW` gate authorizes a
+  public break.
 - **Authorization boundary**:
   deep internal redesign is authorized in `src/`, `test/`, docs, examples, and
   `Project.toml`; public breaks require explicit user approval and migration
@@ -222,7 +240,9 @@ compatibility path may be reduced to a thin wrapper over the normalized owner.
 - **Stop conditions**:
   any required public break, any discovered upstream contract conflict about the
   optional extension boundary, or any attempt to put normalization ownership
-  into the extension instead of the core.
+  into the extension instead of the core; any attempt to remove or stop
+  exporting `leaves` or `preorder` without explicit approval or a named
+  `REVIEW` gate.
 
 ### How to verify
 
@@ -253,9 +273,11 @@ the second encounter instead of recording the second parent incidence.
 - [ ] Given an actual directed cycle, when normalization is attempted, then the
       owner raises a direct cycle diagnostic rather than silently truncating or
       looping.
-- [ ] Given the old traversal helpers, when this tranche is complete, then they
-      are removed, reduced to thin wrappers, or otherwise prevented from
-      surviving as a second topology implementation.
+- [ ] Given the old traversal helpers, when this tranche is complete, then
+      `LineagesMakie.leaves` and `LineagesMakie.preorder` remain only as thin
+      public compatibility wrappers unless explicit approval or a named
+      `REVIEW` gate authorized a public break, and no second topology
+      implementation survives behind them.
 - [ ] Given a fake fix that merely suppresses repeated-node errors or moves
       normalization into the extension, when verification is run, then the
       tranche fails rather than reporting a fake green.
@@ -266,7 +288,8 @@ the second encounter instead of recording the second parent incidence.
 - This tranche addresses lock item 1: DAG is first-class in the core.
 - This tranche addresses lock item 3: `PhyloNetworks.jl` support is an optional
   package extension.
-- This tranche addresses lock item 4: Tier 2 and Tier 3 boundaries are correct.
+- This tranche preserves lock item 4: Tier 2 and Tier 3 boundaries are already
+  closed correctly by the planning artifacts.
 - This tranche preserves lock item 6: tree behavior survives as the special-case
   path.
 
@@ -299,7 +322,8 @@ the second encounter instead of recording the second parent incidence.
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/src/recursion_routines.jl`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/src/auxiliary.jl`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/src/compareNetworks.jl`,
-  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/reference/generic/space.md`.
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/reference/generic/space.md`,
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/Makie/src/makielayout/types.jl`.
 
 ### Primary-goal lock
 
@@ -323,11 +347,29 @@ normalized topology and explicit view or projection metadata rather than raw
 recursive source traversal. Rectangular and radial core modes must both use the
 new owner model.
 
-This tranche must define explicit semantics for topological coordinate modes
-such as `:nodedepths`, `:nodelevels`, and `:nodeheights` on either the full
-DAG-capable topology or an explicitly named tree projection. Weighted or
-age-based coordinate modes must either consume source values that already
-resolve ambiguity or require an explicit resolution policy.
+This tranche fixes the public `lineageunits` contract up front:
+`:nodecoordinates` and `:nodepos` remain DAG-native because they consume one
+explicit coordinate per normalized node with no invented projection;
+`:nodelevels` is DAG-native with `level(basenode) = 0` and
+`level(node) = 1 + maximum(level(parent))`, so it measures longest-path edge
+count from the base node;
+`:nodedepths` is DAG-native with `depth(basenode) = 0` and
+`depth(node) = minimum(depth(parent) + 1)`, so it measures shortest-path edge
+count from the base node;
+`:nodeheights` is DAG-native with `height(leaf) = 0` and
+`height(node) = 1 + maximum(height(child))`, so it measures farthest-descendant
+distance to a leaf;
+`:branchingtime` is DAG-native only when supplied node values are monotone and
+full-network consistent across every directed edge, otherwise it must hard
+error on full-network views until the caller selects an explicit projection or
+resolution mode;
+`:coalescenceage` follows the same rule for leaf-relative age values;
+`:edgeweights` must hard error on full-network views unless the topology owner
+can prove additive path consistency, meaning every directed path from
+`basenode` to a node yields the same cumulative coordinate, otherwise the user
+must choose an explicit projected-tree or other named resolution contract.
+No downstream tasking or implementing agent may reopen these resolved semantics
+without an explicit named `REVIEW` gate.
 
 When this tranche is complete, geometry must produce stable per-edge geometry
 for the normalized edge set, not just a parent-before-child tree stroke list.
@@ -377,8 +419,9 @@ for the normalized edge set, not just a parent-before-child tree stroke list.
   the parent PRD and the completed Tranche 1 handoff.
 - **Settled decisions and non-negotiables**:
   geometry consumes normalized topology, rooted trees remain the single-parent
-  special case, and no owner may silently overwrite one parent path with
-  another.
+  special case, no owner may silently overwrite one parent path with another,
+  and the `lineageunits` contract is already resolved here for DAG-capable
+  views.
 - **Authorization boundary**:
   deep internal redesign is authorized in `src/Geometry.jl`, related topology
   files, tests, and examples; public breaks require review and migration notes.
@@ -411,7 +454,8 @@ for the normalized edge set, not just a parent-before-child tree stroke list.
   any discovered need for a public break, any unresolved ambiguity in
   multi-parent coordinate semantics that cannot be derived honestly from the
   active sources, or any attempt to hide unresolved ambiguity inside a silent
-  default.
+  default; any attempt to reopen the resolved `lineageunits` semantics above
+  without a named `REVIEW` gate.
 
 ### How to verify
 
@@ -425,6 +469,12 @@ for the normalized edge set, not just a parent-before-child tree stroke list.
 - **Automated**:
   add geometry tests for shared-ancestry DAG process coordinates, transverse
   behavior, stable edge geometry, and true-cycle rejection;
+  add contract tests proving `:nodelevels` uses longest-path semantics,
+  `:nodedepths` uses shortest-path semantics, and `:nodeheights` uses the
+  farthest-descendant leaf;
+  add negative tests proving inconsistent full-network `:edgeweights`,
+  `:branchingtime`, and `:coalescenceage` fail directly until an explicit
+  projection or resolution contract is selected;
   add rooted-tree non-regression tests for existing rectangular and radial
   layouts;
   run `julia --project=test test/runtests.jl`;
@@ -439,10 +489,14 @@ explicit contract.
 - [ ] Given a normalized DAG with shared ancestry, when rectangular or radial
       geometry is computed, then the resulting geometry preserves the full edge
       set with stable identities.
-- [ ] Given a coordinate mode whose semantics are ambiguous on a multi-parent
-      graph, when the user has not supplied the required resolution or
-      projection contract, then the owner fails directly or requires an
-      explicit mode rather than silently inventing one.
+- [ ] Given `:nodelevels`, `:nodedepths`, or `:nodeheights` on a normalized
+      DAG, when geometry is computed, then the owner uses the resolved
+      longest-path, shortest-path, and farthest-descendant semantics defined in
+      this tranche rather than a hidden tree fallback.
+- [ ] Given `:edgeweights`, `:branchingtime`, or `:coalescenceage` on a
+      full-network view whose values are not path-consistent, when the user has
+      not supplied an explicit projection or resolution contract, then the
+      owner fails directly rather than silently inventing one.
 - [ ] Given the old preorder-based helpers named above, when this tranche is
       complete, then they are removed, demoted, or otherwise prevented from
       surviving as the real geometry implementation for DAG-capable lineage
@@ -457,7 +511,8 @@ explicit contract.
 - This tranche addresses lock item 1: DAG is first-class in the core.
 - This tranche addresses the geometry precondition of lock item 2:
   reticulation and hybridization are rendered correctly.
-- This tranche preserves lock item 4: Tier 2 and Tier 3 boundaries are correct.
+- This tranche preserves lock item 4: Tier 2 and Tier 3 boundaries remain the
+  ones already closed by the planning artifacts.
 - This tranche preserves lock item 6: tree behavior survives as the special-case
   path.
 
@@ -491,6 +546,7 @@ explicit contract.
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/reference/generic/space.md`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/reference/plots/text.md`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/explanations/recipes.md`,
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/Makie/src/makielayout/types.jl`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/docs/src/man/net_plot.md`.
 
 ### Primary-goal lock
@@ -671,8 +727,9 @@ verification that fails docs-only cleanup without the underlying owner repair.
 - Mandated line-by-line reading of the parent PRD, this tranche file, and the
   completed outputs of Tranches 1 through 3.
 - Mandated line-by-line reading of `Project.toml`, `ext/PhyloNetworksExt.jl`
-  once introduced, topology-owner files, `src/Geometry.jl`, `src/Layers.jl`,
-  relevant tests, examples, and docs surfaces touched by the extension.
+  once introduced, `test/Project.toml`, topology-owner files,
+  `src/Geometry.jl`, `src/Layers.jl`, relevant tests, examples, and docs
+  surfaces touched by the extension.
 - Mandated reading of upstream primary sources required by this tranche:
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/src/types.jl`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/src/auxiliary.jl`,
@@ -739,6 +796,12 @@ view-mode policy decisions that belong to Tranche 5 into hidden defaults.
 - Canonical green gates remain `julia --project=test test/runtests.jl` and
   `julia --project=docs docs/make.jl`; extension-specific tests and examples
   must prove both extension absence and extension presence behavior.
+- Extension-absence verification must run in the checked-in `test/Project.toml`
+  environment without `PhyloNetworks.jl` present there.
+- Extension-presence verification must also use `test/Project.toml`: activate
+  `--project=test` and add the `PhyloNetworks.jl` package in that environment
+  with public `Pkg.add` workflow, rather than mutating the root project
+  environment.
 
 ### Handoff packet
 
@@ -799,6 +862,9 @@ view-mode policy decisions that belong to Tranche 5 into hidden defaults.
   `PhyloNetworks.jl`;
   add extension integration tests using real upstream fixtures for hybrid nodes,
   major edges, minor edges, and gamma values;
+  run the extension suite once in the checked-in `test/Project.toml`
+  environment without `PhyloNetworks.jl` and once after adding
+  `PhyloNetworks.jl` to that same test environment;
   run `julia --project=test test/runtests.jl`;
   run `julia --project=docs docs/make.jl`;
   rerun affected examples.
@@ -852,22 +918,24 @@ layout logic.
   `STYLE-writing.md`.
 - Mandated line-by-line reading of the parent PRD, this tranche file, and the
   completed outputs of Tranches 1 through 4.
-- Mandated line-by-line reading of extension files, affected topology, geometry,
-  and layer files, docs and examples for network behavior, and all relevant
-  tests added by earlier tranches.
+- Mandated line-by-line reading of extension files, `test/Project.toml`,
+  affected topology, geometry, and layer files, docs and examples for network
+  behavior, and all relevant tests added by earlier tranches.
 - Mandated reading of upstream primary sources required by this tranche:
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/src/compareNetworks.jl`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/src/auxiliary.jl`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/docs/src/man/netmanipulation.md`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl/docs/src/man/net_plot.md`,
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/reference/generic/space.md`,
-  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/reference/plots/text.md`.
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/docs/src/reference/plots/text.md`,
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/Makie.jl/Makie/src/makielayout/types.jl`.
 
 ### Primary-goal lock
 
 - Owns the remaining view-mode and display-policy portion of lock item 2.
-- Closes lock item 4 at Tier 3 completion time by proving the source-specific
-  tranche builds only on already-completed foundational owners.
+- Preserves lock item 4, which is already closed by the parent PRD plus this
+  tranche file, by proving the source-specific tranche builds only on
+  already-completed foundational owners.
 - Closes the remaining Tier 3-facing part of lock item 5 in docs, examples, and
   workflow surfaces touched by final network support.
 - Preserves lock item 6 by keeping rooted-tree and tree-projection behavior
@@ -927,6 +995,12 @@ reproducible.
 - Canonical green gates remain `julia --project=test test/runtests.jl` and
   `julia --project=docs docs/make.jl`; network examples and rendered artifacts
   are also mandatory for tranche completion.
+- Extension-absence verification must run in the checked-in `test/Project.toml`
+  environment without `PhyloNetworks.jl` present there.
+- Extension-presence verification must also use `test/Project.toml`: activate
+  `--project=test` and add the `PhyloNetworks.jl` package in that environment
+  with public `Pkg.add` workflow, rather than mutating the root project
+  environment.
 
 ### Handoff packet
 
@@ -991,6 +1065,9 @@ reproducible.
   such as `displayedtrees` or major-tree utilities where applicable;
   add tests that fail if minor edges disappear in full-network mode or if a
   projected-tree mode is not explicitly named;
+  run the extension suite once in the checked-in `test/Project.toml`
+  environment without `PhyloNetworks.jl` and once after adding
+  `PhyloNetworks.jl` to that same test environment;
   run `julia --project=test test/runtests.jl`;
   run `julia --project=docs docs/make.jl`;
   rerun affected examples and any extension-specific demonstrations.
@@ -1020,7 +1097,8 @@ documentation.
 - Parent PRD note: there is no numbered user-story section.
 - This tranche closes the remaining view-mode and display-policy portion of lock
   item 2: reticulation and hybridization are rendered correctly.
-- This tranche closes lock item 4: Tier 2 and Tier 3 boundaries are correct.
+- This tranche preserves lock item 4: Tier 2 and Tier 3 boundaries remain the
+  ones already closed by the planning artifacts.
 - This tranche closes the remaining Tier 3-facing part of lock item 5:
   documentation, vocabulary, and workflow drift are repaired.
 - This tranche preserves lock item 6: tree behavior survives as the special-case
