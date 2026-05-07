@@ -10,7 +10,8 @@ module Geometry
 
 using Makie: Point2f, Rect2f
 
-using ..Accessors: LineageGraphAccessor, is_leaf, leaves, preorder
+using ..Accessors: LineageGraphAccessor
+using ..Topology: normalize_topology, require_tree_topology, source_nodes
 
 # ── LineageGraphGeometry ────────────────────────────────────────────────────────
 
@@ -72,6 +73,10 @@ end
                        nonultrametric::Symbol=:error) -> LineageGraphGeometry
 
 Compute a rectangular (right-angle) layout for a rooted lineage graph.
+
+In the current tree-only geometry owner, shared-parent lineage graphs are
+rejected after topology normalization. DAG-safe layout policy is deferred to a
+later tranche.
 
 Process coordinates (first `Point2f` component) are determined by `lineageunits`:
 
@@ -135,6 +140,8 @@ A `LineageGraphGeometry` with fully populated fields.
 - `ArgumentError` if `lineageunits = :edgeweights` and any edge weight is negative.
 - `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
   and `nonultrametric = :error`.
+- `ArgumentError` if topology normalization discovers a node with more than one
+  parent edge; shared-parent lineage graphs remain unsupported at the geometry owner.
 """
 function rectangular_layout(
         basenode,
@@ -145,16 +152,7 @@ function rectangular_layout(
     )::LineageGraphGeometry
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
     step = _validate_leaf_spacing(leaf_spacing)
-
-    leaf_list = leaves(accessor, basenode)
-    isempty(leaf_list) && throw(
-        ArgumentError(
-            "lineage graph with basenode $(repr(basenode)) has zero leaves; " *
-                "a layout requires at least one leaf",
-        ),
-    )
-
-    all_nodes = preorder(accessor, basenode)
+    all_nodes, leaf_list = _tree_geometry_inputs(basenode, accessor)
 
     # Bypass modes: both process and transverse coordinates come from the accessor.
     if lineageunits === :nodecoordinates || lineageunits === :nodepos
@@ -183,6 +181,24 @@ function rectangular_layout(
     bb = _compute_boundingbox(node_positions)
 
     return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
+end
+
+function _tree_geometry_inputs(
+        basenode,
+        accessor::LineageGraphAccessor,
+    )::Tuple{Vector{Any}, Vector{Any}}
+    topology = normalize_topology(accessor, basenode)
+    require_tree_topology(topology, "the tree-only geometry owner")
+
+    leaf_list = source_nodes(topology.sink_order)
+    isempty(leaf_list) && throw(
+        ArgumentError(
+            "lineage graph with basenode $(repr(basenode)) has zero leaves; " *
+                "a layout requires at least one leaf",
+        ),
+    )
+    all_nodes = source_nodes(topology.node_order)
+    return all_nodes, leaf_list
 end
 
 # ── Internal: default lineageunits detection ───────────────────────────────────
@@ -609,6 +625,10 @@ end
 
 Compute a circular (radial) layout for a rooted lineage graph.
 
+In the current tree-only geometry owner, shared-parent lineage graphs are
+rejected after topology normalization. DAG-safe layout policy is deferred to a
+later tranche.
+
 Process coordinates (radial distances from the origin) are determined by `lineageunits`
 using the same rules as `rectangular_layout`. Leaves are placed at equal angular
 spacing by default; internal nodes are placed at the mean angle of their children.
@@ -655,6 +675,8 @@ preorder traversal order, and `boundingbox` enclosing all node positions.
 - `ArgumentError` if `lineageunits = :edgeweights` and any edge weight is negative.
 - `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
   and `nonultrametric = :error`.
+- `ArgumentError` if topology normalization discovers a node with more than one
+  parent edge; shared-parent lineage graphs remain unsupported at the geometry owner.
 """
 function circular_layout(
         basenode,
@@ -673,16 +695,7 @@ function circular_layout(
     )
 
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
-
-    leaf_list = leaves(accessor, basenode)
-    isempty(leaf_list) && throw(
-        ArgumentError(
-            "lineage graph with basenode $(repr(basenode)) has zero leaves; " *
-                "a layout requires at least one leaf",
-        ),
-    )
-
-    all_nodes = preorder(accessor, basenode)
+    all_nodes, leaf_list = _tree_geometry_inputs(basenode, accessor)
 
     # Bypass modes: both coordinates come from the accessor; no angular computation.
     if lineageunits === :nodecoordinates || lineageunits === :nodepos

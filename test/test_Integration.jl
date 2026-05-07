@@ -18,6 +18,11 @@ struct IntegrationTestNode
     children::Vector{IntegrationTestNode}
 end
 
+mutable struct IntegrationDagNode
+    name::String
+    children::Vector{IntegrationDagNode}
+end
+
 # 4-leaf balanced tree: root → {ab → {a, b}, cd → {c, d}}
 # Internal nodes: root, ab, cd (3 total); leaves: a, b, c, d (4 total)
 const _IT_BASENODE = IntegrationTestNode("root", [
@@ -49,6 +54,22 @@ const _IT_BASENODE6 = IntegrationTestNode("root6", [
         ]),
     ]),
 ])
+
+const _IT_SHARED_DESCENDANT_DAG = let
+    shared = IntegrationDagNode("shared", IntegrationDagNode[])
+    left = IntegrationDagNode("left", IntegrationDagNode[shared])
+    right = IntegrationDagNode("right", IntegrationDagNode[shared])
+    IntegrationDagNode("root", IntegrationDagNode[left, right])
+end
+
+const _IT_SHARED_DESCENDANT_EDGEWEIGHTS = Dict(
+    ("root", "left") => 1.0,
+    ("root", "right") => 10.0,
+    ("left", "shared") => 2.0,
+    ("right", "shared") => 3.0,
+)
+const _IT_TREE_ONLY_DAG_MESSAGE =
+    "shared-parent lineage graphs are not yet supported by the tree-only geometry owner"
 
 # ── Accessor helper functions ──────────────────────────────────────────────────
 
@@ -88,6 +109,14 @@ const _IT_NODEPOS = Dict{String, CairoMakie.Makie.Point2f}(
 )
 _it_nodepos(node::IntegrationTestNode) = _IT_NODEPOS[node.name]
 
+function _it_dag_accessor()
+    return lineagegraph_accessor(
+        _IT_SHARED_DESCENDANT_DAG;
+        children = node -> node.children,
+        edgeweight = (src, dst) -> _IT_SHARED_DESCENDANT_EDGEWEIGHTS[(src.name, dst.name)],
+    )
+end
+
 function _it_visible_blockscene_strings(lax::LineageAxis)::Vector{String}
     strings = String[]
     for plot in lax.blockscene.plots
@@ -117,6 +146,19 @@ function _it_rgb_channels(pixel)
     g = Float32((word >> 8) & 0xff) / 255.0f0
     b = Float32(word & 0xff) / 255.0f0
     return (r, g, b)
+end
+
+function _it_captured_error(f)
+    try
+        f()
+        return nothing
+    catch err
+        return err
+    end
+end
+
+function _it_root_error(err)
+    return hasproperty(err, :error) ? getproperty(err, :error) : err
 end
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -161,6 +203,53 @@ end
         finally
             isfile(tmpfile) && rm(tmpfile)
         end
+    end
+
+    @testset "lineageplot! rejects shared-descendant DAGs before rendering" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = _it_dag_accessor()
+        err = _it_captured_error(() -> lineageplot!(
+            ax,
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :edgeweights,
+        ))
+        @test err !== nothing
+        @test _it_root_error(err) isa ArgumentError
+        @test occursin(_IT_TREE_ONLY_DAG_MESSAGE, sprint(showerror, err))
+    end
+
+    @testset "lineageplot rejects shared-descendant DAGs on the radial surface" begin
+        acc = _it_dag_accessor()
+        err = _it_captured_error(() -> lineageplot(
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :edgeweights,
+            lineage_orientation = :radial,
+            figure = (; size = (600, 600)),
+        ))
+        @test err !== nothing
+        @test _it_root_error(err) isa ArgumentError
+        @test occursin(_IT_TREE_ONLY_DAG_MESSAGE, sprint(showerror, err))
+    end
+
+    @testset "tree plotting remains green alongside DAG rejection" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = lineagegraph_accessor(
+            _IT_BASENODE;
+            children = node -> node.children,
+            edgeweight = (src, dst) -> 1.0,
+        )
+        lp = @test_nowarn lineageplot!(
+            ax,
+            _IT_BASENODE,
+            acc;
+            lineageunits = :edgeweights,
+        )
+        @test lp isa LineagePlot
+        @test_nowarn CairoMakie.colorbuffer(fig)
     end
 
     @testset "lineageplot! on LineageAxis returns LineagePlot and sets last_geom" begin

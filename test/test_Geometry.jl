@@ -57,6 +57,33 @@ function _acc(basenode)
     return lineagegraph_accessor(basenode; children = node -> node.children)
 end
 
+const _GEO_TOPOLOGY = LineagesMakie.Topology
+const _GEO_SHARED_DESCENDANT_EDGEWEIGHTS = Dict(
+    ("root", "left") => 1.0,
+    ("root", "right") => 10.0,
+    ("left", "shared") => 2.0,
+    ("right", "shared") => 3.0,
+)
+const _GEO_TREE_ONLY_DAG_MESSAGE =
+    "shared-parent lineage graphs are not yet supported by the tree-only geometry owner"
+
+function _dag_weighted_acc()
+    return lineagegraph_accessor(
+        SHARED_DESCENDANT_DAG;
+        children = node -> node.children,
+        edgeweight = (src, dst) -> _GEO_SHARED_DESCENDANT_EDGEWEIGHTS[(src.name, dst.name)],
+    )
+end
+
+function _captured_error(f)
+    try
+        f()
+        return nothing
+    catch err
+        return err
+    end
+end
+
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
 @testset "Geometry" begin
@@ -394,6 +421,53 @@ end
         @test_throws ArgumentError rectangular_layout(
             GEO_BALANCED, acc; lineageunits = :edgeweights,
         )
+    end
+
+    @testset "shared-descendant DAG — topology succeeds while geometry rejects tree-only boundary" begin
+        acc = _dag_weighted_acc()
+        shared = SHARED_DESCENDANT_DAG.children[1].children[1]
+
+        topology = _GEO_TOPOLOGY.normalize_topology(acc, SHARED_DESCENDANT_DAG)
+        shared_node = _GEO_TOPOLOGY.normalized_node(topology, shared)
+
+        @test length(_GEO_TOPOLOGY.parent_incidence(topology, shared_node)) == 2
+        @test [node.name for node in leaves(acc, SHARED_DESCENDANT_DAG)] == ["shared"]
+        @test [node.name for node in preorder(acc, SHARED_DESCENDANT_DAG)] ==
+            ["root", "left", "right", "shared"]
+
+        for layout_call in (
+                () -> rectangular_layout(
+                    SHARED_DESCENDANT_DAG,
+                    acc;
+                    lineageunits = :edgeweights,
+                ),
+                () -> rectangular_layout(
+                    SHARED_DESCENDANT_DAG,
+                    acc;
+                    lineageunits = :nodelevels,
+                ),
+                () -> circular_layout(
+                    SHARED_DESCENDANT_DAG,
+                    acc;
+                    lineageunits = :edgeweights,
+                ),
+            )
+            err = _captured_error(layout_call)
+            @test err isa ArgumentError
+            @test occursin(_GEO_TREE_ONLY_DAG_MESSAGE, sprint(showerror, err))
+        end
+    end
+
+    @testset "tree-only DAG guard preserves rooted-tree geometry" begin
+        acc = lineagegraph_accessor(
+            GEO_BALANCED;
+            children = node -> node.children,
+            edgeweight = (src, dst) -> 1.0,
+        )
+        @test rectangular_layout(GEO_BALANCED, acc; lineageunits = :edgeweights) isa
+            LineageGraphGeometry
+        @test circular_layout(GEO_BALANCED, acc; lineageunits = :edgeweights) isa
+            LineageGraphGeometry
     end
 
     # ── :branchingtime ──────────────────────────────────────────────────────────

@@ -92,6 +92,24 @@ function source_nodes(nodes::Vector{NormalizedNode{Any}})::Vector{Any}
     return Any[node.source_node for node in nodes]
 end
 
+function require_tree_topology(
+        topology::NormalizedTopology{Any},
+        owner_name::AbstractString,
+    )::NormalizedTopology{Any}
+    for node in topology.node_order
+        parent_count = length(parent_incidence(topology, node))
+        parent_count <= 1 && continue
+        throw(
+            ArgumentError(
+                "shared-parent lineage graphs are not yet supported by $(owner_name); " *
+                    "node $(repr(node.source_node)) has $(parent_count) parent edges " *
+                    "after topology normalization",
+            ),
+        )
+    end
+    return topology
+end
+
 function _visit!(
         accessor,
         source_node,
@@ -218,6 +236,7 @@ export child_incidence
 export normalize_topology
 export normalized_node
 export parent_incidence
+export require_tree_topology
 export source_nodes
 
 end # module Topology
