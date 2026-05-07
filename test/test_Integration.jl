@@ -62,14 +62,26 @@ const _IT_SHARED_DESCENDANT_DAG = let
     IntegrationDagNode("root", IntegrationDagNode[left, right])
 end
 
-const _IT_SHARED_DESCENDANT_EDGEWEIGHTS = Dict(
+const _IT_SHARED_DESCENDANT_CONSISTENT_EDGEWEIGHTS = Dict(
+    ("root", "left") => 1.0,
+    ("root", "right") => 1.0,
+    ("left", "shared") => 2.0,
+    ("right", "shared") => 2.0,
+)
+const _IT_SHARED_DESCENDANT_INCONSISTENT_EDGEWEIGHTS = Dict(
     ("root", "left") => 1.0,
     ("root", "right") => 10.0,
     ("left", "shared") => 2.0,
     ("right", "shared") => 3.0,
 )
-const _IT_TREE_ONLY_DAG_MESSAGE =
-    "shared-parent lineage graphs are not yet supported by the tree-only geometry owner"
+
+function _it_dag_nodes()
+    root = _IT_SHARED_DESCENDANT_DAG
+    left = root.children[1]
+    right = root.children[2]
+    shared = left.children[1]
+    return (; root, left, right, shared)
+end
 
 # ── Accessor helper functions ──────────────────────────────────────────────────
 
@@ -109,11 +121,12 @@ const _IT_NODEPOS = Dict{String, CairoMakie.Makie.Point2f}(
 )
 _it_nodepos(node::IntegrationTestNode) = _IT_NODEPOS[node.name]
 
-function _it_dag_accessor()
+function _it_dag_accessor(; edgeweights = nothing)
     return lineagegraph_accessor(
         _IT_SHARED_DESCENDANT_DAG;
         children = node -> node.children,
-        edgeweight = (src, dst) -> _IT_SHARED_DESCENDANT_EDGEWEIGHTS[(src.name, dst.name)],
+        edgeweight = edgeweights === nothing ? nothing :
+            (src, dst) -> edgeweights[(src.name, dst.name)],
     )
 end
 
@@ -205,10 +218,33 @@ end
         end
     end
 
-    @testset "lineageplot! rejects shared-descendant DAGs before rendering" begin
+    @testset "lineageplot! renders DAG-safe shared-descendant geometry on Axis" begin
         fig = Figure(; size = (600, 400))
         ax = Axis(fig[1, 1])
         acc = _it_dag_accessor()
+        nodes = _it_dag_nodes()
+        lp = @test_nowarn lineageplot!(
+            ax,
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodelevels,
+        )
+        geom = lp[:computed_geom][]
+        @test lp isa LineagePlot
+        @test length(geom.node_positions) == 4
+        @test [(src.name, dst.name) for (src, dst) in geom.edges] ==
+            [("root", "left"), ("left", "shared"), ("root", "right"), ("right", "shared")]
+        @test geom.node_positions[nodes.root][1] ≈ 0.0
+        @test geom.node_positions[nodes.left][1] ≈ 1.0
+        @test geom.node_positions[nodes.right][1] ≈ 1.0
+        @test geom.node_positions[nodes.shared][1] ≈ 2.0
+        @test_nowarn CairoMakie.colorbuffer(fig)
+    end
+
+    @testset "lineageplot! fails explicitly for inconsistent weighted shared-descendant DAGs" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = _it_dag_accessor(; edgeweights = _IT_SHARED_DESCENDANT_INCONSISTENT_EDGEWEIGHTS)
         err = _it_captured_error(() -> lineageplot!(
             ax,
             _IT_SHARED_DESCENDANT_DAG,
@@ -217,24 +253,34 @@ end
         ))
         @test err !== nothing
         @test _it_root_error(err) isa ArgumentError
-        @test occursin(_IT_TREE_ONLY_DAG_MESSAGE, sprint(showerror, err))
+        @test occursin("additive full-network consistency", sprint(showerror, err))
+        @test occursin("projected-tree", sprint(showerror, err))
     end
 
-    @testset "lineageplot rejects shared-descendant DAGs on the radial surface" begin
-        acc = _it_dag_accessor()
-        err = _it_captured_error(() -> lineageplot(
+    @testset "lineageplot renders shared-descendant DAG on the radial surface" begin
+        acc = _it_dag_accessor(; edgeweights = _IT_SHARED_DESCENDANT_CONSISTENT_EDGEWEIGHTS)
+        nodes = _it_dag_nodes()
+        plot_result = lineageplot(
             _IT_SHARED_DESCENDANT_DAG,
             acc;
             lineageunits = :edgeweights,
             lineage_orientation = :radial,
             figure = (; size = (600, 600)),
-        ))
-        @test err !== nothing
-        @test _it_root_error(err) isa ArgumentError
-        @test occursin(_IT_TREE_ONLY_DAG_MESSAGE, sprint(showerror, err))
+        )
+        @test plot_result isa CairoMakie.Makie.FigureAxisPlot
+        fig, lax, lp = plot_result
+        geom = lp[:computed_geom][]
+        @test lax.last_geom[] !== nothing
+        @test [(src.name, dst.name) for (src, dst) in geom.edges] ==
+            [("root", "left"), ("left", "shared"), ("root", "right"), ("right", "shared")]
+        @test hypot(geom.node_positions[nodes.root]...) ≈ 0.0 atol = 1e-8
+        @test hypot(geom.node_positions[nodes.left]...) ≈ 1.0 atol = 1e-6
+        @test hypot(geom.node_positions[nodes.right]...) ≈ 1.0 atol = 1e-6
+        @test hypot(geom.node_positions[nodes.shared]...) ≈ 3.0 atol = 1e-6
+        @test_nowarn CairoMakie.colorbuffer(fig)
     end
 
-    @testset "tree plotting remains green alongside DAG rejection" begin
+    @testset "tree plotting remains green alongside DAG support" begin
         fig = Figure(; size = (600, 400))
         ax = Axis(fig[1, 1])
         acc = lineagegraph_accessor(

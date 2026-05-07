@@ -58,21 +58,106 @@ function _acc(basenode)
 end
 
 const _GEO_TOPOLOGY = LineagesMakie.Topology
-const _GEO_SHARED_DESCENDANT_EDGEWEIGHTS = Dict(
+const _GEO_SHARED_DESCENDANT_CONSISTENT_EDGEWEIGHTS = Dict(
+    ("root", "left") => 1.0,
+    ("root", "right") => 1.0,
+    ("left", "shared") => 2.0,
+    ("right", "shared") => 2.0,
+)
+const _GEO_SHARED_DESCENDANT_INCONSISTENT_EDGEWEIGHTS = Dict(
     ("root", "left") => 1.0,
     ("root", "right") => 10.0,
     ("left", "shared") => 2.0,
     ("right", "shared") => 3.0,
 )
-const _GEO_TREE_ONLY_DAG_MESSAGE =
-    "shared-parent lineage graphs are not yet supported by the tree-only geometry owner"
+const _GEO_SHARED_DESCENDANT_CONSISTENT_BRANCHINGTIMES = Dict(
+    "root" => 0.0,
+    "left" => 1.0,
+    "right" => 1.0,
+    "shared" => 3.0,
+)
+const _GEO_SHARED_DESCENDANT_INCONSISTENT_BRANCHINGTIMES = Dict(
+    "root" => 0.0,
+    "left" => 1.0,
+    "right" => 10.0,
+    "shared" => 3.0,
+)
+const _GEO_SHARED_DESCENDANT_CONSISTENT_COALESCENCEAGES = Dict(
+    "root" => 3.0,
+    "left" => 1.0,
+    "right" => 1.0,
+    "shared" => 0.0,
+)
+const _GEO_SHARED_DESCENDANT_INCONSISTENT_COALESCENCEAGES = Dict(
+    "root" => 5.0,
+    "left" => 3.0,
+    "right" => 4.0,
+    "shared" => 4.5,
+)
+const _GEO_SHARED_DESCENDANT_NODECOORDINATES = Dict(
+    "root" => Point2f(0, 1),
+    "left" => Point2f(1, 2),
+    "right" => Point2f(1, 4),
+    "shared" => Point2f(2, 3),
+)
+const _GEO_SHARED_DESCENDANT_NODEPOS = Dict(
+    "root" => Point2f(10, 10),
+    "left" => Point2f(20, 20),
+    "right" => Point2f(20, 40),
+    "shared" => Point2f(30, 30),
+)
 
-function _dag_weighted_acc()
+function _dag_nodes()
+    root = SHARED_DESCENDANT_DAG
+    left = root.children[1]
+    right = root.children[2]
+    shared = left.children[1]
+    return (; root, left, right, shared)
+end
+
+function _dag_acc(;
+        edgeweights = nothing,
+        branchingtimes = nothing,
+        coalescenceages = nothing,
+        nodecoordinates = nothing,
+        nodepos = nothing,
+    )
     return lineagegraph_accessor(
         SHARED_DESCENDANT_DAG;
         children = node -> node.children,
-        edgeweight = (src, dst) -> _GEO_SHARED_DESCENDANT_EDGEWEIGHTS[(src.name, dst.name)],
+        edgeweight = edgeweights === nothing ? nothing :
+            (src, dst) -> edgeweights[(src.name, dst.name)],
+        branchingtime = branchingtimes === nothing ? nothing :
+            node -> branchingtimes[node.name],
+        coalescenceage = coalescenceages === nothing ? nothing :
+            node -> coalescenceages[node.name],
+        nodecoordinates = nodecoordinates === nothing ? nothing :
+            node -> nodecoordinates[node.name],
+        nodepos = nodepos === nothing ? nothing :
+            node -> nodepos[node.name],
     )
+end
+
+function _expected_dag_edges(acc)
+    topology = _GEO_TOPOLOGY.normalize_topology(acc, SHARED_DESCENDANT_DAG)
+    return Tuple{Any, Any}[
+        (edge.src.source_node, edge.dst.source_node) for edge in topology.edges
+    ]
+end
+
+function _assert_edge_contract(geom, expected_edges)
+    @test geom.edges == expected_edges
+    @test length(geom.edge_shapes) == 4 * length(expected_edges)
+    @test count(p -> isnan(p[1]) && isnan(p[2]), geom.edge_shapes) == length(expected_edges)
+end
+
+function _assert_direct_edge_shapes(geom)
+    for (i, (src, dst)) in enumerate(geom.edges)
+        quartet = geom.edge_shapes[(4 * (i - 1) + 1):(4 * i)]
+        @test quartet[1] ≈ geom.node_positions[src]
+        @test quartet[3] ≈ geom.node_positions[dst]
+        @test isnan(quartet[4][1]) && isnan(quartet[4][2])
+    end
 end
 
 function _captured_error(f)
@@ -423,42 +508,179 @@ end
         )
     end
 
-    @testset "shared-descendant DAG — topology succeeds while geometry rejects tree-only boundary" begin
-        acc = _dag_weighted_acc()
-        shared = SHARED_DESCENDANT_DAG.children[1].children[1]
-
+    @testset "shared-descendant DAG — DAG-safe rectangular units preserve normalized edges" begin
+        nodes = _dag_nodes()
+        acc = _dag_acc(
+            nodecoordinates = _GEO_SHARED_DESCENDANT_NODECOORDINATES,
+            nodepos = _GEO_SHARED_DESCENDANT_NODEPOS,
+        )
         topology = _GEO_TOPOLOGY.normalize_topology(acc, SHARED_DESCENDANT_DAG)
-        shared_node = _GEO_TOPOLOGY.normalized_node(topology, shared)
+        shared_node = _GEO_TOPOLOGY.normalized_node(topology, nodes.shared)
+        expected_edges = _expected_dag_edges(acc)
 
         @test length(_GEO_TOPOLOGY.parent_incidence(topology, shared_node)) == 2
         @test [node.name for node in leaves(acc, SHARED_DESCENDANT_DAG)] == ["shared"]
         @test [node.name for node in preorder(acc, SHARED_DESCENDANT_DAG)] ==
             ["root", "left", "right", "shared"]
+        @test expected_edges == Tuple{Any, Any}[
+            (nodes.root, nodes.left),
+            (nodes.left, nodes.shared),
+            (nodes.root, nodes.right),
+            (nodes.right, nodes.shared),
+        ]
 
-        for layout_call in (
-                () -> rectangular_layout(
-                    SHARED_DESCENDANT_DAG,
-                    acc;
-                    lineageunits = :edgeweights,
-                ),
-                () -> rectangular_layout(
-                    SHARED_DESCENDANT_DAG,
-                    acc;
-                    lineageunits = :nodelevels,
-                ),
-                () -> circular_layout(
-                    SHARED_DESCENDANT_DAG,
-                    acc;
-                    lineageunits = :edgeweights,
-                ),
+        geom_levels = rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodelevels,
+        )
+        _assert_edge_contract(geom_levels, expected_edges)
+        @test length(geom_levels.node_positions) == length(topology.node_order)
+        @test geom_levels.node_positions[nodes.root][1] ≈ 0.0
+        @test geom_levels.node_positions[nodes.left][1] ≈ 1.0
+        @test geom_levels.node_positions[nodes.right][1] ≈ 1.0
+        @test geom_levels.node_positions[nodes.shared][1] ≈ 2.0
+        @test geom_levels.leaf_order == Any[nodes.shared]
+
+        geom_depths = rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodedepths,
+        )
+        _assert_edge_contract(geom_depths, expected_edges)
+        @test geom_depths.node_positions[nodes.root][1] ≈ 0.0
+        @test geom_depths.node_positions[nodes.left][1] ≈ 1.0
+        @test geom_depths.node_positions[nodes.right][1] ≈ 1.0
+        @test geom_depths.node_positions[nodes.shared][1] ≈ 2.0
+
+        geom_heights = rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodeheights,
+        )
+        _assert_edge_contract(geom_heights, expected_edges)
+        @test geom_heights.node_positions[nodes.root][1] ≈ 2.0
+        @test geom_heights.node_positions[nodes.left][1] ≈ 1.0
+        @test geom_heights.node_positions[nodes.right][1] ≈ 1.0
+        @test geom_heights.node_positions[nodes.shared][1] ≈ 0.0
+    end
+
+    @testset "shared-descendant DAG — explicit-coordinate units preserve supplied positions" begin
+        nodes = _dag_nodes()
+        acc = _dag_acc(
+            nodecoordinates = _GEO_SHARED_DESCENDANT_NODECOORDINATES,
+            nodepos = _GEO_SHARED_DESCENDANT_NODEPOS,
+        )
+        expected_edges = _expected_dag_edges(acc)
+
+        for (layout, lineageunits, expected_positions) in (
+                (rectangular_layout, :nodecoordinates, _GEO_SHARED_DESCENDANT_NODECOORDINATES),
+                (rectangular_layout, :nodepos, _GEO_SHARED_DESCENDANT_NODEPOS),
+                (circular_layout, :nodecoordinates, _GEO_SHARED_DESCENDANT_NODECOORDINATES),
+                (circular_layout, :nodepos, _GEO_SHARED_DESCENDANT_NODEPOS),
             )
-            err = _captured_error(layout_call)
-            @test err isa ArgumentError
-            @test occursin(_GEO_TREE_ONLY_DAG_MESSAGE, sprint(showerror, err))
+            geom = layout(
+                SHARED_DESCENDANT_DAG,
+                acc;
+                lineageunits = lineageunits,
+            )
+            _assert_edge_contract(geom, expected_edges)
+            _assert_direct_edge_shapes(geom)
+            @test geom.node_positions[nodes.root] ≈ expected_positions["root"]
+            @test geom.node_positions[nodes.left] ≈ expected_positions["left"]
+            @test geom.node_positions[nodes.right] ≈ expected_positions["right"]
+            @test geom.node_positions[nodes.shared] ≈ expected_positions["shared"]
         end
     end
 
-    @testset "tree-only DAG guard preserves rooted-tree geometry" begin
+    @testset "shared-descendant DAG — weighted full-network units are explicit and honest" begin
+        nodes = _dag_nodes()
+        consistent_acc = _dag_acc(
+            edgeweights = _GEO_SHARED_DESCENDANT_CONSISTENT_EDGEWEIGHTS,
+            branchingtimes = _GEO_SHARED_DESCENDANT_CONSISTENT_BRANCHINGTIMES,
+            coalescenceages = _GEO_SHARED_DESCENDANT_CONSISTENT_COALESCENCEAGES,
+        )
+        expected_edges = _expected_dag_edges(consistent_acc)
+
+        geom_edgeweights = rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            consistent_acc;
+            lineageunits = :edgeweights,
+        )
+        _assert_edge_contract(geom_edgeweights, expected_edges)
+        @test geom_edgeweights.node_positions[nodes.root][1] ≈ 0.0
+        @test geom_edgeweights.node_positions[nodes.left][1] ≈ 1.0
+        @test geom_edgeweights.node_positions[nodes.right][1] ≈ 1.0
+        @test geom_edgeweights.node_positions[nodes.shared][1] ≈ 3.0
+
+        geom_branchingtime = rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            consistent_acc;
+            lineageunits = :branchingtime,
+        )
+        _assert_edge_contract(geom_branchingtime, expected_edges)
+        @test geom_branchingtime.node_positions[nodes.root][1] ≈ 0.0
+        @test geom_branchingtime.node_positions[nodes.left][1] ≈ 1.0
+        @test geom_branchingtime.node_positions[nodes.right][1] ≈ 1.0
+        @test geom_branchingtime.node_positions[nodes.shared][1] ≈ 3.0
+
+        geom_coalescenceage = rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            consistent_acc;
+            lineageunits = :coalescenceage,
+        )
+        _assert_edge_contract(geom_coalescenceage, expected_edges)
+        @test geom_coalescenceage.node_positions[nodes.root][1] ≈ 3.0
+        @test geom_coalescenceage.node_positions[nodes.left][1] ≈ 1.0
+        @test geom_coalescenceage.node_positions[nodes.right][1] ≈ 1.0
+        @test geom_coalescenceage.node_positions[nodes.shared][1] ≈ 0.0
+
+        geom_radial = circular_layout(
+            SHARED_DESCENDANT_DAG,
+            consistent_acc;
+            lineageunits = :edgeweights,
+        )
+        _assert_edge_contract(geom_radial, expected_edges)
+        @test hypot(geom_radial.node_positions[nodes.root]...) ≈ 0.0 atol = 1e-8
+        @test hypot(geom_radial.node_positions[nodes.left]...) ≈ 1.0 atol = 1e-6
+        @test hypot(geom_radial.node_positions[nodes.right]...) ≈ 1.0 atol = 1e-6
+        @test hypot(geom_radial.node_positions[nodes.shared]...) ≈ 3.0 atol = 1e-6
+
+        inconsistent_acc = _dag_acc(
+            edgeweights = _GEO_SHARED_DESCENDANT_INCONSISTENT_EDGEWEIGHTS,
+            branchingtimes = _GEO_SHARED_DESCENDANT_INCONSISTENT_BRANCHINGTIMES,
+            coalescenceages = _GEO_SHARED_DESCENDANT_INCONSISTENT_COALESCENCEAGES,
+        )
+
+        edgeweight_err = _captured_error(() -> rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            inconsistent_acc;
+            lineageunits = :edgeweights,
+        ))
+        @test edgeweight_err isa ArgumentError
+        @test occursin("additive full-network consistency", sprint(showerror, edgeweight_err))
+        @test occursin("projected-tree", sprint(showerror, edgeweight_err))
+
+        branchingtime_err = _captured_error(() -> rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            inconsistent_acc;
+            lineageunits = :branchingtime,
+        ))
+        @test branchingtime_err isa ArgumentError
+        @test occursin("forward full-network-consistent", sprint(showerror, branchingtime_err))
+        @test occursin("projected-tree", sprint(showerror, branchingtime_err))
+
+        coalescenceage_err = _captured_error(() -> rectangular_layout(
+            SHARED_DESCENDANT_DAG,
+            inconsistent_acc;
+            lineageunits = :coalescenceage,
+        ))
+        @test coalescenceage_err isa ArgumentError
+        @test occursin("backward full-network-consistent", sprint(showerror, coalescenceage_err))
+        @test occursin("projected-tree", sprint(showerror, coalescenceage_err))
+    end
+
+    @testset "topology-backed DAG geometry preserves rooted-tree behavior" begin
         acc = lineagegraph_accessor(
             GEO_BALANCED;
             children = node -> node.children,

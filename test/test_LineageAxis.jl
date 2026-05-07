@@ -37,6 +37,23 @@ const _LA_BALANCED_BASENODE = LATestNode("root", [
 const _LA_ACC = lineagegraph_accessor(_LA_BALANCED_BASENODE; children = node -> node.children)
 const _LA_NONBASENODE_CLADE = _LA_BALANCED_BASENODE.children[1]
 
+mutable struct LADagNode
+    name::String
+    children::Vector{LADagNode}
+end
+
+const _LA_SHARED_DESCENDANT_DAG = let
+    shared = LADagNode("shared", LADagNode[])
+    left = LADagNode("left", LADagNode[shared])
+    right = LADagNode("right", LADagNode[shared])
+    LADagNode("root", LADagNode[left, right])
+end
+
+const _LA_DAG_ACC = lineagegraph_accessor(
+    _LA_SHARED_DESCENDANT_DAG;
+    children = node -> node.children,
+)
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 function _fresh_lax(; kwargs...)
@@ -88,6 +105,23 @@ end
         fig, lax, lp = _plotted_lax()
         @test lp isa LineagePlot
         @test lax.last_geom[] !== nothing
+        @test_nowarn colorbuffer(fig)
+    end
+
+    @testset "shared-descendant DAG lineageplot! on LineageAxis renders without error" begin
+        fig, lax = _fresh_lax()
+        lp = lineageplot!(
+            lax,
+            _LA_SHARED_DESCENDANT_DAG,
+            _LA_DAG_ACC;
+            lineageunits = :nodelevels,
+        )
+        geom = lax.last_geom[]
+        @test lp isa LineagePlot
+        @test geom !== nothing
+        @test length(geom.node_positions) == 4
+        @test [(src.name, dst.name) for (src, dst) in geom.edges] ==
+            [("root", "left"), ("left", "shared"), ("root", "right"), ("right", "shared")]
         @test_nowarn colorbuffer(fig)
     end
 

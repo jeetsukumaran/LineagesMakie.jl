@@ -11,7 +11,13 @@ module Geometry
 using Makie: Point2f, Rect2f
 
 using ..Accessors: LineageGraphAccessor
-using ..Topology: normalize_topology, require_tree_topology, source_nodes
+using ..Topology:
+    NormalizedNode,
+    NormalizedTopology,
+    child_incidence,
+    normalize_topology,
+    parent_incidence,
+    source_nodes
 
 # ── LineageGraphGeometry ────────────────────────────────────────────────────────
 
@@ -36,9 +42,10 @@ Fields:
   exactly 4 entries (3 geometry points + 1 NaN separator). Suitable for a single
   `lines!` call.
 - `edges::Vector{Tuple{NodeT,NodeT}}`: `(src, dst)` pairs in the same
-  traversal order as `edge_shapes`. `edges[i]` corresponds to the i-th
-  NaN-terminated group of 4 points in `edge_shapes`. Used by rendering layers
-  to expand per-edge attribute functions without re-traversing the source tree.
+  normalized-topology edge order as `edge_shapes`. `edges[i]` corresponds to
+  the i-th NaN-terminated group of 4 points in `edge_shapes`. Used by
+  rendering layers to expand per-edge attribute functions without re-traversing
+  the source tree.
 - `leaf_order::Vector{NodeT}`: leaves in the order they appear along the transverse
   axis (preorder depth-first traversal order).
 - `boundingbox::Rect2f`: smallest axis-aligned rectangle enclosing all entries
@@ -74,9 +81,9 @@ end
 
 Compute a rectangular (right-angle) layout for a rooted lineage graph.
 
-In the current tree-only geometry owner, shared-parent lineage graphs are
-rejected after topology normalization. DAG-safe layout policy is deferred to a
-later tranche.
+The geometry owner normalizes the lineage graph once and then consumes the
+normalized topology as its authority for node order, sink order, parent
+incidence, child incidence, and edge order.
 
 Process coordinates (first `Point2f` component) are determined by `lineageunits`:
 
@@ -85,24 +92,29 @@ Process coordinates (first `Point2f` component) are determined by `lineageunits`
   toward leaves. Missing edge weights emit `@warn` and fall back to 1.0;
   negative edge weights raise `ArgumentError`.
 - `:branchingtime` — per-node branching time read directly from
-  `branchingtime(node)`; requires `branchingtime` accessor; `basenode` = 0.
+  `branchingtime(node)`; requires `branchingtime` accessor. Every normalized
+  edge must remain forward-monotone (`branchingtime(dst) ≥ branchingtime(src)`).
 - `:coalescenceage` — per-node coalescence age read from
   `coalescenceage(node)`; requires `coalescenceage` accessor; leaves = 0,
-  increases toward the basenode. Non-ultrametric inputs are controlled by `nonultrametric`.
-- `:nodedepths` — integer edge count from `basenode`; `basenode` = 0,
-  increases by 1 per edge. No accessor required.
-- `:nodeheights` — per-node height: edge count to the farthest descendant
-  leaf. Leaves = 0, basenode = maximum. No accessor required.
-- `:nodelevels` — edge count from `basenode`: basenode = 0, leaves = maximum.
-  Equal inter-level spacing. No accessor required.
+  increases toward the basenode. On shared-parent lineage graphs, every
+  normalized edge must remain backward-monotone
+  (`coalescenceage(src) ≥ coalescenceage(dst)`). Tree-only non-ultrametric
+  inputs are controlled by `nonultrametric`.
+- `:nodedepths` — shortest directed path length (edge count) from `basenode`;
+  `basenode` = 0, increases by 1 per edge. No accessor required.
+- `:nodeheights` — longest directed path length (edge count) to any descendant
+  sink. Sinks = 0, basenode = maximum. No accessor required.
+- `:nodelevels` — longest directed path length (edge count) from `basenode`:
+  `basenode` = 0, leaves or sinks = maximum. Equal inter-level spacing. No
+  accessor required.
 - `:nodecoordinates` — user-supplied `Point2f` data coordinates read from
-  `nodecoordinates(node)`; requires `nodecoordinates` accessor. Bypasses layout
-  computation entirely; both process and transverse coordinates come from the
-  accessor.
+  `nodecoordinates(node)`; requires `nodecoordinates` accessor. Bypasses
+  layout computation entirely; both process and transverse coordinates come
+  from the accessor.
 - `:nodepos` — user-supplied `Point2f` pixel coordinates read from
-  `nodepos(node)`; requires `nodepos` accessor. Same geometry-layer
-  behaviour as `:nodecoordinates`; the semantic distinction (data vs pixel space)
-  is documented here but not enforced at the geometry layer.
+  `nodepos(node)`; requires `nodepos` accessor. Same geometry-layer behaviour
+  as `:nodecoordinates`; the semantic distinction (data vs pixel space) is
+  documented here but not enforced at the geometry layer.
 
 **Default detection:** if `lineageunits` is not supplied (or `nothing`), the
 default is `:edgeweights` when an `edgeweight` accessor is present; otherwise
@@ -112,9 +124,12 @@ Transverse coordinates (second `Point2f` component) place leaves at equal
 intervals by default (`leaf_spacing = :equal`). The `leaf_order` field records
 the leaf sequence.
 
-Each edge `src → dst` contributes a right-angle polyline:
+For units that synthesize rectangular coordinates, each edge `src → dst`
+contributes a right-angle polyline:
   `(x_src, y_src) → (x_src, y_dst) → (x_dst, y_dst)`
-followed by a `Point2f(NaN, NaN)` separator.
+followed by a `Point2f(NaN, NaN)` separator. Explicit-coordinate units preserve
+the supplied node positions and connect them with direct segments while keeping
+the same 4-point-per-edge storage contract.
 
 # Arguments
 - `basenode`: basenode of the lineage graph; first positional argument.
@@ -140,8 +155,9 @@ A `LineageGraphGeometry` with fully populated fields.
 - `ArgumentError` if `lineageunits = :edgeweights` and any edge weight is negative.
 - `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
   and `nonultrametric = :error`.
-- `ArgumentError` if topology normalization discovers a node with more than one
-  parent edge; shared-parent lineage graphs remain unsupported at the geometry owner.
+- `ArgumentError` if a weighted full-network unit encounters inconsistent
+  multi-parent coordinates and therefore requires an explicit projected-tree or
+  other named resolution contract.
 """
 function rectangular_layout(
         basenode,
@@ -152,7 +168,7 @@ function rectangular_layout(
     )::LineageGraphGeometry
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
     step = _validate_leaf_spacing(leaf_spacing)
-    all_nodes, leaf_list = _tree_geometry_inputs(basenode, accessor)
+    topology = _normalized_geometry_inputs(basenode, accessor)
 
     # Bypass modes: both process and transverse coordinates come from the accessor.
     if lineageunits === :nodecoordinates || lineageunits === :nodepos
@@ -163,42 +179,45 @@ function rectangular_layout(
                     "but none was supplied",
             ),
         )
-        node_positions = Dict{Any, Point2f}(node => Point2f(accessor_fn(node)) for node in all_nodes)
-        pc = Dict{Any, Float64}(node => Float64(node_positions[node][1]) for node in all_nodes)
-        tc = Dict{Any, Float64}(node => Float64(node_positions[node][2]) for node in all_nodes)
-        edge_shapes = _build_edge_shapes(all_nodes, accessor, pc, tc)
-        edges = _build_edge_list(all_nodes, accessor)
+        node_positions = _explicit_node_positions(topology, accessor_fn)
+        edge_shapes = _build_direct_edge_shapes(topology, node_positions)
+        edges = _build_edge_list(topology)
         bb = _compute_boundingbox(node_positions)
+        leaf_list = source_nodes(topology.sink_order)
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coordinates = _process_coordinates(basenode, accessor, lineageunits, all_nodes, nonultrametric)
-    transverse_coordinates = _assign_transverse(leaf_list, accessor, all_nodes, step)
+    process_coordinates = _process_coordinates(topology, accessor, lineageunits, nonultrametric)
+    transverse_coordinates = _transverse_coordinates(topology, step)
 
-    node_positions = _build_node_positions(all_nodes, process_coordinates, transverse_coordinates)
-    edge_shapes = _build_edge_shapes(all_nodes, accessor, process_coordinates, transverse_coordinates)
-    edges = _build_edge_list(all_nodes, accessor)
+    node_positions = _build_node_positions(topology.node_order, process_coordinates, transverse_coordinates)
+    edge_shapes = _build_edge_shapes(topology, process_coordinates, transverse_coordinates)
+    edges = _build_edge_list(topology)
+    leaf_list = _ordered_sinks(topology, transverse_coordinates)
     bb = _compute_boundingbox(node_positions)
 
     return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
 end
 
-function _tree_geometry_inputs(
+function _normalized_geometry_inputs(
         basenode,
         accessor::LineageGraphAccessor,
-    )::Tuple{Vector{Any}, Vector{Any}}
+    )::NormalizedTopology{Any}
     topology = normalize_topology(accessor, basenode)
-    require_tree_topology(topology, "the tree-only geometry owner")
-
-    leaf_list = source_nodes(topology.sink_order)
-    isempty(leaf_list) && throw(
+    isempty(topology.sink_order) && throw(
         ArgumentError(
             "lineage graph with basenode $(repr(basenode)) has zero leaves; " *
                 "a layout requires at least one leaf",
         ),
     )
-    all_nodes = source_nodes(topology.node_order)
-    return all_nodes, leaf_list
+    return topology
+end
+
+function _is_tree_topology(topology::NormalizedTopology{Any})::Bool
+    for node in topology.node_order
+        length(parent_incidence(topology, node)) <= 1 || return false
+    end
+    return true
 end
 
 # ── Internal: default lineageunits detection ───────────────────────────────────
@@ -245,16 +264,15 @@ end
 # ── Internal: process coordinate computation ───────────────────────────────────
 
 function _process_coordinates(
-        basenode,
+        topology::NormalizedTopology{Any},
         accessor::LineageGraphAccessor,
         lineageunits::Symbol,
-        all_nodes::Vector,
         nonultrametric::Symbol,
     )::Dict{Any, Float64}
     if lineageunits === :nodeheights
-        return _nodeheights(all_nodes, accessor)
+        return _nodeheights(topology)
     elseif lineageunits === :nodelevels
-        return _nodelevels(basenode, all_nodes, accessor)
+        return _nodelevels(topology)
     elseif lineageunits === :edgeweights
         accessor.edgeweight === nothing && throw(
             ArgumentError(
@@ -262,12 +280,7 @@ function _process_coordinates(
                     "but none was supplied",
             ),
         )
-        return _cumulative_preorder(
-            basenode,
-            all_nodes,
-            accessor,
-            (src, dst) -> _safe_edgeweight(accessor, src, dst),
-        )
+        return _edgeweight_coordinates(topology, accessor)
     elseif lineageunits === :branchingtime
         accessor.branchingtime === nothing && throw(
             ArgumentError(
@@ -275,15 +288,9 @@ function _process_coordinates(
                     "but none was supplied",
             ),
         )
-        bt = accessor.branchingtime
-        return _cumulative_preorder(
-            basenode,
-            all_nodes,
-            accessor,
-            (src, dst) -> bt(dst) - bt(src),
-        )
+        return _branchingtime_coordinates(topology, accessor)
     elseif lineageunits === :nodedepths
-        return _node_depths(basenode, all_nodes, accessor)
+        return _node_depths(topology)
     elseif lineageunits === :coalescenceage
         accessor.coalescenceage === nothing && throw(
             ArgumentError(
@@ -291,7 +298,7 @@ function _process_coordinates(
                     "but none was supplied",
             ),
         )
-        return _validate_ultrametric(accessor, all_nodes, nonultrametric)
+        return _coalescenceage_coordinates(topology, accessor, nonultrametric)
     else
         throw(
             ArgumentError(
@@ -345,225 +352,233 @@ function _safe_edgeweight(
     return fval
 end
 
-# ── Internal: shared preorder cumulative-sum traversal ────────────────────────
+# ── Internal: topology-backed process coordinates ─────────────────────────────
 
-"""
-    _cumulative_preorder(basenode, all_nodes, accessor, edge_increment) -> Dict{Any,Float64}
-
-Preorder cumulative-sum traversal used by both `:edgeweights` and `:branchingtime`.
-
-Seeds `basenode` at 0.0. For each node in preorder order, sets each child's
-coordinate to:
-
-    coordinates[child] = coordinates[node] + edge_increment(node, child)
-
-`edge_increment` is a callable `(src, dst) -> Float64` that returns
-the additive increment for each directed edge:
-- For `:edgeweights`: the edge weight via `_safe_edgeweight`.
-- For `:branchingtime`: `branchingtime(dst) - branchingtime(src)`, which yields
-  `coordinates[dst] = branchingtime(dst)` — i.e., the accessor value is used directly.
-
-The caller is responsible for ensuring that `edge_increment` returns non-negative
-values where required.
-"""
-function _cumulative_preorder(
-        basenode,
-        all_nodes::Vector,
+function _edgeweight_coordinates(
+        topology::NormalizedTopology{Any},
         accessor::LineageGraphAccessor,
-        edge_increment,
     )::Dict{Any, Float64}
-    coordinates = Dict{Any, Float64}()
-    coordinates[basenode] = 0.0
-    for node in all_nodes
-        coordinate = coordinates[node]
-        for child in accessor.children(node)
-            coordinates[child] = coordinate + edge_increment(node, child)
+    coordinates = Dict{Any, Float64}(topology.basenode.source_node => 0.0)
+    for node in topology.node_order
+        src = node.source_node
+        src_coordinate = coordinates[src]
+        for edge in child_incidence(topology, node)
+            dst = edge.dst.source_node
+            candidate = src_coordinate + _safe_edgeweight(accessor, src, dst)
+            if haskey(coordinates, dst)
+                isapprox(coordinates[dst], candidate; atol = 1.0e-9, rtol = 1.0e-9) || throw(
+                    ArgumentError(
+                        "lineageunits = :edgeweights requires additive full-network consistency; " *
+                            "node $(repr(dst)) reaches conflicting cumulative coordinates " *
+                            "$(coordinates[dst]) and $(candidate)) from different parent paths. " *
+                            "Select an explicit projected-tree or other named resolution contract instead.",
+                    ),
+                )
+            else
+                coordinates[dst] = candidate
+            end
         end
     end
     return coordinates
 end
 
-# ── Internal: :nodeheights — postorder, leaf = 0, internal = max(children) + 1
+function _branchingtime_coordinates(
+        topology::NormalizedTopology{Any},
+        accessor::LineageGraphAccessor,
+    )::Dict{Any, Float64}
+    coordinates = Dict{Any, Float64}()
+    for node in topology.node_order
+        coordinates[node.source_node] = Float64(accessor.branchingtime(node.source_node))
+    end
+    for edge in topology.edges
+        src = edge.src.source_node
+        dst = edge.dst.source_node
+        coordinates[dst] + 1.0e-9 >= coordinates[src] || throw(
+            ArgumentError(
+                "lineageunits = :branchingtime requires forward full-network-consistent node values; " *
+                    "edge $(repr(src)) -> $(repr(dst)) decreases from $(coordinates[src]) to " *
+                    "$(coordinates[dst]). Select an explicit projected-tree or other named resolution " *
+                    "contract instead.",
+            ),
+        )
+    end
+    return coordinates
+end
 
-function _nodeheights(all_nodes::Vector, accessor::LineageGraphAccessor)::Dict{Any, Float64}
+function _coalescenceage_coordinates(
+        topology::NormalizedTopology{Any},
+        accessor::LineageGraphAccessor,
+        nonultrametric::Symbol,
+    )::Dict{Any, Float64}
+    coordinates = Dict{Any, Float64}()
+    for node in topology.node_order
+        coordinates[node.source_node] = Float64(accessor.coalescenceage(node.source_node))
+    end
+    _is_tree_topology(topology) && _validate_tree_coalescence(topology, coordinates, nonultrametric)
+    for edge in topology.edges
+        src = edge.src.source_node
+        dst = edge.dst.source_node
+        coordinates[src] + 1.0e-9 >= coordinates[dst] || throw(
+            ArgumentError(
+                "lineageunits = :coalescenceage requires backward full-network-consistent node values; " *
+                    "edge $(repr(src)) -> $(repr(dst)) increases from $(coordinates[src]) to " *
+                    "$(coordinates[dst]). Select an explicit projected-tree or other named resolution " *
+                    "contract instead.",
+            ),
+        )
+    end
+    return coordinates
+end
+
+function _nodeheights(topology::NormalizedTopology{Any})::Dict{Any, Float64}
     heights = Dict{Any, Float64}()
-    # Reversing a preorder traversal yields a valid postorder (children before
-    # parents), because in preorder every parent precedes all its descendants.
-    for node in Iterators.reverse(all_nodes)
-        child_collection = accessor.children(node)
-        if isempty(child_collection)
-            heights[node] = 0.0
+    for node in Iterators.reverse(topology.node_order)
+        child_edges = child_incidence(topology, node)
+        if isempty(child_edges)
+            heights[node.source_node] = 0.0
         else
-            heights[node] = maximum(heights[child] for child in child_collection) + 1.0
+            heights[node.source_node] = maximum(
+                heights[edge.dst.source_node] for edge in child_edges
+            ) + 1.0
         end
     end
     return heights
 end
 
-# ── Internal: :nodelevels — preorder, basenode = 0, each child = parent + 1
-
-function _nodelevels(
-        basenode,
-        all_nodes::Vector,
-        accessor::LineageGraphAccessor,
-    )::Dict{Any, Float64}
-    levels = Dict{Any, Float64}()
-    levels[basenode] = 0.0
-    for node in all_nodes
-        level = levels[node]
-        for child in accessor.children(node)
-            levels[child] = level + 1.0
+function _nodelevels(topology::NormalizedTopology{Any})::Dict{Any, Float64}
+    levels = Dict{Any, Float64}(topology.basenode.source_node => 0.0)
+    for node in topology.node_order
+        level = levels[node.source_node]
+        for edge in child_incidence(topology, node)
+            dst = edge.dst.source_node
+            candidate = level + 1.0
+            levels[dst] = haskey(levels, dst) ? max(levels[dst], candidate) : candidate
         end
     end
     return levels
 end
 
-# ── Internal: :nodedepths — preorder, basenode = 0, each child = parent + 1 ───────
-
-"""
-    _node_depths(basenode, all_nodes, accessor) -> Dict{Any,Float64}
-
-Compute per-node integer edge-count depths from `basenode` in a preorder pass.
-
-`basenode` is assigned depth 0. Each child's depth is its parent's depth plus 1.
-The result is always integer-valued (stored as `Float64`).
-
-This is distinct from `_nodelevels` (which assigns equal inter-level spacing for
-display) in that `_node_depths` records the raw edge count along the path from
-`basenode` with no further transformation.
-"""
-function _node_depths(
-        basenode,
-        all_nodes::Vector,
-        accessor::LineageGraphAccessor,
-    )::Dict{Any, Float64}
-    depths = Dict{Any, Float64}()
-    depths[basenode] = 0.0
-    for node in all_nodes
-        depth = depths[node]
-        for child in accessor.children(node)
-            depths[child] = depth + 1.0
+function _node_depths(topology::NormalizedTopology{Any})::Dict{Any, Float64}
+    depths = Dict{Any, Float64}(topology.basenode.source_node => 0.0)
+    for node in topology.node_order
+        depth = depths[node.source_node]
+        for edge in child_incidence(topology, node)
+            dst = edge.dst.source_node
+            candidate = depth + 1.0
+            depths[dst] = haskey(depths, dst) ? min(depths[dst], candidate) : candidate
         end
     end
     return depths
 end
 
-# ── Internal: :coalescenceage — validation and postorder resolution ────────────
-
-"""
-    _validate_ultrametric(accessor, all_nodes, nonultrametric) -> Dict{Any,Float64}
-
-Validate the ultrametricity of accessor-supplied `coalescenceage` values and
-return a `Dict` mapping each node to its process coordinate.
-
-In a postorder traversal, for each internal node, collects the
-`coalescenceage` values of all its children from `accessor.coalescenceage`. For a
-strictly ultrametric tree, all children of any given internal node share the
-same coalescence age (since the implied edge weights sum to the same total
-distance from any child path to a leaf). If any two children disagree
-beyond a floating-point tolerance of `1e-9`, the `nonultrametric` policy is
-applied:
-
-- `:error` (default) — raises `ArgumentError` naming the node and the
-  conflicting minimum and maximum child values.
-- `:minimum` — suppresses the error and accepts the inconsistency.
-- `:maximum` — suppresses the error and accepts the inconsistency.
-
-All node coordinates in the returned dict are `accessor.coalescenceage(node)` as
-supplied. The `:minimum` and `:maximum` policies do not modify the accessor-supplied
-values; they only suppress the error, allowing the caller to accept a
-non-ultrametric set of coordinates.
-
-# Throws
-- `ArgumentError` if `nonultrametric = :error` and any internal node has
-  children with inconsistent coalescenceage values.
-"""
-function _validate_ultrametric(
-        accessor::LineageGraphAccessor,
-        all_nodes::Vector,
+function _validate_tree_coalescence(
+        topology::NormalizedTopology{Any},
+        coordinates::Dict{Any, Float64},
         nonultrametric::Symbol,
-    )::Dict{Any, Float64}
-    coordinates = Dict{Any, Float64}()
-    for node in Iterators.reverse(all_nodes)  # postorder: children before parents
-        coordinates[node] = accessor.coalescenceage(node)
-        child_collection = accessor.children(node)
-        isempty(child_collection) && continue
-        child_ages = [accessor.coalescenceage(child) for child in child_collection]
+    )::Nothing
+    for node in Iterators.reverse(topology.node_order)
+        child_edges = child_incidence(topology, node)
+        isempty(child_edges) && continue
+        child_ages = [coordinates[edge.dst.source_node] for edge in child_edges]
         mn = minimum(child_ages)
         mx = maximum(child_ages)
-        if mx - mn > 1.0e-9
-            if nonultrametric === :error
-                throw(
-                    ArgumentError(
-                        "non-ultrametric lineage graph: children of node $(repr(node)) " *
-                            "have inconsistent coalescenceage values " *
-                            "(min=$(mn), max=$(mx)); pass nonultrametric = :minimum or " *
-                            ":maximum to rectangular_layout to resolve",
-                    ),
-                )
-            end
-            # :minimum or :maximum: inconsistency silently accepted.
+        if mx - mn > 1.0e-9 && nonultrametric === :error
+            throw(
+                ArgumentError(
+                    "non-ultrametric lineage graph: children of node $(repr(node.source_node)) " *
+                        "have inconsistent coalescenceage values (min=$(mn), max=$(mx)); " *
+                        "pass nonultrametric = :minimum or :maximum to rectangular_layout to resolve",
+                ),
+            )
         end
     end
-    return coordinates
+    return nothing
 end
 
 # ── Internal: transverse coordinate assignment ─────────────────────────────────
 
-# Leaves get equally spaced transverse positions (1*step, 2*step, …).
-# Internal nodes are placed at the mean of their children's transverse
-# positions. Reverse preorder (≈ postorder) ensures children are assigned
-# before their parents.
-function _assign_transverse(
-        leaf_list::Vector,
-        accessor::LineageGraphAccessor,
-        all_nodes::Vector,
+function _transverse_coordinates(
+        topology::NormalizedTopology{Any},
+        step::Float64,
+    )::Dict{Any, Float64}
+    return _is_tree_topology(topology) ?
+        _tree_transverse_coordinates(topology, step) :
+        _dag_transverse_coordinates(topology, step)
+end
+
+function _tree_transverse_coordinates(
+        topology::NormalizedTopology{Any},
         step::Float64,
     )::Dict{Any, Float64}
     transverse = Dict{Any, Float64}()
-    for (i, leaf) in enumerate(leaf_list)
-        transverse[leaf] = i * step
+    for (i, leaf) in enumerate(topology.sink_order)
+        transverse[leaf.source_node] = i * step
     end
-    for node in Iterators.reverse(all_nodes)
-        haskey(transverse, node) && continue
-        n_children = 0
-        transverse_sum = 0.0
-        for child in accessor.children(node)
-            n_children += 1
-            transverse_sum += transverse[child]
-        end
-        transverse[node] = transverse_sum / n_children
+    for node in Iterators.reverse(topology.node_order)
+        haskey(transverse, node.source_node) && continue
+        child_edges = child_incidence(topology, node)
+        transverse[node.source_node] = sum(
+            transverse[edge.dst.source_node] for edge in child_edges
+        ) / length(child_edges)
     end
     return transverse
 end
 
+function _dag_transverse_coordinates(
+        topology::NormalizedTopology{Any},
+        step::Float64,
+    )::Dict{Any, Float64}
+    transverse = Dict{Any, Float64}()
+    for (i, node) in enumerate(topology.node_order)
+        transverse[node.source_node] = i * step
+    end
+    return transverse
+end
+
+function _ordered_sinks(
+        topology::NormalizedTopology{Any},
+        axis_coordinates::Dict{Any, Float64},
+    )::Vector{Any}
+    ordered = sort(
+        topology.sink_order;
+        by = node -> (axis_coordinates[node.source_node], node.index),
+    )
+    return source_nodes(ordered)
+end
+
 # ── Internal: geometry assembly ────────────────────────────────────────────────
 
-# Build the ordered list of (src, dst) pairs.
-# Iterates all_nodes in preorder and loops over accessor.children(node) in the
-# same inner order as _build_edge_shapes, so edges[i] corresponds to the i-th
-# NaN-terminated group of 4 points in edge_shapes.
+# Build the ordered list of (src, dst) pairs in normalized-topology edge order.
 function _build_edge_list(
-        all_nodes::Vector,
-        accessor::LineageGraphAccessor,
+        topology::NormalizedTopology{Any},
     )::Vector{Tuple{Any, Any}}
-    edges = Tuple{Any, Any}[]
-    for node in all_nodes
-        for child in accessor.children(node)
-            push!(edges, (node, child))
-        end
+    return Tuple{Any, Any}[
+        (edge.src.source_node, edge.dst.source_node) for edge in topology.edges
+    ]
+end
+
+function _explicit_node_positions(
+        topology::NormalizedTopology{Any},
+        accessor_fn,
+    )::Dict{Any, Point2f}
+    node_positions = Dict{Any, Point2f}()
+    for node in topology.node_order
+        node_positions[node.source_node] = Point2f(accessor_fn(node.source_node))
     end
-    return edges
+    return node_positions
 end
 
 function _build_node_positions(
-        all_nodes::Vector,
+        node_order::Vector{NormalizedNode{Any}},
         process_coordinates::Dict{Any, Float64},
         transverse_coordinates::Dict{Any, Float64},
     )::Dict{Any, Point2f}
     pos = Dict{Any, Point2f}()
-    for node in all_nodes
-        pos[node] = Point2f(process_coordinates[node], transverse_coordinates[node])
+    for node in node_order
+        pos[node.source_node] = Point2f(
+            process_coordinates[node.source_node],
+            transverse_coordinates[node.source_node],
+        )
     end
     return pos
 end
@@ -574,26 +589,39 @@ end
 # The first segment is parallel to the transverse axis (changes y at fixed x).
 # The second segment is parallel to the lineage axis (changes x at fixed y).
 function _build_edge_shapes(
-        all_nodes::Vector,
-        accessor::LineageGraphAccessor,
+        topology::NormalizedTopology{Any},
         process_coordinates::Dict{Any, Float64},
         transverse_coordinates::Dict{Any, Float64},
     )::Vector{Point2f}
     shapes = Point2f[]
-    for node in all_nodes
-        xp = process_coordinates[node]
-        yp = transverse_coordinates[node]
-        for child in accessor.children(node)
-            xc = process_coordinates[child]
-            yc = transverse_coordinates[child]
-            push!(
-                shapes,
-                Point2f(xp, yp),
-                Point2f(xp, yc),
-                Point2f(xc, yc),
-                Point2f(NaN, NaN),
-            )
-        end
+    for edge in topology.edges
+        src = edge.src.source_node
+        dst = edge.dst.source_node
+        xp = process_coordinates[src]
+        yp = transverse_coordinates[src]
+        xc = process_coordinates[dst]
+        yc = transverse_coordinates[dst]
+        push!(
+            shapes,
+            Point2f(xp, yp),
+            Point2f(xp, yc),
+            Point2f(xc, yc),
+            Point2f(NaN, NaN),
+        )
+    end
+    return shapes
+end
+
+function _build_direct_edge_shapes(
+        topology::NormalizedTopology{Any},
+        node_positions::Dict{Any, Point2f},
+    )::Vector{Point2f}
+    shapes = Point2f[]
+    for edge in topology.edges
+        src = node_positions[edge.src.source_node]
+        dst = node_positions[edge.dst.source_node]
+        midpoint = Point2f((src[1] + dst[1]) / 2, (src[2] + dst[2]) / 2)
+        push!(shapes, src, midpoint, dst, Point2f(NaN, NaN))
     end
     return shapes
 end
@@ -625,13 +653,15 @@ end
 
 Compute a circular (radial) layout for a rooted lineage graph.
 
-In the current tree-only geometry owner, shared-parent lineage graphs are
-rejected after topology normalization. DAG-safe layout policy is deferred to a
-later tranche.
+The geometry owner normalizes the lineage graph once and then consumes the
+normalized topology as its authority for node order, sink order, parent
+incidence, child incidence, and edge order.
 
 Process coordinates (radial distances from the origin) are determined by `lineageunits`
 using the same rules as `rectangular_layout`. Leaves are placed at equal angular
-spacing by default; internal nodes are placed at the mean angle of their children.
+spacing by default for trees. Shared-parent lineage graphs use explicit
+normalized-topology node order for angular placement so that the full network
+remains visible without a hidden tree projection.
 
 **Angular leaf placement:** with `leaf_spacing = :equal` the angular step is
 `2π / n_leaves`. A positive `Float64` `leaf_spacing` sets an explicit angular step
@@ -645,8 +675,9 @@ chord segment at the parent's radial distance spanning the child's angular posit
 followed by a radial segment from that connector point to the child's position. The
 `:arc` style (Tier 2) is not implemented.
 
-**Bypass modes:** `lineageunits = :nodecoordinates` and `:nodepos` use the accessor
-coordinates directly, bypassing angular computation (same as `rectangular_layout`).
+**Bypass modes:** `lineageunits = :nodecoordinates` and `:nodepos` use the
+accessor coordinates directly, bypassing angular computation and preserving the
+supplied node positions.
 
 # Arguments
 - `basenode`: basenode of the lineage graph.
@@ -675,8 +706,9 @@ preorder traversal order, and `boundingbox` enclosing all node positions.
 - `ArgumentError` if `lineageunits = :edgeweights` and any edge weight is negative.
 - `ArgumentError` if `lineageunits = :coalescenceage`, the tree is non-ultrametric,
   and `nonultrametric = :error`.
-- `ArgumentError` if topology normalization discovers a node with more than one
-  parent edge; shared-parent lineage graphs remain unsupported at the geometry owner.
+- `ArgumentError` if a weighted full-network unit encounters inconsistent
+  multi-parent coordinates and therefore requires an explicit projected-tree or
+  other named resolution contract.
 """
 function circular_layout(
         basenode,
@@ -695,7 +727,7 @@ function circular_layout(
     )
 
     lineageunits = _resolve_lineageunits(lineageunits, accessor)
-    all_nodes, leaf_list = _tree_geometry_inputs(basenode, accessor)
+    topology = _normalized_geometry_inputs(basenode, accessor)
 
     # Bypass modes: both coordinates come from the accessor; no angular computation.
     if lineageunits === :nodecoordinates || lineageunits === :nodepos
@@ -706,29 +738,29 @@ function circular_layout(
                     "but none was supplied",
             ),
         )
-        node_positions = Dict{Any, Point2f}(node => Point2f(accessor_fn(node)) for node in all_nodes)
-        pc = Dict{Any, Float64}(node => Float64(node_positions[node][1]) for node in all_nodes)
-        tc = Dict{Any, Float64}(node => Float64(node_positions[node][2]) for node in all_nodes)
-        edge_shapes = _build_edge_shapes(all_nodes, accessor, pc, tc)
-        edges = _build_edge_list(all_nodes, accessor)
+        node_positions = _explicit_node_positions(topology, accessor_fn)
+        edge_shapes = _build_direct_edge_shapes(topology, node_positions)
+        edges = _build_edge_list(topology)
         bb = _compute_boundingbox(node_positions)
+        leaf_list = source_nodes(topology.sink_order)
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
-    process_coordinates = _process_coordinates(basenode, accessor, lineageunits, all_nodes, nonultrametric)
+    process_coordinates = _process_coordinates(topology, accessor, lineageunits, nonultrametric)
 
-    θ_step = _angular_leaf_step(leaf_spacing, length(leaf_list), min_leaf_angle)
-    angles = _angular_positions(leaf_list, all_nodes, accessor, θ_step)
+    θ_step = _angular_step(leaf_spacing, topology, min_leaf_angle)
+    angles = _angular_positions(topology, θ_step)
 
     node_positions = Dict{Any, Point2f}()
-    for node in all_nodes
-        r = process_coordinates[node]
-        θ = angles[node]
-        node_positions[node] = Point2f(r * cos(θ), r * sin(θ))
+    for node in topology.node_order
+        r = process_coordinates[node.source_node]
+        θ = angles[node.source_node]
+        node_positions[node.source_node] = Point2f(r * cos(θ), r * sin(θ))
     end
 
-    edge_shapes = _build_circular_edge_shapes(all_nodes, accessor, process_coordinates, angles)
-    edges = _build_edge_list(all_nodes, accessor)
+    edge_shapes = _build_circular_edge_shapes(topology, process_coordinates, angles)
+    edges = _build_edge_list(topology)
+    leaf_list = _ordered_sinks(topology, angles)
     bb = _compute_boundingbox(node_positions)
 
     return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
@@ -737,22 +769,27 @@ end
 # ── Internal: angular leaf step computation ────────────────────────────────────
 
 """
-    _angular_leaf_step(leaf_spacing, n_leaves, min_leaf_angle) -> Float64
+    _angular_step(leaf_spacing, topology, min_leaf_angle) -> Float64
 
-Compute the angular spacing in radians between adjacent leaves for a circular layout.
+Compute the angular spacing in radians for a circular layout.
 
-For `leaf_spacing = :equal` the step is `2π / n_leaves` (a single leaf gets `2π`).
-For a positive `Float64` `leaf_spacing` the value is used directly as the angular step.
-When `min_leaf_angle` is not `nothing` and the computed step is smaller, a warning is
-emitted and `min_leaf_angle` is used, causing the layout to span less than a full circle.
+For tree topologies, `leaf_spacing = :equal` uses `2π / n_sinks` (a single sink
+gets `2π`). For shared-parent lineage graphs, `:equal` uses the normalized
+topology's node order so that every node receives a distinct full-network
+placement without a hidden tree projection. For a positive `Float64`
+`leaf_spacing` the value is used directly as the angular step. When
+`min_leaf_angle` is not `nothing` and the computed step is smaller, a warning
+is emitted and `min_leaf_angle` is used, causing the layout to span less than a
+full circle.
 """
-function _angular_leaf_step(
+function _angular_step(
         leaf_spacing,
-        n_leaves::Int,
+        topology::NormalizedTopology{Any},
         min_leaf_angle::Union{Nothing, Float64},
     )::Float64
+    n_positions = _is_tree_topology(topology) ? length(topology.sink_order) : length(topology.node_order)
     θ_step = if leaf_spacing === :equal
-        n_leaves > 1 ? 2π / n_leaves : 2π
+        n_positions > 1 ? 2π / n_positions : 2π
     elseif leaf_spacing isa Real
         leaf_spacing > 0 || throw(
             ArgumentError(
@@ -780,34 +817,50 @@ end
 # ── Internal: angular position assignment ─────────────────────────────────────
 
 """
-    _angular_positions(leaf_list, all_nodes, accessor, θ_step) -> Dict{Any,Float64}
+    _angular_positions(topology, θ_step) -> Dict{Any,Float64}
 
 Assign an angular position (radians) to every node.
 
-Leaves receive evenly spaced angles starting at 0: `θ_i = (i-1) * θ_step` for the
-i-th leaf in `leaf_list` (1-indexed). Internal nodes receive the mean of their
-children's angles, computed in reverse-preorder so children are assigned before
-their parents.
+Tree topologies receive the classic leaf-driven placement: sinks receive evenly
+spaced angles and internal nodes receive the mean of their children's angles.
+Shared-parent lineage graphs receive explicit normalized-topology node-order
+angles, preserving one full-network position per node without projecting the
+DAG onto a tree.
 """
 function _angular_positions(
-        leaf_list::Vector,
-        all_nodes::Vector,
-        accessor::LineageGraphAccessor,
+        topology::NormalizedTopology{Any},
+        θ_step::Float64,
+    )::Dict{Any, Float64}
+    return _is_tree_topology(topology) ?
+        _tree_angular_positions(topology, θ_step) :
+        _dag_angular_positions(topology, θ_step)
+end
+
+function _tree_angular_positions(
+        topology::NormalizedTopology{Any},
         θ_step::Float64,
     )::Dict{Any, Float64}
     angles = Dict{Any, Float64}()
-    for (i, leaf) in enumerate(leaf_list)
-        angles[leaf] = (i - 1) * θ_step
+    for (i, leaf) in enumerate(topology.sink_order)
+        angles[leaf.source_node] = (i - 1) * θ_step
     end
-    for node in Iterators.reverse(all_nodes)
-        haskey(angles, node) && continue
-        n_children = 0
-        angle_sum = 0.0
-        for child in accessor.children(node)
-            n_children += 1
-            angle_sum += angles[child]
-        end
-        angles[node] = angle_sum / n_children
+    for node in Iterators.reverse(topology.node_order)
+        haskey(angles, node.source_node) && continue
+        child_edges = child_incidence(topology, node)
+        angles[node.source_node] = sum(
+            angles[edge.dst.source_node] for edge in child_edges
+        ) / length(child_edges)
+    end
+    return angles
+end
+
+function _dag_angular_positions(
+        topology::NormalizedTopology{Any},
+        θ_step::Float64,
+    )::Dict{Any, Float64}
+    angles = Dict{Any, Float64}()
+    for (i, node) in enumerate(topology.node_order)
+        angles[node.source_node] = (i - 1) * θ_step
     end
     return angles
 end
@@ -830,32 +883,31 @@ matching the convention used by `_build_edge_shapes` for rectangular layouts:
 4. `Point2f(NaN, NaN)` separator
 """
 function _build_circular_edge_shapes(
-        all_nodes::Vector,
-        accessor::LineageGraphAccessor,
+        topology::NormalizedTopology{Any},
         process_coordinates::Dict{Any, Float64},
         angles::Dict{Any, Float64},
     )::Vector{Point2f}
     shapes = Point2f[]
-    for node in all_nodes
-        r_parent = process_coordinates[node]
-        θ_parent = angles[node]
+    for edge in topology.edges
+        src = edge.src.source_node
+        dst = edge.dst.source_node
+        r_parent = process_coordinates[src]
+        θ_parent = angles[src]
         x_parent = r_parent * cos(θ_parent)
         y_parent = r_parent * sin(θ_parent)
-        for child in accessor.children(node)
-            r_child = process_coordinates[child]
-            θ_child = angles[child]
-            x_conn = r_parent * cos(θ_child)
-            y_conn = r_parent * sin(θ_child)
-            x_child = r_child * cos(θ_child)
-            y_child = r_child * sin(θ_child)
-            push!(
-                shapes,
-                Point2f(x_parent, y_parent),
-                Point2f(x_conn, y_conn),
-                Point2f(x_child, y_child),
-                Point2f(NaN, NaN),
-            )
-        end
+        r_child = process_coordinates[dst]
+        θ_child = angles[dst]
+        x_conn = r_parent * cos(θ_child)
+        y_conn = r_parent * sin(θ_child)
+        x_child = r_child * cos(θ_child)
+        y_child = r_child * sin(θ_child)
+        push!(
+            shapes,
+            Point2f(x_parent, y_parent),
+            Point2f(x_conn, y_conn),
+            Point2f(x_child, y_child),
+            Point2f(NaN, NaN),
+        )
     end
     return shapes
 end
