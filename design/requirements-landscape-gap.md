@@ -2,7 +2,7 @@
 
 ## Phylogenetic Tree / Network Data Packages
 
-| Package | Primary Tree Data Structure | Implements AbstractTrees.jl Interface? | Uses / Extends Graphs.jl `AbstractGraph`? |
+| Package | Primary tree / network data structure | Implements AbstractTrees.jl Interface? | Uses / Extends Graphs.jl `AbstractGraph`? |
 |---|---|---|---|
 | **PhyloNetworks.jl** | `HybridNetwork <: Network` — flat `Vector{Node}` + `Vector{Edge}` with cross-references; `rooti::Int` for root; explicit `hybrid::Vector{Node}` and `leaf::Vector{Node}` lists | No | No — bespoke adjacency structure; no Graphs.jl dependency |
 | **Phylo.jl** | `LinkTree`, `RecursiveTree`, `BinaryTree`, `PolytomousTree` (all `<: AbstractTree{...}`); also `TreeSet` | No — defines own traversal API (`getchildren`, `getparent`, `getancestors`) | Partial — imports `src`, `dst`, `indegree`, `outdegree`, `degree` from Graphs.jl but does **not** extend `AbstractGraph` |
@@ -91,15 +91,17 @@ package-specific type before plotting:
 - D3Trees.jl: must satisfy AbstractTrees interface (lowest barrier), but output
   is JavaScript/browser-only and requires internet access
 
-There is no path from a generic Julia tree representation (e.g., a plain struct
-with children pointers, an AbstractTrees-compliant object, or a Graphs.jl graph)
-into a Julia-native graphical rendering of a phylogenetic tree.
+There is no path from a generic Julia tree or network representation (e.g., a
+plain struct with children pointers, an AbstractTrees-compliant object, a
+`HybridNetwork`, or a Graphs.jl graph) into a Julia-native graphical rendering
+of a phylogenetic tree or network.
 
 ---
 
 ## Gap
 
-**No native Makie-based phylogenetic tree visualization package exists.**
+**No native Makie-based phylogenetic tree or network visualization package
+exists.**
 
 Specifically:
 
@@ -117,7 +119,13 @@ Specifically:
   Phylogenies.jl) implement Graphs.jl `AbstractGraph`, so GraphMakie cannot
   accept them directly.
 
-**PhyloMakie.jl** addresses this gap: Makie-native recipes for phylogenetic tree
-visualization, targeting the AbstractTrees.jl interface as the minimal input
-contract — accepting any conforming tree type without requiring package-specific
-deserialization.
+For `PhyloNetworks.jl` specifically, the missing piece is not just an adapter
+or a small amount of hybrid-edge styling. A Makie-native package that wants
+correct network support must own DAG-capable traversal, geometry, annotation,
+and projection contracts in its core; otherwise the source-specific integration
+becomes a shadow owner and drifts from the rest of the package.
+
+**LineagesMakie.jl** addresses this gap: Makie-native lineage-graph
+visualization targeting a normalized input contract, with Tier 2 establishing a
+DAG-capable foundation and Tier 3 layering `PhyloNetworks.jl` support on top as
+an optional package extension.

@@ -1,6 +1,6 @@
 ---
 date-created: 2026-04-18T16:00:00
-date-revised: 2026-04-19T00:00:00
+date-revised: 2026-05-06T00:00:00
 ---
 
 # Design
@@ -8,8 +8,8 @@ date-revised: 2026-04-19T00:00:00
 ## Purpose
 
 LineagesMakie.jl is a general framework for visualization of evolutionary
-(phylogenetic, coalescent, cladistic, ancestral) graphs and associated
-biological data in the Makie ecosystem.
+(phylogenetic, coalescent, cladistic, ancestral, reticulate) lineage graphs
+and associated biological data in the Makie ecosystem.
 
 The package accepts any Julia value that exposes a `children` function — or any
 object satisfying the AbstractTrees.jl interface — and renders it as a
@@ -82,6 +82,20 @@ source type.
 
 This is dependency inversion applied at the input boundary: the package's core
 does not depend on any external lineage graph type.
+
+## Target-state DAG and network boundary
+
+The target architecture treats rooted trees as the single-parent special case
+of lineage graphs. Tier 2 must therefore lift the core owners from tree-only
+traversal and subtree semantics to DAG-capable traversal, geometry, and
+annotation semantics. Shared ancestry is valid. Actual directed cycles are not.
+
+`PhyloNetworks.jl` support belongs above that owner boundary as an optional
+package extension. The extension may adapt `HybridNetwork` node, edge,
+major/minor parent, and `gamma` semantics into the core contracts, but it must
+not become a shadow owner of traversal, layout, or annotation logic.
+Network-specific view modes and layers are Tier 3 capacities built on the Tier
+2 DAG-capable foundation.
 
 ## Minimum working examples
 

@@ -6,8 +6,9 @@ Derived from:
 
 - **ggtree** (R/ggplot2) — the most complete existing phylogenetic visualization
   system; serves as the functional reference baseline
-- **PhyloNetworks.jl / PhyloPlots.jl** — defines the extra visual vocabulary
-  required for reticulate (non-tree) network structures
+- **PhyloNetworks.jl / PhyloPlots.jl** — defines the extra lineage-graph
+  semantics and visual vocabulary required for reticulate (non-tree) network
+  structures
 - **LineageAxis design** (described in section 0 below) — the semantic axis
   abstraction that grounds the coordinate system and makes the above correctly
   composable
@@ -51,6 +52,25 @@ concerns leads to an API that either forces one convention on the user or
 requires ad-hoc workarounds for every deviation from that convention.
 
 `LineageAxis` separates them explicitly.
+
+### DAG-capable lineage graphs
+
+Tier 2 and Tier 3 require one more architectural separation. A second encounter
+of a node can mean either valid shared ancestry in a directed acyclic graph
+(DAG) or an actual directed cycle. These are not the same event, and the
+package must not treat them as the same failure mode.
+
+Tier 2 therefore establishes the owner-level capacities needed for DAG-capable
+lineage graphs. Traversal must accept shared ancestry while rejecting actual
+directed cycles. Layout must place nodes and edges without assuming that every
+node has exactly one parent or owns exactly one subtree. Annotation ownership
+must distinguish tree-only subtree semantics from network-capable group and
+projection semantics.
+
+Tier 3 then builds the network-specific layers and the `PhyloNetworks.jl`
+integration on top of those owners. A `PhyloNetworks.jl` integration is not a
+thin styling patch by itself; it is a package extension layered over the
+DAG-capable core.
 
 ### The primary dimension
 
@@ -427,6 +447,19 @@ Tier: 4
 
 Required when the input is a phylogenetic network (has reticulations).
 
+### 5.0 Foundational owner requirements
+
+Network-specific rendering is not a thin ornament layer. Before Tier 3 layers
+or a `PhyloNetworks.jl` integration can be correct, Tier 2 must establish the
+following owner-level capacities.
+
+| Foundational capacity | Why it is required | Tier |
+|---|---|---|
+| DAG-capable traversal and cycle detection | A repeated node reached through a second parent is shared ancestry, not a directed cycle | 2 |
+| DAG-capable geometry owner | Full-network and major-tree projections cannot reuse tree-only subtree geometry unchanged | 2 |
+| Network-aware annotation owner | MRCA-subtree annotations do not by themselves cover reticulate groups or network view policies | 2 |
+| Package extension scaffolding | `PhyloNetworks.jl` support should ship as an optional package extension, not as a hard dependency or a source-specific shadow owner | 2 |
+
 ### 5.1 Hybrid node marker
 
 | Property | Options |
@@ -476,7 +509,16 @@ Each reticulation has two parent edges converging on the same child node.
 
 | Layer | Tier |
 |---|---|
-| All network-specific layers | 3 |
+| DAG-capable traversal and cycle detection owner | 2 |
+| DAG-capable geometry owner for shared ancestry and network projection modes | 2 |
+| Network-aware annotation owner | 2 |
+| Package extension scaffolding for optional upstream integrations | 2 |
+| Hybrid node marker layer | 3 |
+| Hybrid / reticulation edge rendering | 3 |
+| Gamma (γ) label layer | 3 |
+| Full-network vs. major-tree projection modes | 3 |
+| Rooted / semi-directed / unrooted network display policies | 3 |
+| PhyloNetworks.jl package extension | 3 |
 
 ## 6. External data overlay layers
 
@@ -687,6 +729,9 @@ is just a matter of wiring.
 
 ### Tier 2 — Standard annotation
 
+- DAG-capable lineage graph foundation: shared ancestry accepted, directed
+  cycles rejected, and traversal / geometry / annotation owners lifted out of
+  tree-only assumptions
 - Fan layout; slanted layout; equal-angle (unrooted); dendrogram orientation
 - Layout transformations (flip, rotate, ladderise)
 - Edge labels (edge weight, bootstrap, γ)
@@ -698,18 +743,21 @@ is just a matter of wiring.
 - Uncertainty / range bars
 - Tanglegram layout
 - Basenode layer
-- Graphs.jl adapter
+- Package extension scaffolding for optional upstream integrations
+- Graphs.jl adapter, if pursued, built on the same DAG-capable foundation
 
 ### Tier 3 — Network-specific and advanced layout
 
 - Hybrid node marker layer
-- Hybrid / reticulation edge rendering (major + minor, color distinction)
+- Hybrid / reticulation edge rendering (major + minor inheritance paths, color
+  distinction)
 - Gamma (γ) label layer
-- Full-network vs. major-tree view mode toggle
+- Full-network vs. major-tree projection mode toggle
+- Rooted / semi-directed / unrooted network display policies
 - Arrow / directionality rendering on reticulation edges
 - Inward circular layout
 - Geographic tip coordinate constraints
-- PhyloNetworks.jl adapter
+- PhyloNetworks.jl package extension
 
 ### Tier 4 — Advanced and aspirational
 

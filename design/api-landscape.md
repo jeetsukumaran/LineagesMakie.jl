@@ -1,4 +1,4 @@
-# API Landscape: Phylogenetic Tree Packages
+# API Landscape: Phylogenetic tree and network packages
 
 Terminology, data models, and access patterns across all surveyed packages.
 Covers: PhyloNetworks.jl, Phylo.jl, Phylogenies.jl, AbstractTrees.jl,
