@@ -799,9 +799,11 @@ view-mode policy decisions that belong to Tranche 5 into hidden defaults.
 - Extension-absence verification must run in the checked-in `test/Project.toml`
   environment without `PhyloNetworks.jl` present there.
 - Extension-presence verification must also use `test/Project.toml`: activate
-  `--project=test` and add the `PhyloNetworks.jl` package in that environment
-  with public `Pkg.add` workflow, rather than mutating the root project
-  environment.
+  `--project=test` and install the reviewed local checkout at
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
+  in that environment with a documented local-path package-manager workflow
+  such as `Pkg.develop(path=".../PhyloNetworks.jl")`, rather than mutating the
+  root project environment or resolving an arbitrary registry or cached copy.
 
 ### Handoff packet
 
@@ -864,7 +866,10 @@ view-mode policy decisions that belong to Tranche 5 into hidden defaults.
   major edges, minor edges, and gamma values;
   run the extension suite once in the checked-in `test/Project.toml`
   environment without `PhyloNetworks.jl` and once after adding
-  `PhyloNetworks.jl` to that same test environment;
+  the reviewed local `PhyloNetworks.jl` checkout from
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
+  to that same test environment with a documented local-path package-manager
+  workflow;
   run `julia --project=test test/runtests.jl`;
   run `julia --project=docs docs/make.jl`;
   rerun affected examples.
@@ -998,9 +1003,11 @@ reproducible.
 - Extension-absence verification must run in the checked-in `test/Project.toml`
   environment without `PhyloNetworks.jl` present there.
 - Extension-presence verification must also use `test/Project.toml`: activate
-  `--project=test` and add the `PhyloNetworks.jl` package in that environment
-  with public `Pkg.add` workflow, rather than mutating the root project
-  environment.
+  `--project=test` and install the reviewed local checkout at
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
+  in that environment with a documented local-path package-manager workflow
+  such as `Pkg.develop(path=".../PhyloNetworks.jl")`, rather than mutating the
+  root project environment or resolving an arbitrary registry or cached copy.
 
 ### Handoff packet
 
@@ -1067,7 +1074,10 @@ reproducible.
   projected-tree mode is not explicitly named;
   run the extension suite once in the checked-in `test/Project.toml`
   environment without `PhyloNetworks.jl` and once after adding
-  `PhyloNetworks.jl` to that same test environment;
+  the reviewed local `PhyloNetworks.jl` checkout from
+  `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
+  to that same test environment with a documented local-path package-manager
+  workflow;
   run `julia --project=test test/runtests.jl`;
   run `julia --project=docs docs/make.jl`;
   rerun affected examples and any extension-specific demonstrations.
