@@ -358,6 +358,9 @@ immediately, identifying the node and the returned type.
 
 Position mode `:toward_parent` shifts the label slightly toward the parent
 node along the transverse axis, separating the label from the node marker.
+This mode currently requires a rooted-tree or explicit tree-view display;
+shared-parent lineage graphs are rejected directly rather than collapsing to
+an arbitrary displayed parent.
 
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry.
@@ -373,7 +376,8 @@ node along the transverse axis, separating the label from the node marker.
   Default: `node -> false` (show no nodes; opt-in).
 - `position`: `:node` places the label at the node data position;
   `:toward_parent` shifts the label slightly (3 px) toward the parent node
-  along the transverse axis. Default `:node`.
+  along the transverse axis. `:toward_parent` currently requires a rooted-tree
+  or explicit tree-view display. Default `:node`.
 - `font`: Makie font. Default `:regular`.
 - `fontsize`: label font size in points. Default `10`.
 - `color`: label color. Default `:gray50`.
@@ -384,7 +388,7 @@ node along the transverse axis, separating the label from the node marker.
     value_func = (node -> "")
     "Predicate `node -> Bool`; only nodes returning true are labelled. Default: none (opt-in)."
     threshold = (node -> false)
-    "Label position: `:node` or `:toward_parent`."
+    "Label position: `:node` or `:toward_parent`; `:toward_parent` currently requires rooted-tree or explicit tree-view geometry."
     position = :node
     font = :regular
     fontsize = 10
@@ -409,7 +413,15 @@ function Makie.plot!(p::NodeLabelLayer)::NodeLabelLayer
         [:geom, :value_func, :threshold, :position, :pixel_projection],
         :node_label_raw,
     ) do geom, value_func, threshold, position, _
-        parent_of = Dict{Any, Any}(dst => src for (src, dst) in geom.edges)
+        parent_of = if position === :toward_parent
+            _tree_parent_lookup(
+                geom,
+                "NodeLabelLayer(position = :toward_parent)",
+                "`:toward_parent` node-label placement",
+            )
+        else
+            Dict{Any, Any}()
+        end
         entries = Tuple{Point2f, String}[]
         for (node, pos) in geom.node_positions
             threshold(node) || continue
@@ -457,6 +469,46 @@ function Makie.plot!(p::NodeLabelLayer)::NodeLabelLayer
 end
 
 # ── Private helpers ───────────────────────────────────────────────────────────
+
+function _shared_parent_display_error(
+        geom::LineageGraphGeometry,
+        owner_name::AbstractString,
+        contract_name::AbstractString,
+    )::Union{Nothing, ArgumentError}
+    parent_of = Dict{Any, Any}()
+    for (src, dst) in geom.edges
+        prior_parent = get(parent_of, dst, nothing)
+        if prior_parent !== nothing
+            return ArgumentError(
+                "$(owner_name) currently supports $(contract_name) only on rooted-tree " *
+                    "or explicit tree-view displays; shared-parent lineage graphs are not yet " *
+                    "supported because node $(repr(dst)) is reached from both " *
+                    "$(repr(prior_parent)) and $(repr(src)) in the displayed geometry",
+            )
+        end
+        parent_of[dst] = src
+    end
+    return nothing
+end
+
+function _require_rooted_tree_display(
+        geom::LineageGraphGeometry,
+        owner_name::AbstractString,
+        contract_name::AbstractString,
+    )::Nothing
+    err = _shared_parent_display_error(geom, owner_name, contract_name)
+    err === nothing || throw(err)
+    return nothing
+end
+
+function _tree_parent_lookup(
+        geom::LineageGraphGeometry,
+        owner_name::AbstractString,
+        contract_name::AbstractString,
+    )::Dict{Any, Any}
+    _require_rooted_tree_display(geom, owner_name, contract_name)
+    return Dict{Any, Any}(dst => src for (src, dst) in geom.edges)
+end
 
 function _to_blockscene_pixel(sc, data_pt::Point2f)::Point2f
     sc_vp = Makie.viewport(sc)[]
@@ -810,6 +862,10 @@ unpadded clade bounds for that evaluation rather than interpreting raw pixel
 offsets as data-space padding. The padding conversion is viewport-reactive: it
 reruns whenever the scene is resized.
 
+This MRCA/subtree surface currently requires a rooted-tree or explicit
+tree-view display; shared-parent lineage graphs are rejected directly rather
+than silently projected to a tree.
+
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry.
 - `accessor::LineageGraphAccessor`: supplies the `children` callable used to
@@ -817,7 +873,8 @@ reruns whenever the scene is resized.
 
 # Keyword attributes
 - `clade_nodes`: `Vector` of MRCA nodes whose subtrees should be
-  highlighted. Default `Any[]` (no highlights).
+  highlighted. This MRCA/subtree surface currently requires a rooted-tree or
+  explicit tree-view display. Default `Any[]` (no highlights).
 - `color`: fill color, including alpha channel. Default
   `Makie.RGBAf(0.2, 0.6, 1.0, 0.15)`.
 - `alpha`: opacity in `[0, 1]`; replaces the alpha of `color` in the rendered
@@ -852,6 +909,11 @@ function Makie.plot!(p::CladeHighlightLayer)::CladeHighlightLayer
         [:geom, :accessor, :clade_nodes, :padding, :pixel_projection],
         :highlight_rects,
     ) do geom, accessor, clade_nodes, padding, _
+        isempty(clade_nodes) || _require_rooted_tree_display(
+            geom,
+            "CladeHighlightLayer(clade_nodes = ...)",
+            "`clade_nodes` subtree highlighting",
+        )
         rects = Rect2f[]
         for mrca in clade_nodes
             leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
@@ -940,13 +1002,19 @@ are not clipped by the axis camera. The derived attributes
 corresponding blockscene pixel coordinates and are updated reactively whenever
 the scene viewport or camera changes.
 
+This MRCA/subtree surface currently requires a rooted-tree or explicit
+tree-view display; shared-parent lineage graphs are rejected directly rather
+than silently projected to a tree.
+
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry.
 - `accessor::LineageGraphAccessor`: supplies the `children` callable used to
   traverse each subtree via `Accessors.leaves`.
 
 # Keyword attributes
-- `clade_nodes`: `Vector` of MRCA nodes to annotate. Default `Any[]`.
+- `clade_nodes`: `Vector` of MRCA nodes to annotate. This MRCA/subtree
+  surface currently requires a rooted-tree or explicit tree-view display.
+  Default `Any[]`.
 - `label_func`: callable `mrca -> String` producing the bracket label.
   Default `node -> ""` (invisible empty labels).
 - `color`: line and text color. Default `:black`.
@@ -985,6 +1053,11 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
         [:geom, :accessor, :clade_nodes, :offset, :pixel_projection, :side],
         :bracket_shapes,
     ) do geom, accessor, clade_nodes, offset, _, side
+        isempty(clade_nodes) || _require_rooted_tree_display(
+            geom,
+            "CladeLabelLayer(clade_nodes = ...)",
+            "`clade_nodes` bracket labelling",
+        )
         pts = Point2f[]
         for mrca in clade_nodes
             leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
@@ -1054,6 +1127,11 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
         [:geom, :accessor, :clade_nodes, :label_func, :offset, :pixel_projection, :side],
         :bracket_label_data,
     ) do geom, accessor, clade_nodes, label_func, offset, _, side
+        isempty(clade_nodes) || _require_rooted_tree_display(
+            geom,
+            "CladeLabelLayer(clade_nodes = ...)",
+            "`clade_nodes` bracket labelling",
+        )
         entries = Tuple{Point2f, String, Tuple{Symbol, Symbol}}[]
         for mrca in clade_nodes
             leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
@@ -1458,9 +1536,12 @@ re-calling `lineageplot!`. The `basenode` argument may be a plain value or an
   `leaf_label_align`, `leaf_label_visible`: forwarded to `LeafLabelLayer`.
 - `node_label_func`, `node_label_threshold`, `node_label_position`,
   `node_label_font`, `node_label_fontsize`, `node_label_color`,
-  `node_label_visible`: forwarded to `NodeLabelLayer`.
+  `node_label_visible`: forwarded to `NodeLabelLayer`. `node_label_position =
+  :toward_parent` currently requires a rooted-tree or explicit tree-view
+  display.
 - `clade_nodes`: vector of MRCA nodes shared by `CladeHighlightLayer`
-  and `CladeLabelLayer`. Default `Any[]`.
+  and `CladeLabelLayer`. This MRCA/subtree surface currently requires a
+  rooted-tree or explicit tree-view display. Default `Any[]`.
 - `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`,
   `clade_highlight_visible`: forwarded to `CladeHighlightLayer`.
 - `clade_label_func`, `clade_label_color`, `clade_label_fontsize`,
@@ -1531,7 +1612,7 @@ For the non-mutating convenience entry point that creates a `Figure` and
     node_label_func = (node -> "")
     "Predicate node -> Bool; only nodes returning true are labelled. Default: none (opt-in)."
     node_label_threshold = (node -> false)
-    "Label position: :node or :toward_parent."
+    "Label position: :node or :toward_parent; :toward_parent currently requires rooted-tree or explicit tree-view geometry."
     node_label_position = :node
     node_label_font = :regular
     node_label_fontsize = 10
@@ -1539,7 +1620,7 @@ For the non-mutating convenience entry point that creates a `Figure` and
     node_label_visible = true
 
     # ── CladeHighlightLayer (shares clade_nodes with CladeLabelLayer) ─────────
-    "Vector of MRCA nodes whose subtrees are highlighted and labelled."
+    "Vector of MRCA nodes whose subtrees are highlighted and labelled; currently rooted-tree or explicit tree-view only."
     clade_nodes = Any[]
     clade_highlight_color = Makie.RGBAf(0.2f0, 0.6f0, 1.0f0, 0.15f0)
     clade_highlight_alpha = 0.15

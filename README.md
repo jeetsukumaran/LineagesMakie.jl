@@ -105,7 +105,9 @@ plot_result = lineageplot(
 
 Add the `edgeweight(src, dst)` accessor when horizontal distance should reflect
 edge weight. The same example also shows leaf labels, clade highlighting, a
-clade bracket label, a quantitative x-axis, and a scale bar.
+clade bracket label, a quantitative x-axis, and a scale bar. On shared-parent
+DAG displays, `clade_nodes` subtree annotations currently require an explicit
+rooted-tree view.
 
 ```julia
 using CairoMakie
@@ -327,9 +329,9 @@ its layers.
 | Internal nodes | `node_marker`, `node_color`, `node_markersize`, `node_strokecolor`, `node_visible`. |
 | Leaves | `leaf_marker`, `leaf_color`, `leaf_markersize`, `leaf_strokecolor`, `leaf_visible`. |
 | Leaf labels | `leaf_label_func`, `leaf_label_fontsize`, `leaf_label_color`, `leaf_label_italic`, `leaf_label_visible`. |
-| Node labels | `node_label_func`, `node_label_threshold`, `node_label_position`, `node_label_fontsize`. |
-| Clade highlights | `clade_nodes`, `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`. |
-| Clade labels | `clade_nodes`, `clade_label_func`, `clade_label_color`, `clade_label_fontsize`, `clade_label_side`. |
+| Node labels | `node_label_func`, `node_label_threshold`, `node_label_position`, `node_label_fontsize`. `node_label_position = :toward_parent` currently requires a rooted-tree or explicit tree-view display. |
+| Clade highlights | `clade_nodes`, `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`. `clade_nodes` subtree highlights currently require a rooted-tree or explicit tree-view display. |
+| Clade labels | `clade_nodes`, `clade_label_func`, `clade_label_color`, `clade_label_fontsize`, `clade_label_side`. `clade_nodes` subtree brackets currently require a rooted-tree or explicit tree-view display. |
 | Scale bars | `scalebar_label`, `scalebar_length`, `scalebar_position`, `scalebar_auto_visible`. |
 
 `edge_color` may be a uniform color or a function of `(src, dst)`:
@@ -345,6 +347,9 @@ lineageplot!(
 ```
 
 Node labels are opt-in. Enable them with `node_label_threshold`:
+
+`node_label_position = :toward_parent` currently requires a rooted-tree or
+explicit tree-view display; use `:node` on shared-parent DAG layouts.
 
 ```julia
 lineageplot!(

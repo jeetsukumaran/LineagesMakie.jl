@@ -285,6 +285,43 @@ end
         @test_nowarn CairoMakie.colorbuffer(fig)
     end
 
+    @testset "lineageplot! rejects :toward_parent node labels on shared-parent DAG displays" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = _it_dag_accessor()
+        err = _it_captured_error(() -> lineageplot!(
+            ax,
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodelevels,
+            node_label_func = node -> node.name,
+            node_label_threshold = node -> true,
+            node_label_position = :toward_parent,
+        ))
+        @test err !== nothing
+        @test _it_root_error(err) isa ArgumentError
+        @test occursin("NodeLabelLayer(position = :toward_parent)", sprint(showerror, _it_root_error(err)))
+        @test occursin("rooted-tree or explicit tree-view", sprint(showerror, _it_root_error(err)))
+    end
+
+    @testset "lineageplot! rejects clade_nodes subtree annotations on shared-parent DAG displays" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = _it_dag_accessor()
+        err = _it_captured_error(() -> lineageplot!(
+            ax,
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodelevels,
+            clade_nodes = [_IT_SHARED_DESCENDANT_DAG],
+            clade_label_func = node -> node.name,
+        ))
+        @test err !== nothing
+        @test _it_root_error(err) isa ArgumentError
+        @test occursin("CladeHighlightLayer(clade_nodes = ...)", sprint(showerror, _it_root_error(err)))
+        @test occursin("rooted-tree or explicit tree-view", sprint(showerror, _it_root_error(err)))
+    end
+
     @testset "lineageplot! on Axis keeps explicit-coordinate leaf labels aligned with rendered order" begin
         fig = Figure(; size = (600, 400))
         ax = Axis(fig[1, 1])

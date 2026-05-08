@@ -20,6 +20,11 @@ struct LayersTestNode
     children::Vector{LayersTestNode}
 end
 
+struct LayersDagNode
+    name::String
+    children::Vector{LayersDagNode}
+end
+
 #   root
 #   ├── ab
 #   │   ├── a
@@ -38,6 +43,13 @@ const _LT_BALANCED_BASENODE = LayersTestNode("root", [
     ]),
 ])
 
+const _LT_SHARED_DESCENDANT_DAG = let
+    shared = LayersDagNode("shared", LayersDagNode[])
+    left = LayersDagNode("left", LayersDagNode[shared])
+    right = LayersDagNode("right", LayersDagNode[shared])
+    LayersDagNode("root", LayersDagNode[left, right])
+end
+
 # ── Shared fixture: rendered axis ─────────────────────────────────────────────
 
 _LT_FIG = Figure(; size = (800, 600))
@@ -52,6 +64,10 @@ _LT_ACC_UNIT = lineagegraph_accessor(
 )
 _LT_GEOM = rectangular_layout(_LT_BALANCED_BASENODE, _LT_ACC)
 _LT_NONBASENODE_CLADE = _LT_BALANCED_BASENODE.children[1]
+
+function _lt_dag_accessor()
+    return lineagegraph_accessor(_LT_SHARED_DESCENDANT_DAG; children = node -> node.children)
+end
 
 function _lt_clade_points(geom::LineageGraphGeometry, acc, mrca)
     pts = [geom.node_positions[node] for node in leaves(acc, mrca)]
@@ -549,6 +565,39 @@ end
             @test plot_obj.visible[] == false
         end
 
+        @testset ":toward_parent rejects shared-parent DAG displays" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            @test_throws r"NodeLabelLayer\(position = :toward_parent\).*rooted-tree or explicit tree-view.*shared-parent lineage graphs" nodelabellayer!(
+                ax,
+                geom,
+                acc;
+                value_func = node -> node.name,
+                threshold = node -> true,
+                position = :toward_parent,
+            )
+        end
+
+        @testset ":toward_parent remains green on rooted trees" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = lineagegraph_accessor(_LT_BALANCED_BASENODE; children = node -> node.children)
+            geom = rectangular_layout(_LT_BALANCED_BASENODE, acc)
+            plot_obj = nodelabellayer!(
+                ax,
+                geom,
+                acc;
+                value_func = node -> node.name,
+                threshold = node -> node === _LT_NONBASENODE_CLADE,
+                position = :toward_parent,
+            )
+            colorbuffer(fig)
+            @test length(plot_obj[:node_label_positions][]) == 1
+            @test only(plot_obj[:node_label_positions][]) != geom.node_positions[_LT_NONBASENODE_CLADE]
+        end
+
     end
 
     @testset "CladeHighlightLayer" begin
@@ -606,6 +655,19 @@ end
             geom = rectangular_layout(_LT_BALANCED_BASENODE, acc)
             plot_obj = cladehighlightlayer!(ax, geom, acc; visible = false)
             @test plot_obj.visible[] == false
+        end
+
+        @testset "clade_nodes reject shared-parent DAG displays" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            @test_throws r"CladeHighlightLayer\(clade_nodes = \.\.\.\).*rooted-tree or explicit tree-view.*shared-parent lineage graphs" cladehighlightlayer!(
+                ax,
+                geom,
+                acc;
+                clade_nodes = [_LT_SHARED_DESCENDANT_DAG],
+            )
         end
 
         @testset "non-basenode-clade highlight remains local after layout" begin
@@ -720,6 +782,20 @@ end
             geom = rectangular_layout(_LT_BALANCED_BASENODE, acc)
             plot_obj = cladelabellayer!(ax, geom, acc; visible = false)
             @test plot_obj.visible[] == false
+        end
+
+        @testset "clade_nodes reject shared-parent DAG displays" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            @test_throws r"CladeLabelLayer\(clade_nodes = \.\.\.\).*rooted-tree or explicit tree-view.*shared-parent lineage graphs" cladelabellayer!(
+                ax,
+                geom,
+                acc;
+                clade_nodes = [_LT_SHARED_DESCENDANT_DAG],
+                label_func = node -> node.name,
+            )
         end
 
         @testset "bracket renders in decoration scene (not clipped)" begin
