@@ -810,6 +810,27 @@ end
                 maximum(geom.node_positions[node][1] for node in _LT_SHARED_DESCENDANT_DAG.children)
         end
 
+        @testset "empty resolved labels suppress bracket rendering" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            plot_obj = nodegrouplabellayer!(
+                ax,
+                geom,
+                acc;
+                group_nodes = _LT_SHARED_DESCENDANT_DAG.children,
+                label_func = nodes -> "",
+            )
+            colorbuffer(fig)
+
+            @test isempty(plot_obj[:bracket_shapes][])
+            @test isempty(plot_obj[:bracket_pixel_shapes][])
+            @test isempty(plot_obj[:bracket_label_positions][])
+            @test isempty(plot_obj[:bracket_label_pixel_positions][])
+            @test plot_obj[:bracket_label_strings][] == String[]
+        end
+
     end
 
     @testset "CladeLabelLayer" begin

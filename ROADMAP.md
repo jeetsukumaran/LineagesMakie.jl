@@ -10,13 +10,16 @@ LineagesMakie.jl currently provides the core Makie-native plotting foundation:
 
 - generic `LineageGraphAccessor` input with a required `children` accessor
 - `abstracttrees_accessor` for AbstractTrees.jl-compatible data
-- rectangular clade graph and edgeweight-proportional layouts
+- rectangular rooted-tree and shared-parent DAG lineage-graph layouts,
+  including edgeweight-proportional displays when the graph satisfies the
+  current coordinate contract
 - radial layout with chord-style circular edges
 - all current `lineageunits` values
 - `LineageAxis` with `axis_polarity`, `display_polarity`, and
   `lineage_orientation`
 - quantitative x-axis and y-axis decorations, labels, and grid lines
-- edge, node, leaf, leaf-label, node-label, clade-highlight, clade-label, and
+- edge, node, leaf, leaf-label, node-label, clade-highlight, clade-label,
+  graph-capable node-group highlight, graph-capable node-group label, and
   scale-bar layers
 - Observable-aware Makie recipe composition
 

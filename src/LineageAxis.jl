@@ -51,6 +51,7 @@ using Makie: make_block_docstring
 # LineagePlot is the return type of the updated lineageplot! method.
 using .Layers:
     _resolve_lineageunits_stub,
+    _resolved_nodegroup_label_string,
     CladeLabelLayer,
     LeafLabelLayer,
     LineagePlot,
@@ -1507,8 +1508,9 @@ function _resolved_clade_label_strings(clade_nodes, label_func)::Vector{String}
 end
 
 function _resolved_nodegroup_label_strings(group_nodes, label_func)::Vector{String}
-    isempty(group_nodes) && return String[]
-    return String[string(label_func(group_nodes))]
+    label_string = _resolved_nodegroup_label_string(group_nodes, label_func)
+    isempty(label_string) && return String[]
+    return String[label_string]
 end
 
 function _shared_annotation_label_side(
@@ -1694,7 +1696,7 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
             lp[:group_nodes][],
             lp[:nodegroup_label_func][],
             lp[:nodegroup_label_fontsize][],
-            lp[:nodegroup_label_visible][],
+            lp[:resolved_nodegroup_label_visible][],
             lp[:nodegroup_label_offset][],
             lp[:nodegroup_label_side][],
             lp[:resolved_scalebar_visible][],
@@ -1725,7 +1727,7 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
         lp[:group_nodes],
         lp[:nodegroup_label_func],
         lp[:nodegroup_label_fontsize],
-        lp[:nodegroup_label_visible],
+        lp[:resolved_nodegroup_label_visible],
         lp[:nodegroup_label_offset],
         lp[:nodegroup_label_side],
         lp[:resolved_scalebar_visible],

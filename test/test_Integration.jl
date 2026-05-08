@@ -350,6 +350,53 @@ end
         @test length(ngl[:bracket_label_pixel_positions][]) == 1
     end
 
+    @testset "lineageplot! keeps highlight-only node-group DAG annotations label-free" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = _it_dag_accessor()
+        nodes = _it_dag_nodes()
+        lp = @test_nowarn lineageplot!(
+            ax,
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodelevels,
+            group_nodes = [nodes.left, nodes.right],
+            nodegroup_highlight_alpha = 0.22,
+        )
+        @test_nowarn CairoMakie.colorbuffer(fig)
+
+        ngh = only(filter(p -> p isa NodeGroupHighlightLayer, lp.plots))
+        ngl = only(filter(p -> p isa NodeGroupLabelLayer, lp.plots))
+
+        @test length(ngh[:highlight_rects][]) == 1
+        @test isempty(ngl[:bracket_pixel_shapes][])
+        @test isempty(ngl[:bracket_label_pixel_positions][])
+        @test ngl[:bracket_label_strings][] == String[]
+    end
+
+    @testset "lineageplot! keeps label-only node-group DAG annotations highlight-free" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = _it_dag_accessor()
+        nodes = _it_dag_nodes()
+        lp = @test_nowarn lineageplot!(
+            ax,
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodelevels,
+            group_nodes = [nodes.left, nodes.right],
+            nodegroup_label_func = nodes -> join(String[node.name for node in nodes], " + "),
+        )
+        @test_nowarn CairoMakie.colorbuffer(fig)
+
+        ngh = only(filter(p -> p isa NodeGroupHighlightLayer, lp.plots))
+        ngl = only(filter(p -> p isa NodeGroupLabelLayer, lp.plots))
+
+        @test isempty(ngh[:highlight_rects][])
+        @test ngl[:bracket_label_strings][] == ["left + right"]
+        @test length(ngl[:bracket_label_pixel_positions][]) == 1
+    end
+
     @testset "lineageplot! on Axis keeps explicit-coordinate leaf labels aligned with rendered order" begin
         fig = Figure(; size = (600, 400))
         ax = Axis(fig[1, 1])

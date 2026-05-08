@@ -522,6 +522,29 @@ end
         @test any(x -> isapprox(x, layout.clade_bracket_x; atol = 1.0f-3), bracket_xs)
     end
 
+    @testset "highlight-only node-group DAG annotations do not reserve shared annotation lanes" begin
+        fig, lax = _fresh_lax()
+        group_nodes = _LA_SHARED_DESCENDANT_DAG.children
+        lp = lineageplot!(
+            lax,
+            _LA_SHARED_DESCENDANT_DAG,
+            _LA_DAG_ACC;
+            lineageunits = :nodelevels,
+            leaf_label_func = node -> "node_" * node.name,
+            group_nodes = group_nodes,
+            nodegroup_highlight_alpha = 0.22,
+        )
+        colorbuffer(fig)
+
+        measurements = lax._annotation_measurements[]
+        ngl = only(filter(p -> p isa NodeGroupLabelLayer, lp.plots))
+
+        @test !measurements.clade_annotation_visible
+        @test isempty(ngl[:bracket_pixel_shapes][])
+        @test isempty(ngl[:bracket_label_pixel_positions][])
+        @test ngl[:bracket_label_strings][] == String[]
+    end
+
     @testset "radial annotation layout uses measured outer padding" begin
         fig, lax = _fresh_lax(; lineage_orientation = :radial)
         lineageplot!(

@@ -663,6 +663,20 @@ function _group_node_positions(group_nodes, node_positions::Dict)::Vector{Point2
     return Point2f[node_positions[node] for node in group_nodes if haskey(node_positions, node)]
 end
 
+const _NODEGROUP_HIGHLIGHT_DEFAULT_COLOR = Makie.RGBAf(0.95f0, 0.7f0, 0.2f0, 0.18f0)
+const _NODEGROUP_HIGHLIGHT_DEFAULT_ALPHA = 0.18
+const _NODEGROUP_HIGHLIGHT_DEFAULT_PADDING = Makie.Vec2f(4, 4)
+
+function _resolved_nodegroup_label_string(group_nodes, label_func)::String
+    isempty(group_nodes) && return ""
+    label = string(label_func(group_nodes))
+    return isempty(strip(label)) ? "" : label
+end
+
+function _nodegroup_highlight_requested(color, alpha, padding)::Bool
+    return color !== nothing || alpha !== nothing || padding !== nothing
+end
+
 function _shared_bracket_pixel_shapes_for_groups(
         sc,
         point_groups,
@@ -1053,9 +1067,10 @@ function Makie.plot!(p::NodeGroupHighlightLayer)::NodeGroupHighlightLayer
 
     map!(
         p.attributes,
-        [:geom, :group_nodes, :padding, :pixel_projection],
+        [:geom, :group_nodes, :padding, :pixel_projection, :visible],
         :highlight_rects,
-    ) do geom, group_nodes, padding, _
+    ) do geom, group_nodes, padding, _, visible
+        visible || return Rect2f[]
         group_pts = _group_node_positions(group_nodes, geom.node_positions)
         isempty(group_pts) && return Rect2f[]
 
@@ -1462,11 +1477,16 @@ function Makie.plot!(p::NodeGroupLabelLayer)::NodeGroupLabelLayer
     sc = parent_scene(p)
     register_pixel_projection!(p.attributes, sc)
 
+    map!(p.attributes, [:group_nodes, :label_func], :resolved_label_string) do group_nodes, label_func
+        return _resolved_nodegroup_label_string(group_nodes, label_func)
+    end
+
     map!(
         p.attributes,
-        [:geom, :group_nodes, :offset, :pixel_projection, :side],
+        [:geom, :group_nodes, :offset, :pixel_projection, :side, :resolved_label_string],
         :bracket_shapes,
-    ) do geom, group_nodes, offset, _, side
+    ) do geom, group_nodes, offset, _, side, label_string
+        isempty(label_string) && return Point2f[]
         group_pts = _group_node_positions(group_nodes, geom.node_positions)
         isempty(group_pts) && return Point2f[]
 
@@ -1529,16 +1549,12 @@ function Makie.plot!(p::NodeGroupLabelLayer)::NodeGroupLabelLayer
         return pts
     end
 
-    map!(p.attributes, [:group_nodes, :label_func], :resolved_label_string) do group_nodes, label_func
-        isempty(group_nodes) && return ""
-        return string(label_func(group_nodes))
-    end
-
     map!(
         p.attributes,
         [:geom, :group_nodes, :resolved_label_string, :offset, :pixel_projection, :side],
         :bracket_label_data,
     ) do geom, group_nodes, label_string, offset, _, side
+        isempty(label_string) && return Tuple{Point2f, String, Tuple{Symbol, Symbol}}[]
         group_pts = _group_node_positions(group_nodes, geom.node_positions)
         isempty(group_pts) && return Tuple{Point2f, String, Tuple{Symbol, Symbol}}[]
 
@@ -1609,6 +1625,7 @@ function Makie.plot!(p::NodeGroupLabelLayer)::NodeGroupLabelLayer
         [:geom, :group_nodes, :bracket_shapes, :annotation_layout, :pixel_projection],
         :bracket_pixel_shapes,
     ) do geom, group_nodes, shapes, annotation_layout, _
+        isempty(shapes) && return Point2f[]
         if _shared_clade_annotation_active(annotation_layout)
             return _shared_bracket_pixel_shapes_for_groups(
                 sc,
@@ -1638,6 +1655,7 @@ function Makie.plot!(p::NodeGroupLabelLayer)::NodeGroupLabelLayer
         [:geom, :group_nodes, :bracket_label_positions, :annotation_layout, :pixel_projection],
         :bracket_label_pixel_positions,
     ) do geom, group_nodes, positions, annotation_layout, _
+        isempty(positions) && return Point2f[]
         if _shared_clade_annotation_active(annotation_layout)
             return _shared_bracket_label_pixel_positions_for_groups(
                 sc,
@@ -1939,13 +1957,17 @@ re-calling `lineageplot!`. The `basenode` argument may be a plain value or an
   surface performs no MRCA expansion and is DAG-safe. Default `Any[]`.
 - `nodegroup_highlight_color`, `nodegroup_highlight_alpha`,
   `nodegroup_highlight_padding`, `nodegroup_highlight_visible`: forwarded to
-  `NodeGroupHighlightLayer`.
+  `NodeGroupHighlightLayer`. The composite highlight surface stays off until
+  one highlight-specific keyword is supplied or
+  `nodegroup_highlight_visible = true`.
 - `nodegroup_label_func`, `nodegroup_label_color`,
   `nodegroup_label_fontsize`, `nodegroup_label_offset`,
   `nodegroup_label_side`, `nodegroup_label_visible`: forwarded to
   `NodeGroupLabelLayer`. `nodegroup_label_func` is called as
-  `label_func(group_nodes)`. `nodegroup_label_side` is set automatically by
-  `lineageplot!(ax::LineageAxis, ...)` based on orientation.
+  `label_func(group_nodes)`. The composite label surface stays off until that
+  call resolves to a non-empty label; empty labels suppress both bracket
+  rendering and `LineageAxis` lane activation. `nodegroup_label_side` is set
+  automatically by `lineageplot!(ax::LineageAxis, ...)` based on orientation.
 - `clade_nodes`: vector of MRCA nodes shared by `CladeHighlightLayer`
   and `CladeLabelLayer`. This MRCA/subtree surface currently requires a
   rooted-tree or explicit tree-view display. Default `Any[]`.
@@ -2029,11 +2051,13 @@ For the non-mutating convenience entry point that creates a `Figure` and
     # ── NodeGroupHighlightLayer / NodeGroupLabelLayer ────────────────────────
     "One explicit displayed node group shared by `NodeGroupHighlightLayer` and `NodeGroupLabelLayer`."
     group_nodes = Any[]
-    nodegroup_highlight_color = Makie.RGBAf(0.95f0, 0.7f0, 0.2f0, 0.18f0)
-    nodegroup_highlight_alpha = 0.18
-    "Pixel-space expansion of the explicit node-group bounding box on each side."
-    nodegroup_highlight_padding = Makie.Vec2f(4, 4)
-    nodegroup_highlight_visible = true
+    "nothing keeps the composite highlight surface off until one highlight-specific keyword is supplied."
+    nodegroup_highlight_color = nothing
+    nodegroup_highlight_alpha = nothing
+    "nothing keeps the composite highlight surface off until one highlight-specific keyword is supplied."
+    nodegroup_highlight_padding = nothing
+    "nothing auto-enables the highlight surface when a highlight-specific keyword is supplied."
+    nodegroup_highlight_visible = nothing
     "Callable `group_nodes -> String` producing the graph-capable node-group label."
     nodegroup_label_func = (nodes -> "")
     nodegroup_label_color = :black
@@ -2042,7 +2066,8 @@ For the non-mutating convenience entry point that creates a `Figure` and
     nodegroup_label_offset = Makie.Vec2f(6, 0)
     "Side on which the node-group bracket is placed: :right, :left, :top, or :bottom."
     nodegroup_label_side = :right
-    nodegroup_label_visible = true
+    "nothing auto-enables the label surface only when `nodegroup_label_func(group_nodes)` resolves to a non-empty label."
+    nodegroup_label_visible = nothing
 
     # ── CladeHighlightLayer (shares clade_nodes with CladeLabelLayer) ─────────
     "Vector of MRCA nodes whose subtrees are highlighted and labelled; currently rooted-tree or explicit tree-view only."
@@ -2142,6 +2167,48 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         return av === nothing ? _scalebar_visible(lu, label) : av::Bool
     end
 
+    map!(lp.attributes, [:nodegroup_highlight_color], :resolved_nodegroup_highlight_color) do color
+        return color === nothing ? _NODEGROUP_HIGHLIGHT_DEFAULT_COLOR : color
+    end
+
+    map!(lp.attributes, [:nodegroup_highlight_alpha], :resolved_nodegroup_highlight_alpha) do alpha
+        return alpha === nothing ? _NODEGROUP_HIGHLIGHT_DEFAULT_ALPHA : alpha
+    end
+
+    map!(lp.attributes, [:nodegroup_highlight_padding], :resolved_nodegroup_highlight_padding) do padding
+        return padding === nothing ? _NODEGROUP_HIGHLIGHT_DEFAULT_PADDING : padding
+    end
+
+    map!(
+        lp.attributes,
+        [
+            :group_nodes,
+            :nodegroup_highlight_color,
+            :nodegroup_highlight_alpha,
+            :nodegroup_highlight_padding,
+            :nodegroup_highlight_visible,
+        ],
+        :resolved_nodegroup_highlight_visible,
+    ) do group_nodes, color, alpha, padding, visible
+        isempty(group_nodes) && return false
+        if visible === nothing
+            return _nodegroup_highlight_requested(color, alpha, padding)
+        end
+        return visible::Bool
+    end
+
+    map!(
+        lp.attributes,
+        [:group_nodes, :nodegroup_label_func, :nodegroup_label_visible],
+        :resolved_nodegroup_label_visible,
+    ) do group_nodes, label_func, visible
+        has_label = !isempty(_resolved_nodegroup_label_string(group_nodes, label_func))
+        if visible === nothing
+            return has_label
+        end
+        return (visible::Bool) && has_label
+    end
+
     # Step 4: Call all 10 sub-layer recipes, passing ComputeGraph node handles
     # as positional arguments where possible.
     #
@@ -2169,10 +2236,10 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
     nodegrouphighlightlayer!(
         lp, lp[:computed_geom], lp[:accessor];
         group_nodes = lp[:group_nodes],
-        color = lp[:nodegroup_highlight_color],
-        alpha = lp[:nodegroup_highlight_alpha],
-        padding = lp[:nodegroup_highlight_padding],
-        visible = lp[:nodegroup_highlight_visible],
+        color = lp[:resolved_nodegroup_highlight_color],
+        alpha = lp[:resolved_nodegroup_highlight_alpha],
+        padding = lp[:resolved_nodegroup_highlight_padding],
+        visible = lp[:resolved_nodegroup_highlight_visible],
     )
 
     # Internal node markers are rendered in two passes so the marker fill can
@@ -2253,7 +2320,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         fontsize = lp[:nodegroup_label_fontsize],
         offset = lp[:nodegroup_label_offset],
         side = lp[:nodegroup_label_side],
-        visible = lp[:nodegroup_label_visible],
+        visible = lp[:resolved_nodegroup_label_visible],
     )
 
     cladelabellayer!(

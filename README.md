@@ -365,8 +365,8 @@ its layers.
 | Leaves | `leaf_marker`, `leaf_color`, `leaf_markersize`, `leaf_strokecolor`, `leaf_visible`. |
 | Leaf labels | `leaf_label_func`, `leaf_label_fontsize`, `leaf_label_color`, `leaf_label_italic`, `leaf_label_visible`. |
 | Node labels | `node_label_func`, `node_label_threshold`, `node_label_position`, `node_label_fontsize`. `node_label_position = :toward_parent` currently requires a rooted-tree or explicit tree-view display. |
-| Node-group highlights | `group_nodes`, `nodegroup_highlight_color`, `nodegroup_highlight_alpha`, `nodegroup_highlight_padding`. This graph-capable surface performs no MRCA expansion and is DAG-safe. |
-| Node-group labels | `group_nodes`, `nodegroup_label_func`, `nodegroup_label_color`, `nodegroup_label_fontsize`, `nodegroup_label_side`. `nodegroup_label_func` is called as `label_func(group_nodes)`. |
+| Node-group highlights | `group_nodes`, `nodegroup_highlight_color`, `nodegroup_highlight_alpha`, `nodegroup_highlight_padding`, `nodegroup_highlight_visible`. This graph-capable surface performs no MRCA expansion and is DAG-safe. The composite `lineageplot!` surface stays off until one highlight-specific keyword is supplied or `nodegroup_highlight_visible = true`. |
+| Node-group labels | `group_nodes`, `nodegroup_label_func`, `nodegroup_label_color`, `nodegroup_label_fontsize`, `nodegroup_label_side`, `nodegroup_label_visible`. `nodegroup_label_func` is called as `label_func(group_nodes)`. The composite label surface is independent from highlighting and only activates when that call resolves to a non-empty label; `nodegroup_label_visible` only gates that non-empty surface on or off. |
 | Clade highlights | `clade_nodes`, `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`. `clade_nodes` subtree highlights currently require a rooted-tree or explicit tree-view display. |
 | Clade labels | `clade_nodes`, `clade_label_func`, `clade_label_color`, `clade_label_fontsize`, `clade_label_side`. `clade_nodes` subtree brackets currently require a rooted-tree or explicit tree-view display. |
 | Scale bars | `scalebar_label`, `scalebar_length`, `scalebar_position`, `scalebar_auto_visible`. |
@@ -389,6 +389,12 @@ Node labels are opt-in. Enable them with `node_label_threshold`:
 explicit tree-view display; use `:node` on shared-parent DAG layouts, or use
 `group_nodes` with `nodegroup_label_*` when the annotation target is one exact
 displayed node set.
+
+`group_nodes` drives two independent graph-capable surfaces. Highlight-only
+calls can pass `group_nodes` with `nodegroup_highlight_*` and no label surface
+will be created; label-only calls can pass `group_nodes` with
+`nodegroup_label_*`, and empty resolved labels suppress both the bracket and
+any `LineageAxis` annotation-lane reservation.
 
 ```julia
 lineageplot!(
