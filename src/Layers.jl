@@ -8,7 +8,7 @@ import Makie
 using Makie: @recipe, parent_scene, Axis, lines!, scatter!, text!, poly!, Point2f, Vec2f, Rect2f
 using LineagesMakie.CoordinateTransform: register_pixel_projection!, pixel_offset_to_data_delta, data_to_pixel
 using ..Accessors: LineageGraphAccessor, is_leaf, leaves
-using ..Geometry: LineageGraphGeometry, rectangular_layout, circular_layout
+using ..Geometry: LineageGraphGeometry, _plot_envelope, rectangular_layout, circular_layout
 
 # ── EdgeLayer ─────────────────────────────────────────────────────────────────
 
@@ -677,7 +677,7 @@ function _resolved_scalebar_length(
         len,
         lineage_orientation::Symbol,
     )::Float64
-    bb = geom.boundingbox
+    bb = _plot_envelope(geom)
     if len !== nothing
         return Float64(len)
     end
@@ -692,7 +692,7 @@ function _scalebar_length_px(
         bar_length::Float64,
         lineage_orientation::Symbol,
     )::Float32
-    bb = geom.boundingbox
+    bb = _plot_envelope(geom)
     if lineage_orientation === :radial
         center = _geom_center(bb)
         start_pt = center
@@ -737,7 +737,7 @@ end
 
 """
 Compute the bottom-left origin of a scale bar in data space given `position`
-(halign × valign tuple), the layout bounding box `bb`, and the bar length.
+(halign × valign tuple), the rendered plot envelope `bb`, and the bar length.
 """
 function _scalebar_origin(
         position::Tuple{Symbol, Symbol},
@@ -1225,12 +1225,13 @@ For topological layouts (`:nodeheights`, `:nodelevels`, `:nodedepths`,
 invisible. This default can be overridden by passing
 `scalebar_auto_visible = true` or `scalebar_auto_visible = false` explicitly.
 
-The bar length defaults to 10% of the process-coordinate span of
-`geom.boundingbox`. Pass an explicit `length` value (in data units) to override.
+The bar length defaults to 10% of the process-coordinate span of the full
+rendered plot envelope. Pass an explicit `length` value (in data units) to
+override.
 
 # Arguments
 - `geom::LineageGraphGeometry`: pre-computed layout geometry; provides the
-  bounding box for default bar length and position computation.
+  full rendered plot envelope for default bar length and position computation.
 - `accessor::LineageGraphAccessor`: accepted for API symmetry with other layers;
   not used by the core logic of this layer.
 - `lineageunits_val::Symbol`: the resolved `lineageunits` value; determines the
@@ -1241,7 +1242,7 @@ The bar length defaults to 10% of the process-coordinate span of
   `halign ∈ {:left, :center, :right}` and `valign ∈ {:top, :center, :bottom}`.
   Default `(:left, :bottom)`.
 - `length`: bar length in data units. `nothing` (default) → 10% of the
-  process-coordinate range from `geom.boundingbox`.
+  process-coordinate range from the full rendered plot envelope.
 - `label`: text displayed below the bar midpoint. Default `""`.
 - `color`: bar and label color. Default `:black`.
 - `linewidth`: bar line width in pixels. Default `1.5f0`.
@@ -1252,7 +1253,7 @@ The bar length defaults to 10% of the process-coordinate span of
 """
 @recipe ScaleBarLayer (geom, accessor, lineageunits_val) begin
     position = (:left, :bottom)
-    "Bar length in data units; nothing → 10% of process-coordinate span."
+    "Bar length in data units; nothing → 10% of the full rendered process span."
     length = nothing
     label = ""
     color = :black
@@ -1285,7 +1286,7 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
         [:geom, :position, :length, :lineage_orientation],
         :scalebar_line_pts,
     ) do geom, position, len, lineage_orientation
-        bb = geom.boundingbox
+        bb = _plot_envelope(geom)
         bar_length = _resolved_scalebar_length(geom, len, lineage_orientation)
         origin = _scalebar_origin(position, bb, bar_length, lineage_orientation)
         policy = _parent_lineage_orientation_policy(lineage_orientation)
@@ -1300,7 +1301,7 @@ function Makie.plot!(p::ScaleBarLayer)::ScaleBarLayer
         [:geom, :position, :length, :lineage_orientation],
         :scalebar_label_pos_vec,
     ) do geom, position, len, lineage_orientation
-        bb = geom.boundingbox
+        bb = _plot_envelope(geom)
         bar_length = _resolved_scalebar_length(geom, len, lineage_orientation)
         origin = _scalebar_origin(position, bb, bar_length, lineage_orientation)
         policy = _parent_lineage_orientation_policy(lineage_orientation)

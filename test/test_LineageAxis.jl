@@ -36,6 +36,16 @@ const _LA_BALANCED_BASENODE = LATestNode("root", [
 
 const _LA_ACC = lineagegraph_accessor(_LA_BALANCED_BASENODE; children = node -> node.children)
 const _LA_NONBASENODE_CLADE = _LA_BALANCED_BASENODE.children[1]
+const _LA_REORDERED_NODEPOS = Dict{String, Makie.Point2f}(
+    "root" => Makie.Point2f(0, 250),
+    "ab" => Makie.Point2f(10, 150),
+    "cd" => Makie.Point2f(10, 350),
+    "a" => Makie.Point2f(20, 400),
+    "b" => Makie.Point2f(20, 100),
+    "c" => Makie.Point2f(20, 300),
+    "d" => Makie.Point2f(20, 200),
+)
+const _LA_REORDERED_LEAF_ORDER = ["b", "d", "c", "a"]
 
 mutable struct LADagNode
     name::String
@@ -439,6 +449,33 @@ end
         @test layout.radial_outer_pad_px > 24.0f0
     end
 
+    @testset "LineageAxis keeps explicit nodepos leaf labels aligned with rendered order" begin
+        fig, lax = _fresh_lax()
+        acc = lineagegraph_accessor(
+            _LA_BALANCED_BASENODE;
+            children = node -> node.children,
+            nodepos = node -> _LA_REORDERED_NODEPOS[node.name],
+        )
+        lp = lineageplot!(
+            lax,
+            _LA_BALANCED_BASENODE,
+            acc;
+            lineageunits = :nodepos,
+            leaf_label_func = node -> node.name,
+        )
+        colorbuffer(fig)
+
+        geom = lax.last_geom[]
+        labels = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+        geom_leaf_ys = [Float32(geom.node_positions[node][2]) for node in geom.leaf_order]
+        label_ys = [Float32(pt[2]) for pt in labels[:leaf_label_positions][]]
+        @test [node.name for node in geom.leaf_order] == _LA_REORDERED_LEAF_ORDER
+        @test labels[:leaf_label_strings][] == _LA_REORDERED_LEAF_ORDER
+        @test _visible_blockscene_strings(lax) == _LA_REORDERED_LEAF_ORDER
+        @test issorted(geom_leaf_ys)
+        @test issorted(label_ys)
+    end
+
     @testset "scale bar reserves a bottom decoration band when visible" begin
         fig, lax = _fresh_lax(; show_x_axis = true)
         lp = lineageplot!(
@@ -467,6 +504,32 @@ end
         @test band_bottom <= line_y <= band_top
         xaxis_top = layout.xaxis_band_rect.origin[2] + layout.xaxis_band_rect.widths[2]
         @test xaxis_top <= layout.scalebar_band_rect.origin[2]
+    end
+
+    @testset "radial limits contain full rendered backward-time geometry" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :radial)
+        lineageplot!(
+            lax,
+            _LA_BALANCED_BASENODE,
+            _LA_ACC;
+            lineageunits = :nodeheights,
+            lineage_orientation = :radial,
+        )
+        colorbuffer(fig)
+
+        geom = lax.last_geom[]
+        plot_bb = LineagesMakie.Geometry._plot_envelope(geom)
+        vp = Makie.viewport(lax.scene)[]
+        vp_w = Float32(Makie.widths(vp)[1])
+        vp_h = Float32(Makie.widths(vp)[2])
+        @test plot_bb.widths[1] > geom.boundingbox.widths[1] ||
+            plot_bb.widths[2] > geom.boundingbox.widths[2]
+        for pt in geom.edge_shapes
+            isfinite(pt[1]) && isfinite(pt[2]) || continue
+            px = data_to_pixel(lax.scene, pt)
+            @test -1.0f-3 <= px[1] <= vp_w + 1.0f-3
+            @test -1.0f-3 <= px[2] <= vp_h + 1.0f-3
+        end
     end
 
     @testset "radial scale bar is auto-hidden when unlabeled" begin

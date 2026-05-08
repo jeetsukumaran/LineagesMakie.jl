@@ -109,6 +109,18 @@ const _IT_NODECOORDINATES = Dict{String, CairoMakie.Makie.Point2f}(
 )
 _it_nodecoordinates(node::IntegrationTestNode) = _IT_NODECOORDINATES[node.name]
 
+const _IT_REORDERED_NODECOORDINATES = Dict{String, CairoMakie.Makie.Point2f}(
+    "root" => CairoMakie.Makie.Point2f(0, 25),
+    "ab" => CairoMakie.Makie.Point2f(1, 15),
+    "cd" => CairoMakie.Makie.Point2f(1, 35),
+    "a" => CairoMakie.Makie.Point2f(2, 40),
+    "b" => CairoMakie.Makie.Point2f(2, 10),
+    "c" => CairoMakie.Makie.Point2f(2, 30),
+    "d" => CairoMakie.Makie.Point2f(2, 20),
+)
+_it_reordered_nodecoordinates(node::IntegrationTestNode) = _IT_REORDERED_NODECOORDINATES[node.name]
+const _IT_REORDERED_LEAF_ORDER = ["b", "d", "c", "a"]
+
 # nodepos: pixel-space Point2f for each node in the 4-leaf tree
 const _IT_NODEPOS = Dict{String, CairoMakie.Makie.Point2f}(
     "root" => CairoMakie.Makie.Point2f(100, 200),
@@ -239,6 +251,33 @@ end
         @test geom.node_positions[nodes.right][1] ≈ 1.0
         @test geom.node_positions[nodes.shared][1] ≈ 2.0
         @test_nowarn CairoMakie.colorbuffer(fig)
+    end
+
+    @testset "lineageplot! on Axis keeps explicit-coordinate leaf labels aligned with rendered order" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = lineagegraph_accessor(
+            _IT_BASENODE;
+            children = node -> node.children,
+            nodecoordinates = _it_reordered_nodecoordinates,
+        )
+        lp = lineageplot!(
+            ax,
+            _IT_BASENODE,
+            acc;
+            lineageunits = :nodecoordinates,
+            leaf_label_func = node -> node.name,
+        )
+        CairoMakie.colorbuffer(fig)
+
+        geom = lp[:computed_geom][]
+        labels = only(filter(p -> p isa LeafLabelLayer, lp.plots))
+        geom_leaf_ys = [Float32(geom.node_positions[node][2]) for node in geom.leaf_order]
+        label_ys = [Float32(pt[2]) for pt in labels[:leaf_label_positions][]]
+        @test [node.name for node in geom.leaf_order] == _IT_REORDERED_LEAF_ORDER
+        @test labels[:leaf_label_strings][] == _IT_REORDERED_LEAF_ORDER
+        @test issorted(geom_leaf_ys)
+        @test issorted(label_ys)
     end
 
     @testset "lineageplot! fails explicitly for inconsistent weighted shared-descendant DAGs" begin

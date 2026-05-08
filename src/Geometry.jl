@@ -46,8 +46,10 @@ Fields:
   the i-th NaN-terminated group of 4 points in `edge_shapes`. Used by
   rendering layers to expand per-edge attribute functions without re-traversing
   the source tree.
-- `leaf_order::Vector{NodeT}`: leaves in the order they appear along the transverse
-  axis (preorder depth-first traversal order).
+- `leaf_order::Vector{NodeT}`: leaves in the order they appear along the
+  rendered leaf axis. Topology-backed layouts derive this from owner-computed
+  layout coordinates; explicit-coordinate layouts derive it from the supplied
+  coordinates while preserving normalized-topology sink order as a tie-break.
 - `boundingbox::Rect2f`: smallest axis-aligned rectangle enclosing all entries
   in `node_positions`.
 """
@@ -122,7 +124,9 @@ default is `:edgeweights` when an `edgeweight` accessor is present; otherwise
 
 Transverse coordinates (second `Point2f` component) place leaves at equal
 intervals by default (`leaf_spacing = :equal`). The `leaf_order` field records
-the leaf sequence.
+the rendered leaf sequence. For explicit-coordinate units, `leaf_order` is
+derived from the supplied transverse coordinates rather than from topology
+sink order.
 
 For units that synthesize rectangular coordinates, each edge `src → dst`
 contributes a right-angle polyline:
@@ -183,7 +187,7 @@ function rectangular_layout(
         edge_shapes = _build_direct_edge_shapes(topology, node_positions)
         edges = _build_edge_list(topology)
         bb = _compute_boundingbox(node_positions)
-        leaf_list = source_nodes(topology.sink_order)
+        leaf_list = _explicit_rectangular_leaf_order(topology, node_positions)
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 
@@ -546,6 +550,42 @@ function _ordered_sinks(
     return source_nodes(ordered)
 end
 
+function _explicit_rectangular_leaf_order(
+        topology::NormalizedTopology{Any},
+        node_positions::Dict{Any, Point2f},
+    )::Vector{Any}
+    ordered = sort(
+        topology.sink_order;
+        by = node -> (Float64(node_positions[node.source_node][2]), node.index),
+    )
+    return source_nodes(ordered)
+end
+
+function _explicit_radial_leaf_order(
+        topology::NormalizedTopology{Any},
+        node_positions::Dict{Any, Point2f},
+        bb::Rect2f,
+    )::Vector{Any}
+    center = Point2f(
+        bb.origin[1] + bb.widths[1] / 2,
+        bb.origin[2] + bb.widths[2] / 2,
+    )
+    ordered = sort(
+        topology.sink_order;
+        by = node -> (
+            _normalized_polar_angle(node_positions[node.source_node], center),
+            node.index,
+        ),
+    )
+    return source_nodes(ordered)
+end
+
+function _normalized_polar_angle(point::Point2f, center::Point2f)::Float64
+    angle = atan(Float64(point[2] - center[2]), Float64(point[1] - center[1]))
+    angle < 0.0 && (angle += 2.0 * π)
+    return angle
+end
+
 # ── Internal: geometry assembly ────────────────────────────────────────────────
 
 # Build the ordered list of (src, dst) pairs in normalized-topology edge order.
@@ -626,19 +666,34 @@ function _build_direct_edge_shapes(
     return shapes
 end
 
-function _compute_boundingbox(node_positions::Dict{Any, Point2f})::Rect2f
-    isempty(node_positions) && return Rect2f(0.0f0, 0.0f0, 0.0f0, 0.0f0)
-    first_p = first(values(node_positions))
-    xmin = xmax = first_p[1]
-    ymin = ymax = first_p[2]
-    for p in values(node_positions)
-        x, y = p[1], p[2]
+function _compute_envelope(points)::Rect2f
+    found = false
+    xmin = xmax = ymin = ymax = 0.0f0
+    for point in points
+        x = Float32(point[1])
+        y = Float32(point[2])
+        isfinite(x) && isfinite(y) || continue
+        if !found
+            xmin = xmax = x
+            ymin = ymax = y
+            found = true
+            continue
+        end
         x < xmin && (xmin = x)
         x > xmax && (xmax = x)
         y < ymin && (ymin = y)
         y > ymax && (ymax = y)
     end
+    found || return Rect2f(0.0f0, 0.0f0, 0.0f0, 0.0f0)
     return Rect2f(xmin, ymin, xmax - xmin, ymax - ymin)
+end
+
+function _compute_boundingbox(node_positions::Dict{Any, Point2f})::Rect2f
+    return _compute_envelope(values(node_positions))
+end
+
+function _plot_envelope(geom::LineageGraphGeometry)::Rect2f
+    return _compute_envelope(Iterators.flatten((values(geom.node_positions), geom.edge_shapes)))
 end
 
 # ── circular_layout ────────────────────────────────────────────────────────────
@@ -694,8 +749,8 @@ supplied node positions.
 
 # Returns
 A `LineageGraphGeometry` with `node_positions` storing Cartesian `(x, y)` from
-polar coordinates, `edge_shapes` using the chord representation, `leaf_order` in
-preorder traversal order, and `boundingbox` enclosing all node positions.
+polar coordinates, `edge_shapes` using the chord representation, `leaf_order`
+recording rendered leaf order, and `boundingbox` enclosing all node positions.
 
 # Throws
 - `ArgumentError` if the lineage graph has zero leaves.
@@ -742,7 +797,7 @@ function circular_layout(
         edge_shapes = _build_direct_edge_shapes(topology, node_positions)
         edges = _build_edge_list(topology)
         bb = _compute_boundingbox(node_positions)
-        leaf_list = source_nodes(topology.sink_order)
+        leaf_list = _explicit_radial_leaf_order(topology, node_positions, bb)
         return LineageGraphGeometry(node_positions, edge_shapes, edges, leaf_list, bb)
     end
 

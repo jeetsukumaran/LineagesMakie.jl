@@ -57,6 +57,7 @@ function _acc(basenode)
     return lineagegraph_accessor(basenode; children = node -> node.children)
 end
 
+const _GEO_GEOMETRY = LineagesMakie.Geometry
 const _GEO_TOPOLOGY = LineagesMakie.Topology
 const _GEO_SHARED_DESCENDANT_CONSISTENT_EDGEWEIGHTS = Dict(
     ("root", "left") => 1.0,
@@ -167,6 +168,11 @@ function _captured_error(f)
     catch err
         return err
     end
+end
+
+function _geo_rect_contains(rect::Rect2f, pt; atol::Float32 = 1.0f-6)::Bool
+    return rect.origin[1] - atol <= pt[1] <= rect.origin[1] + rect.widths[1] + atol &&
+        rect.origin[2] - atol <= pt[2] <= rect.origin[2] + rect.widths[2] + atol
 end
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
@@ -872,6 +878,36 @@ end
         end
     end
 
+    @testset "rectangular_layout :nodecoordinates — leaf_order follows explicit transverse coordinates" begin
+        basenode = GEO_BALANCED
+        ab = basenode.children[1]
+        cd = basenode.children[2]
+        a, b = ab.children[1], ab.children[2]
+        c, d = cd.children[1], cd.children[2]
+        node_coordinates = Dict(
+            basenode => Point2f(0, 25),
+            ab => Point2f(1, 15),
+            cd => Point2f(1, 35),
+            a => Point2f(2, 40),
+            b => Point2f(2, 10),
+            c => Point2f(2, 30),
+            d => Point2f(2, 20),
+        )
+        acc = lineagegraph_accessor(
+            GEO_BALANCED;
+            children = node -> node.children,
+            nodecoordinates = node -> node_coordinates[node],
+        )
+        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodecoordinates)
+        expected = ["b", "d", "c", "a"]
+        rendered = sort(
+            collect(leaves(acc, GEO_BALANCED));
+            by = node -> Float64(geom.node_positions[node][2]),
+        )
+        @test [node.name for node in geom.leaf_order] == expected
+        @test [node.name for node in rendered] == expected
+    end
+
     @testset "rectangular_layout :nodecoordinates — missing accessor raises ArgumentError" begin
         acc = _acc(GEO_BALANCED)
         @test_throws ArgumentError rectangular_layout(
@@ -906,6 +942,36 @@ end
         for (node, expected) in node_pos_src
             @test node_pos[node] ≈ expected
         end
+    end
+
+    @testset "rectangular_layout :nodepos — leaf_order follows explicit transverse coordinates" begin
+        basenode = GEO_BALANCED
+        ab = basenode.children[1]
+        cd = basenode.children[2]
+        a, b = ab.children[1], ab.children[2]
+        c, d = cd.children[1], cd.children[2]
+        node_pos_src = Dict(
+            basenode => Point2f(0, 250),
+            ab => Point2f(10, 150),
+            cd => Point2f(10, 350),
+            a => Point2f(20, 400),
+            b => Point2f(20, 100),
+            c => Point2f(20, 300),
+            d => Point2f(20, 200),
+        )
+        acc = lineagegraph_accessor(
+            GEO_BALANCED;
+            children = node -> node.children,
+            nodepos = node -> node_pos_src[node],
+        )
+        geom = rectangular_layout(GEO_BALANCED, acc; lineageunits = :nodepos)
+        expected = ["b", "d", "c", "a"]
+        rendered = sort(
+            collect(leaves(acc, GEO_BALANCED));
+            by = node -> Float64(geom.node_positions[node][2]),
+        )
+        @test [node.name for node in geom.leaf_order] == expected
+        @test [node.name for node in rendered] == expected
     end
 
     @testset "rectangular_layout :nodepos — missing accessor raises ArgumentError" begin
@@ -1006,6 +1072,114 @@ end
             finite_pts = filter(p -> !isnan(p[1]) && !isnan(p[2]), geom.edge_shapes)
             @test !isempty(finite_pts)
             @test all(p -> isfinite(p[1]) && isfinite(p[2]), finite_pts)
+        end
+
+        @testset "explicit-coordinate bypasses derive circular leaf_order from rendered angular order" begin
+            basenode = GEO_BALANCED
+            ab = basenode.children[1]
+            cd = basenode.children[2]
+            a, b = ab.children[1], ab.children[2]
+            c, d = cd.children[1], cd.children[2]
+            nodecoordinates = Dict(
+                basenode => Point2f(0, 0),
+                ab => Point2f(0, 0.35),
+                cd => Point2f(0, -0.35),
+                a => Point2f(0, 1),
+                b => Point2f(0, -1),
+                c => Point2f(1, 0),
+                d => Point2f(-1, 0),
+            )
+            nodepos = Dict(
+                basenode => Point2f(0, 0),
+                ab => Point2f(0, 35),
+                cd => Point2f(0, -35),
+                a => Point2f(0, 100),
+                b => Point2f(0, -100),
+                c => Point2f(100, 0),
+                d => Point2f(-100, 0),
+            )
+            expected = ["c", "a", "d", "b"]
+
+            for (lu, accessor_kw) in [
+                (:nodecoordinates, (nodecoordinates = node -> nodecoordinates[node],)),
+                (:nodepos, (nodepos = node -> nodepos[node],)),
+            ]
+                acc = lineagegraph_accessor(
+                    GEO_BALANCED;
+                    children = node -> node.children,
+                    accessor_kw...,
+                )
+                geom = circular_layout(GEO_BALANCED, acc; lineageunits = lu)
+                center = Point2f(
+                    geom.boundingbox.origin[1] + geom.boundingbox.widths[1] / 2,
+                    geom.boundingbox.origin[2] + geom.boundingbox.widths[2] / 2,
+                )
+                rendered = sort(
+                    collect(leaves(acc, GEO_BALANCED));
+                    by = node -> begin
+                        pt = geom.node_positions[node]
+                        angle = atan(Float64(pt[2] - center[2]), Float64(pt[1] - center[1]))
+                        angle < 0.0 && (angle += 2.0 * π)
+                        angle
+                    end,
+                )
+                @test [node.name for node in geom.leaf_order] == expected
+                @test [node.name for node in rendered] == expected
+            end
+        end
+
+        @testset "plot envelope contains circular nodeheights geometry without redefining boundingbox" begin
+            acc = _acc(GEO_BALANCED)
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :nodeheights)
+            plot_bb = _GEO_GEOMETRY._plot_envelope(geom)
+            finite_edge_points = [
+                pt for pt in geom.edge_shapes if isfinite(pt[1]) && isfinite(pt[2])
+            ]
+            @test !isempty(finite_edge_points)
+            @test any(!_geo_rect_contains(geom.boundingbox, pt) for pt in finite_edge_points)
+            for pt in values(geom.node_positions)
+                @test _geo_rect_contains(geom.boundingbox, pt)
+                @test _geo_rect_contains(plot_bb, pt)
+            end
+            for pt in finite_edge_points
+                @test _geo_rect_contains(plot_bb, pt)
+            end
+            node_xs = Float32[pt[1] for pt in values(geom.node_positions)]
+            node_ys = Float32[pt[2] for pt in values(geom.node_positions)]
+            @test geom.boundingbox.origin[1] ≈ minimum(node_xs)
+            @test geom.boundingbox.origin[2] ≈ minimum(node_ys)
+            @test geom.boundingbox.widths[1] ≈ maximum(node_xs) - minimum(node_xs)
+            @test geom.boundingbox.widths[2] ≈ maximum(node_ys) - minimum(node_ys)
+            @test plot_bb.widths[1] > geom.boundingbox.widths[1] ||
+                plot_bb.widths[2] > geom.boundingbox.widths[2]
+        end
+
+        @testset "plot envelope contains all finite circular coalescenceage geometry points" begin
+            basenode = GEO_BALANCED
+            ab = basenode.children[1]
+            cd = basenode.children[2]
+            a, b = ab.children[1], ab.children[2]
+            c, d = cd.children[1], cd.children[2]
+            coalescenceages = Dict(
+                basenode => 2.0,
+                ab => 1.0,
+                cd => 1.0,
+                a => 0.0,
+                b => 0.0,
+                c => 0.0,
+                d => 0.0,
+            )
+            acc = lineagegraph_accessor(
+                GEO_BALANCED;
+                children = node -> node.children,
+                coalescenceage = node -> coalescenceages[node],
+            )
+            geom = circular_layout(GEO_BALANCED, acc; lineageunits = :coalescenceage)
+            plot_bb = _GEO_GEOMETRY._plot_envelope(geom)
+            finite_points = Point2f[collect(values(geom.node_positions))...]
+            append!(finite_points, [pt for pt in geom.edge_shapes if isfinite(pt[1]) && isfinite(pt[2])])
+            @test !isempty(finite_points)
+            @test all(pt -> _geo_rect_contains(plot_bb, pt), finite_points)
         end
 
         @testset "single-leaf does not raise (boundary: 1 >= 1 leaf)" begin

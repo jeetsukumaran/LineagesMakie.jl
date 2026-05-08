@@ -4,6 +4,7 @@
 
 import CairoMakie
 const Makie = CairoMakie.Makie
+const _LT_GEOMETRY = LineagesMakie.Geometry
 using CairoMakie: Figure, Axis
 using CairoMakie: colorbuffer
 using CairoMakie: Rect2f, Rect2i, Vec2f
@@ -808,6 +809,38 @@ end
             p2 = scalebarlayer!(ax, geom, acc, :coalescenceage; label = "1 unit")
             @test p1[:resolved_visible][] == true
             @test p2[:resolved_visible][] == true
+        end
+
+        @testset "radial defaults derive from the full plot envelope" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            geom = circular_layout(_LT_BALANCED_BASENODE, _LT_ACC; lineageunits = :nodeheights)
+            plot_obj = scalebarlayer!(
+                ax,
+                geom,
+                _LT_ACC,
+                :nodeheights;
+                lineage_orientation = :radial,
+                scalebar_auto_visible = true,
+                label = "1 unit",
+            )
+            colorbuffer(fig)
+
+            plot_bb = _LT_GEOMETRY._plot_envelope(geom)
+            node_bb = geom.boundingbox
+            line_pts = plot_obj[:scalebar_line_pts][]
+            expected_length = Float32(plot_bb.widths[1]) * 0.1f0
+            node_length = Float32(node_bb.widths[1]) * 0.1f0
+
+            @test plot_obj[:resolved_visible][] == true
+            @test length(line_pts) == 2
+            @test plot_bb.widths[1] > node_bb.widths[1] ||
+                plot_bb.widths[2] > node_bb.widths[2]
+            @test !isapprox(expected_length, node_length; atol = 1.0f-4)
+            @test line_pts[1][1] ≈ plot_bb.origin[1] atol = 1.0f-4
+            @test line_pts[1][2] ≈ plot_bb.origin[2] - 0.5f0 atol = 1.0f-4
+            @test line_pts[2][1] ≈ plot_bb.origin[1] + expected_length atol = 1.0f-4
+            @test line_pts[2][2] ≈ plot_bb.origin[2] - 0.5f0 atol = 1.0f-4
         end
 
     end

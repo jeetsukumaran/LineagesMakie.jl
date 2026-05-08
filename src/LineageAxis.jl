@@ -1278,9 +1278,10 @@ Makie.tightlimits!(lax::LineageAxis) = nothing
 """
     reset_limits!(lax::LineageAxis, geom::LineageGraphGeometry) -> Nothing
 
-Set axis limits from `geom.boundingbox`, applying `display_polarity` and
-`lineage_orientation`. Stores `geom` in `lax.last_geom` so `autolimits!` can
-re-apply the same limits after viewport changes.
+Set axis limits from the full rendered plot envelope, applying
+`display_polarity` and `lineage_orientation`. Stores `geom` in
+`lax.last_geom` so `autolimits!` can re-apply the same limits after viewport
+changes.
 
 Axis reversal is implemented by swapping the `leftright` tuple in the
 orthographic projection rather than passing reversed limits to any higher-level
@@ -1293,13 +1294,13 @@ Rectangular orientations support both horizontal and vertical embeddings:
 `:left_to_right`, `:right_to_left`, `:bottom_to_top`, and `:top_to_bottom`.
 `:right_to_left` and `:top_to_bottom` are implemented as the corresponding
 standard embedding plus a reversed process direction. `:radial` sets equal x
-and y extents centred on the data bounding box, producing a square viewport
-suitable for circular layouts.
+and y extents centred on the full rendered plot envelope, producing a square
+viewport suitable for circular layouts.
 """
 function reset_limits!(lax::LineageAxis, geom::LineageGraphGeometry)::Nothing
     lax.last_geom[] = geom
 
-    bb = geom.boundingbox
+    bb = Geometry._plot_envelope(geom)
     data_left   = Float32(Makie.minimum(bb)[1])
     data_right  = Float32(Makie.maximum(bb)[1])
     data_bottom = Float32(Makie.minimum(bb)[2])
