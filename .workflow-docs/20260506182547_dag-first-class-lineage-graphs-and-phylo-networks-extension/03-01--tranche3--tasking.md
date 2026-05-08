@@ -1,6 +1,6 @@
 ---
 date-created: 2026-05-07T23:20:43-07:00
-date-revised: 2026-05-07T23:24:17-07:00
+date-revised: 2026-05-08T00:10:30-07:00
 status: approved
 ---
 
@@ -24,9 +24,16 @@ split, the shared annotation-layout integration for that owner, and the
 broader public contract, vocabulary, roadmap, docs, and example cleanup that
 must follow from a DAG-first core.
 
+The former public-contract `REVIEW` gate is now closed by the ratified
+sidecar artifact
+`.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03-01a--tranche3--annotation-contract-ratification.md`.
+This tasking file now assumes that ratified split directly.
+
 Parent tranche: Tranche 3  
 Parent PRD:
 `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/01_prd.md`  
+Ratified contract artifact:
+`.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03-01a--tranche3--annotation-contract-ratification.md`  
 Completed prerequisites: Tranche 1, Tranche 2, and
 `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03_tranche-2e--annotation-boundary-guard-tasking.md`
 
@@ -37,19 +44,30 @@ Completed prerequisites: Tranche 1, Tranche 2, and
   path.
 - The tranche-3A tree-only boundary guards in `src/Layers.jl` are current
   baseline behavior. Do not reopen, weaken, or silently bypass them.
-- `clade_nodes` and `NodeLabelLayer(position = :toward_parent)` remain
-  explicit tree-only surfaces unless a separate graph-capable contract is
-  introduced. Tranche 3 must not fake DAG support by broadening those names
-  silently.
+- Ratified tree-only surfaces remain unchanged and permanently bounded:
+  `CladeHighlightLayer(clade_nodes = [...])`,
+  `CladeLabelLayer(clade_nodes = [...])`, and
+  `NodeLabelLayer(position = :toward_parent)` remain explicit tree-only
+  surfaces and must continue to throw on DAG displays.
+- Ratified already-graph-safe surfaces remain unchanged:
+  `NodeLabelLayer(position = :node)` and `LeafLabelLayer`.
+- Ratified Option A graph-capable surfaces are:
+  `NodeGroupHighlightLayer`,
+  `nodegrouphighlightlayer!(ax, geom, accessor; group_nodes = [...], kwargs...)`,
+  `NodeGroupLabelLayer`, and
+  `nodegrouplabellayer!(ax, geom, accessor; group_nodes = [...], label_func = ..., kwargs...)`.
+- The ratified additive `LineagePlot` keyword family uses shared selector
+  `group_nodes`, plus `nodegroup_highlight_*` and `nodegroup_label_*`
+  namespaced keywords.
 - No source-specific `PhyloNetworks.jl` shadow owner is allowed. DAG-capable
   annotation ownership must remain package-owned and source-agnostic.
-- No hidden projection default, arbitrary-parent fallback, or subtree-shaped
-  expansion may stand in for an explicit graph-capable annotation contract.
+- No hidden projection default, arbitrary-parent fallback, subtree-shaped
+  expansion, or nested `group_nodes` reinterpretation may stand in for the
+  ratified graph-capable annotation contract.
 - Any externally visible breaking change still requires explicit user approval
   and a migration note in the same tranche.
-- If an exact graph-capable public naming split is not derivable from the
-  active sources, that choice must be closed by a named `REVIEW` gate rather
-  than by implementer improvisation.
+- No explicit `REVIEW` task remains at the current diagnosis. Stop only if
+  honest implementation would require reopening the ratified Option A split.
 
 ## Governance and required reading
 
@@ -76,6 +94,7 @@ Read line by line before implementation:
 - `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/02_tranches.md`
 - `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03_tranche-2c--final-audit.md`
 - `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03_tranche-2e--annotation-boundary-guard-tasking.md`
+- `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03-01a--tranche3--annotation-contract-ratification.md`
 - this tasking file
 
 Re-read in full as part of current-state revalidation:
@@ -101,16 +120,18 @@ above. Bundled `CONTRIBUTING.md` remains absent, so repo-local
 
 - Continue using the parent PRD vocabulary that treats DAG as the core case and
   rooted tree as the single-parent special case.
-- For tranche 3, the public contract must distinguish at least:
-  `tree view`, `full-network view`, `projected-tree view`, `tree-only
-  annotation surface`, `graph-capable annotation surface`, and `group
-  annotation`.
+- For tranche 3, the public contract now fixes the exact graph-capable API
+  names `NodeGroupHighlightLayer`, `NodeGroupLabelLayer`, `group_nodes`,
+  `nodegroup_highlight_*`, and `nodegroup_label_*`.
+- The reader-facing vocabulary must distinguish at least:
+  `tree view`, `full-network view`, `tree-only annotation surface`,
+  `graph-capable annotation surface`, `node group`, and `group annotation`.
 - Do not describe tranche-4 or extension work as an `adapter` project. The
   extension adapts upstream types into a package-owned core; it is not the
   owner of DAG support.
 - `STYLE-vocabulary.md` does not yet canonically define the graph-capable
-  annotation vocabulary above. Task 2 owns codifying that vocabulary after
-  task 1 ratifies the public split.
+  annotation vocabulary above. Revised task 1 owns codifying that vocabulary
+  under the ratified split.
 
 ## Upstream primary sources
 
@@ -146,18 +167,24 @@ These sources remain mandatory here because:
   subtree surfaces on shared-parent DAG displays, and current tests in
   `test/test_Layers.jl` and `test/test_Integration.jl` cover those direct
   failures.
+- Current `NodeLabelLayer(position = :node)` and `LeafLabelLayer` are already
+  graph-safe and align with the ratified unchanged surfaces.
 - Because those guards are now present, tranche 3 no longer begins from the
   original red state described in the parent tranche file. It begins from an
   honest but incomplete state: tree-only surfaces are now bounded correctly,
   but no graph-capable annotation owner has been added yet.
-- There is still no explicit graph-capable group-annotation surface in the
-  public layer inventory, no canonical vocabulary for that surface in
-  `STYLE-vocabulary.md`, and no public example that demonstrates DAG-capable
-  annotation honestly.
+- There is still no explicit graph-capable `NodeGroupHighlightLayer` or
+  `NodeGroupLabelLayer` in the public layer inventory, no canonical vocabulary
+  for those surfaces in `STYLE-vocabulary.md`, and no public example that
+  demonstrates DAG-capable annotation honestly.
+- No conflicting `NodeGroup*` public names or `group_nodes` composite surface
+  currently exist in `HEAD`, so the ratified split is additive and does not
+  collide with live code.
 - `src/LineageAxis.jl` still coordinates shared annotation layout around the
   existing tree-oriented label and scale-bar owners. Tranche 3 must integrate
-  the new graph-capable owner there instead of letting it bypass the shared
-  layout contract.
+  the new `NodeGroupLabelLayer` lane owner there, and keep
+  `NodeGroupHighlightLayer` on the same honest owner path instead of letting
+  it bypass the shared layout contract.
 - `README.md`, `docs/src/index.md`, and especially `ROADMAP.md` still lag the
   DAG-first public framing. In particular, `ROADMAP.md` still uses
   `PhyloNetworks.jl` adapter language that the parent PRD and tranche file no
@@ -171,8 +198,8 @@ with its public-entry integration through `src/LineageAxis.jl`,
 
 The invariant being repaired is:
 
-- graph-capable annotation must operate on an explicit displayed node-group or
-  explicit projection contract
+- graph-capable annotation in tranche 3 must operate on the ratified explicit
+  displayed node-group contract
 - tree-only annotation surfaces must remain explicit tree surfaces
 - DAG displays must never be annotated by pretending they are one subtree or
   by silently choosing one parent
@@ -182,7 +209,9 @@ The invariant being repaired is:
 The public entry surfaces that must be covered by verification are:
 
 - direct layer constructors and layer application paths in `src/Layers.jl`
-- composite `LineagePlot` or `lineageplot!` surfaces that expose the new owner
+- `nodegrouphighlightlayer!` and `nodegrouplabellayer!`
+- composite `LineagePlot` or `lineageplot!` surfaces that expose the ratified
+  `group_nodes`, `nodegroup_highlight_*`, and `nodegroup_label_*` owner path
 - shared layout behavior through `LineageAxis`
 - public docs and examples that describe DAG annotation support
 
@@ -217,14 +246,19 @@ Not authorized for this tranche:
 - The work is not complete if DAG-capable annotation still enters only through
   `clade_nodes`, `NodeLabelLayer(position = :toward_parent)`, or another
   surface that preserves tree-only semantics behind a broader label.
+- The work is also not complete if graph-capable annotation lands under public
+  names other than the ratified `NodeGroupHighlightLayer`,
+  `NodeGroupLabelLayer`, `group_nodes`, `nodegroup_highlight_*`, and
+  `nodegroup_label_*` family.
 - Direct red-state equivalent:
   current `HEAD` has only the guarded tree-only surfaces and no explicit
   graph-capable node-group owner at all.
-- Closing tasks: 1, 2, 3, and 4.
+- Closing artifact and tasks:
+  the ratified contract artifact plus tasks 1, 2, and 3 below.
 - Verification artifact:
   at least one shared-descendant DAG test must succeed only through the new
-  explicit graph-capable surface and must fail a fake implementation that
-  silently reuses subtree expansion or parent collapse.
+  ratified `NodeGroup*` surface family and must fail a fake implementation
+  that silently reuses subtree expansion or parent collapse.
 
 ### Lock 2: tree-only annotation surfaces must remain honest and explicit after graph-capable support lands
 
@@ -234,7 +268,7 @@ Not authorized for this tranche:
 - Direct red-state repro:
   the pre-3A code silently chose one parent or one subtree; the current guard
   behavior exists specifically to prevent that regression from returning.
-- Closing tasks: 1, 3, 4, and 5.
+- Closing tasks: 2, 3, and 4.
 - Verification artifact:
   DAG rejection proofs for tree-only surfaces must remain in the suite while
   the new graph-capable success cases are added separately.
@@ -247,7 +281,7 @@ Not authorized for this tranche:
 - Direct red-state equivalent:
   current `LineageAxis` layout coordination only knows the existing annotation
   owners and has no graph-capable annotation surface to integrate.
-- Closing tasks: 3 and 4.
+- Closing tasks: 2 and 3.
 - Verification artifact:
   at least one integration proof must exercise the new owner through a public
   `LineageAxis` or `lineageplot!` path and fail if the implementation only
@@ -261,7 +295,8 @@ Not authorized for this tranche:
 - Direct red-state repro:
   current `STYLE-vocabulary.md` has no canonical graph-capable annotation
   vocabulary, and current public prose still contains DAG-first contract drift.
-- Closing tasks: 1, 2, and 5.
+- Closing artifact and tasks:
+  the ratified contract artifact plus tasks 1 and 4 below.
 - Verification artifact:
   touched docs build successfully, use the ratified vocabulary consistently,
   and include at least one honest DAG annotation example through the new public
@@ -275,18 +310,22 @@ Not authorized for this tranche:
   `design/target-reference-capacities.md`,
   `design/requirements-landscape-gap.md`, `design/api-landscape.md`, the
   parent PRD, the parent tranche file, the tranche-2 final audit,
-  the tranche-3A immediate-action packet, and this tasking file.
+  the tranche-3A immediate-action packet, the tranche-3 contract ratification
+  artifact, and this tasking file.
 - Parent documents:
   `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/01_prd.md`,
   `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/02_tranches.md`,
   `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03_tranche-2c--final-audit.md`,
+  `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03_tranche-2e--annotation-boundary-guard-tasking.md`,
   and
-  `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03_tranche-2e--annotation-boundary-guard-tasking.md`.
+  `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03-01a--tranche3--annotation-contract-ratification.md`.
 - Settled decisions and non-negotiables:
   DAG-first core, rooted trees as the single-parent special case, no
   source-specific shadow owner, no hidden projection default, no broadening of
-  `clade_nodes` or `:toward_parent` into silent DAG contracts, and the current
-  tree-only boundary guards remain baseline behavior.
+  `clade_nodes` or `:toward_parent` into silent DAG contracts, the ratified
+  `NodeGroupHighlightLayer` / `NodeGroupLabelLayer` Option A split with
+  `group_nodes`, and the current tree-only boundary guards remain baseline
+  behavior.
 - Authorization boundary:
   deep repair is authorized in the layer owner, public composite entry
   surfaces, shared annotation layout, touched tests, vocabulary, docs,
@@ -295,13 +334,14 @@ Not authorized for this tranche:
 - Current-state diagnosis:
   the honesty repair is already landed, but the graph-capable annotation owner,
   its canonical vocabulary, and the DAG-first contract cleanup are still
-  missing.
+  missing under the newly ratified Option A public split.
 - Primary-goal lock:
   locks 1 through 4 above.
 - Direct red-state repros:
-  no explicit graph-capable annotation owner exists yet; tree-only surfaces are
-  rightly guarded; shared annotation layout has not been integrated with a new
-  DAG-capable annotation owner; public vocabulary and roadmap prose still lag.
+  no explicit graph-capable `NodeGroup*` annotation owner exists yet;
+  tree-only surfaces are rightly guarded; shared annotation layout has not
+  been integrated with a new DAG-capable annotation owner; public vocabulary
+  and roadmap prose still lag.
 - Owner and invariant under repair:
   annotation-owner normalization and contract truth, with `LineageAxis`
   coordinating shared layout for both tree-only and graph-capable annotation
@@ -324,13 +364,12 @@ Not authorized for this tranche:
   `julia --project=test test/runtests.jl`,
   `julia --project=docs docs/make.jl`, touched example reruns, and
   failure-oriented DAG annotation proofs that fail fake subtree or
-  parent-collapse
-  implementations.
+  parent-collapse implementations.
 - Stop conditions:
-  any proposed implementation that depends on silently broadening tree-only
-  names, any discovered need to reopen topology or geometry ownership, any
-  public break without approval, or any unresolved public API naming or
-  semantics question that is not already closed by task 1.
+  any proposed implementation that departs from the ratified `NodeGroup*`
+  Option A contract, any discovered need to reopen topology or geometry
+  ownership, any public break without approval, or any pressure to reintroduce
+  hidden projection semantics into tranche 3.
 
 ## Required revalidation before implementation
 
@@ -338,6 +377,9 @@ Not authorized for this tranche:
   items in `01_prd.md`.
 - Re-read the tranche-2 final audit and tranche-3A immediate-action packet to
   confirm exactly which truth-boundary work is already landed.
+- Re-read
+  `.workflow-docs/20260506182547_dag-first-class-lineage-graphs-and-phylo-networks-extension/03-01a--tranche3--annotation-contract-ratification.md`
+  and treat its Option A split as settled.
 - Re-read `src/Layers.jl`, `src/LineageAxis.jl`, `src/LineagesMakie.jl`,
   `README.md`, `ROADMAP.md`, `docs/src/index.md`, the touched examples, and
   the touched tests in full.
@@ -357,8 +399,8 @@ Not authorized for this tranche:
 ## Tranche execution rule
 
 - This tranche begins green and must end green.
-- Execute tasks in order. The `REVIEW` gate in task 1 is mandatory before
-  additive public-surface implementation begins.
+- Execute tasks in order. Former task 1 is closed by the ratified contract
+  artifact, so the revised task 1 begins immediately.
 - Do not treat the former truth-boundary red state as still open. The current
   tree-only guards are baseline and must be preserved while the new owner is
   introduced.
@@ -370,8 +412,13 @@ Not authorized for this tranche:
 - Do not broaden `clade_nodes` into a graph-capable API.
 - Do not broaden `NodeLabelLayer(position = :toward_parent)` into a
   graph-capable API.
+- Do not rename the ratified `NodeGroupHighlightLayer`,
+  `NodeGroupLabelLayer`, `group_nodes`, `nodegroup_highlight_*`, or
+  `nodegroup_label_*` surfaces without explicit approval.
 - Do not silently project a DAG to a tree, major tree, minor tree, or
   arbitrary-parent walk inside `Layers.jl`.
+- Do not reinterpret `group_nodes` as subtree selection, nested group
+  batching, or hidden projection input.
 - Do not implement graph-capable annotation ownership only in
   `ext/PhyloNetworksExt.jl` or any source-specific path.
 - Do not remove or weaken the tranche-3A negative tests or the direct
@@ -387,6 +434,8 @@ Not authorized for this tranche:
   `PhyloNetworks.jl` adapter.
 - Remove the absence of canonical vocabulary for graph-capable group
   annotation, view types, and tree-only annotation surfaces.
+- Remove any temptation to treat `NodeGroup*` as a thin rename over existing
+  subtree helpers.
 - Remove any implementation pressure to recover DAG annotation by subtree leaf
   expansion, hidden projection, or implicit parent selection.
 - Remove examples that imply generic DAG annotation support through the old
@@ -407,7 +456,7 @@ Not authorized for this tranche:
 ## Failure-oriented verification
 
 - At least one shared-descendant DAG proof must show the new graph-capable
-  annotation owner succeeding through an explicit node-group or projection
+  annotation owner succeeding through the ratified explicit node-group
   contract.
 - That proof must fail a fake implementation that silently expands the target
   set by subtree ownership rather than by the exact displayed group contract.
@@ -422,70 +471,51 @@ Not authorized for this tranche:
 
 ## Tasks
 
-1. **Title**: Ratify the graph-capable annotation public contract
-   **Type**: `REVIEW`
-   **Output**: one approved public split in which tree-only `clade_nodes` and
-   `:toward_parent` remain explicit tree-view surfaces, and graph-capable
-   annotation lands through a separate explicit node-group or projection
-   surface rather than by broadening tree-only keywords.
-   **Depends on**: `none`
-   **Positive contract**:
-   the implementing agent does not choose API names or semantics ad hoc; the
-   tranche records one settled public contract for graph-capable annotation
-   before runtime implementation begins.
-   **Negative contract**:
-   no hidden projection default, no overloading `clade_nodes`, and no silent
-   "DAG but still subtree" API broadening may survive this review step.
-   **Files**:
-   `src/Layers.jl`, `src/LineageAxis.jl`, `README.md`, `ROADMAP.md`,
-   `docs/src/index.md`, `STYLE-vocabulary.md`, and this tasking file
-   **Out of scope**:
-   `src/Geometry.jl`, `src/Topology.jl`, `ext/PhyloNetworksExt.jl`, network
-   view-mode controls, hybrid markers, and gamma-label work
-   **Verification**:
-   the user approves or revises the proposed public split before implementation
-   tasks proceed; the resulting split is written down explicitly enough that a
-   fresh implementing agent does not need to reopen derivable decisions.
-
-2. **Title**: Add canonical vocabulary and public group-annotation surface definitions
+1. **Title**: Add canonical vocabulary and public node-group surface definitions
    **Type**: `WRITE`
    **Output**: canonical DAG-first terminology in `STYLE-vocabulary.md`, plus
-   exported or otherwise public layer and composite-surface names for explicit
-   graph-capable node-group annotation.
-   **Depends on**: `1`
+   exported or otherwise public layer, bang-entrypoint, and composite-surface
+   names for the ratified `NodeGroupHighlightLayer` /
+   `NodeGroupLabelLayer` split.
+   **Depends on**: `none`
    **Positive contract**:
    the code and docs use one settled vocabulary for `group annotation`,
-   `tree view`, `full-network view`, and `projected-tree view`, and the new
+   `tree view`, `full-network view`, and `node group`, and the new
    graph-capable surface is additive and explicitly separate from
    `clade_nodes`.
    **Negative contract**:
-   no naming drift, no adapter framing, and no reuse of tree-only names for
-   graph-capable semantics.
+   no naming drift, no adapter framing, no reuse of tree-only names for
+   graph-capable semantics, and no deviation from the ratified
+   `group_nodes`, `nodegroup_highlight_*`, or `nodegroup_label_*` family.
    **Files**:
    `STYLE-vocabulary.md`, `src/Layers.jl`, `src/LineagesMakie.jl`
    **Out of scope**:
    `src/Geometry.jl`, `src/Topology.jl`, `ext/PhyloNetworksExt.jl`,
    `Project.toml`, and broad README or roadmap cleanup
    **Verification**:
-   vocabulary entries exist before deeper implementation, exported or otherwise
-   public recipe names are in place, and recipe docstrings distinguish
-   tree-only and graph-capable contracts directly.
+   vocabulary entries exist before deeper implementation, exports or otherwise
+   public recipe names are in place, composite recipe attributes reflect the
+   ratified names, and recipe docstrings distinguish tree-only and
+   graph-capable contracts directly.
 
-3. **Title**: Implement the graph-capable group-annotation owner and shared layout integration
+2. **Title**: Implement the ratified node-group annotation owner and shared layout integration
    **Type**: `WRITE`
-   **Output**: graph-capable highlight and label layers and corresponding
-   `LineagePlot` keywords operate on explicit displayed node groups, while
-   `LineageAxis` coordinates their shared annotation lanes with existing leaf,
-   clade, and scale-bar layout.
-   **Depends on**: `2`
+   **Output**: `NodeGroupHighlightLayer` and `NodeGroupLabelLayer`, together
+   with the corresponding `LineagePlot` keyword family, operate on explicit
+   `group_nodes` with no MRCA expansion, while `LineageAxis` integrates the
+   new owner through the same honest annotation-owner path used by existing
+   decorative layers.
+   **Depends on**: `1`
    **Positive contract**:
    DAG-capable displays can request highlight or label annotations from
-   explicit node groups without subtree or unique-parent inference, and
-   tree-only clade layers remain honest and unchanged on rooted-tree views.
+   explicit node groups without subtree or unique-parent inference;
+   `NodeGroupLabelLayer` uses the same annotation-lane mechanism as
+   `CladeLabelLayer`; tree-only clade layers remain honest and unchanged on
+   rooted-tree views.
    **Negative contract**:
    no `leaves(accessor, mrca)` or hidden subtree expansion inside the new
-   owner, no arbitrary-parent fallback for DAG labels, and no source-specific
-   or `PhyloNetworks.jl`-only branch.
+   owner, no arbitrary-parent fallback for DAG labels, no hidden projection
+   contract, and no source-specific or `PhyloNetworks.jl`-only branch.
    **Files**:
    `src/Layers.jl`, `src/LineageAxis.jl`
    **Out of scope**:
@@ -494,21 +524,22 @@ Not authorized for this tranche:
    policy
    **Verification**:
    manual DAG render plus direct layer and integration checks fail if a fake
-   implementation expands a node group by subtree ownership or silently reuses
-   tree-only parent semantics.
+   implementation expands `group_nodes` by subtree ownership, silently reuses
+   tree-only parent semantics, or bypasses the shared annotation-owner path.
 
-4. **Title**: Add failure-oriented DAG annotation proofs and rooted-tree non-regressions
+3. **Title**: Add failure-oriented DAG node-group proofs and rooted-tree non-regressions
    **Type**: `TEST`
-   **Output**: tests prove graph-capable node-group annotations work on
-   shared-descendant DAGs, tree-only surfaces still reject non-tree views, and
-   rooted-tree annotation behavior stays green.
-   **Depends on**: `3`
+   **Output**: tests prove `NodeGroupHighlightLayer` and
+   `NodeGroupLabelLayer` work on shared-descendant DAGs, tree-only surfaces
+   still reject non-tree views, and rooted-tree annotation behavior stays
+   green.
+   **Depends on**: `2`
    **Positive contract**:
-   at least one DAG test exercises the new group surface through direct layers
-   and `lineageplot!`, and at least one rooted-tree test reasserts clade
-   highlight, clade label, and `:toward_parent` behavior.
+   at least one DAG test exercises the new node-group surface through direct
+   layers and `lineageplot!`, and at least one rooted-tree test reasserts
+   clade highlight, clade label, and `:toward_parent` behavior.
    **Negative contract**:
-   the suite fails if group annotations silently use subtree expansion, if DAG
+   the suite fails if `group_nodes` silently uses subtree expansion, if DAG
    `clade_nodes` starts rendering again, or if `LineageAxis` shared annotation
    layout drifts behind a green geometry suite.
    **Files**:
@@ -522,16 +553,16 @@ Not authorized for this tranche:
    expected extent differs between exact node-group ownership and fake subtree
    ownership.
 
-5. **Title**: Bring README, roadmap, docs, examples, and docstrings into DAG-first truth
+4. **Title**: Bring README, roadmap, docs, examples, and docstrings into the ratified DAG-first truth
    **Type**: `MIGRATE`
    **Output**: public contract surfaces describe a DAG-capable core, tree-only
-   clade surfaces as explicitly bounded, and the new graph-capable annotation
+   clade surfaces as explicitly bounded, and the new `NodeGroup*` annotation
    path honestly; roadmap no longer says `PhyloNetworks.jl` adapter.
-   **Depends on**: `2`, `3`, `4`
+   **Depends on**: `1`, `2`, `3`
    **Positive contract**:
    touched prose names rooted trees as the single-parent special case, shows
-   the new group surface in at least one DAG example, and keeps the tranche-3A
-   guard language only where it is still true.
+   the new node-group surface in at least one DAG example, and keeps the
+   tranche-3A guard language only where it is still true.
    **Negative contract**:
    no touched surface may claim generic DAG annotation via `clade_nodes` or
    `:toward_parent`; no adapter framing; no example silently relying on hidden
