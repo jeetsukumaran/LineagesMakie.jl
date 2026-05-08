@@ -25,9 +25,11 @@ existing `Axis`, `LineageAxis`, or multi-panel `Figure`.
 Current `LineageAxis` orientation support includes `:left_to_right`,
 `:right_to_left`, `:bottom_to_top`, `:top_to_bottom`, and `:radial`.
 Vertical rectangular embeddings are supported end to end for tree geometry and
-shared tree-view annotations. Shared-parent DAG layouts remain supported, but
+shared annotation lanes. Shared-parent DAG layouts remain supported through the
+graph-capable `group_nodes` / `nodegroup_*` surface family on full-network
+views. Tree-only
 `node_label_position = :toward_parent` and `clade_nodes` subtree annotations
-currently require a rooted-tree or explicit tree view.
+still require a rooted-tree or explicit tree view.
 
 Screen-axis controls are live: `show_x_axis` and `xlabel` govern the screen
 x-axis, `show_y_axis` and `ylabel` govern the screen y-axis, and `show_grid`

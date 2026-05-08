@@ -625,6 +625,49 @@ function _shared_bracket_pixel_shapes(
         clade_nodes,
         annotation_layout,
     )::Vector{Point2f}
+    point_groups = Vector{Vector{Point2f}}()
+    for mrca in clade_nodes
+        push!(point_groups, _subtree_leaf_positions(accessor, mrca, geom.node_positions))
+    end
+    return _shared_bracket_pixel_shapes_for_groups(sc, point_groups, annotation_layout)
+end
+
+function _shared_bracket_label_pixel_positions(
+        sc,
+        geom::LineageGraphGeometry,
+        accessor::LineageGraphAccessor,
+        clade_nodes,
+        annotation_layout,
+    )::Vector{Point2f}
+    point_groups = Vector{Vector{Point2f}}()
+    for mrca in clade_nodes
+        push!(point_groups, _subtree_leaf_positions(accessor, mrca, geom.node_positions))
+    end
+    return _shared_bracket_label_pixel_positions_for_groups(sc, point_groups, annotation_layout)
+end
+
+"""
+Return `Point2f` positions of all leaves in the subtree rooted at `mrca`.
+Uses `Accessors.leaves` so cycle detection is inherited automatically.
+"""
+function _subtree_leaf_positions(
+        accessor::LineageGraphAccessor,
+        mrca,
+        node_positions::Dict,
+    )::Vector{Point2f}
+    subtree_leaves = leaves(accessor, mrca)
+    return Point2f[node_positions[node] for node in subtree_leaves if haskey(node_positions, node)]
+end
+
+function _group_node_positions(group_nodes, node_positions::Dict)::Vector{Point2f}
+    return Point2f[node_positions[node] for node in group_nodes if haskey(node_positions, node)]
+end
+
+function _shared_bracket_pixel_shapes_for_groups(
+        sc,
+        point_groups,
+        annotation_layout,
+    )::Vector{Point2f}
     !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
 
     side = annotation_layout.active_annotation_side
@@ -632,12 +675,11 @@ function _shared_bracket_pixel_shapes(
     pts = Point2f[]
     nan = Point2f(NaN, NaN)
 
-    for mrca in clade_nodes
-        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
-        isempty(leaf_pts) && continue
-        leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
-        xs = [q[1] for q in leaf_px]
-        ys = [q[2] for q in leaf_px]
+    for group_pts in point_groups
+        isempty(group_pts) && continue
+        group_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in group_pts]
+        xs = [q[1] for q in group_px]
+        ys = [q[2] for q in group_px]
         x_min = minimum(xs)
         x_max = maximum(xs)
         y_min = minimum(ys)
@@ -668,22 +710,19 @@ function _shared_bracket_pixel_shapes(
     return pts
 end
 
-function _shared_bracket_label_pixel_positions(
+function _shared_bracket_label_pixel_positions_for_groups(
         sc,
-        geom::LineageGraphGeometry,
-        accessor::LineageGraphAccessor,
-        clade_nodes,
+        point_groups,
         annotation_layout,
     )::Vector{Point2f}
     !_shared_clade_annotation_active(annotation_layout) && return Point2f[]
 
     positions = Point2f[]
-    for mrca in clade_nodes
-        leaf_pts = _subtree_leaf_positions(accessor, mrca, geom.node_positions)
-        isempty(leaf_pts) && continue
-        leaf_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in leaf_pts]
-        xs = [q[1] for q in leaf_px]
-        ys = [q[2] for q in leaf_px]
+    for group_pts in point_groups
+        isempty(group_pts) && continue
+        group_px = Point2f[_to_blockscene_pixel(sc, pt) for pt in group_pts]
+        xs = [q[1] for q in group_px]
+        ys = [q[2] for q in group_px]
         if annotation_layout.active_annotation_side in (:left, :right)
             x_label = annotation_layout.clade_label_anchor_x
             push!(positions, Point2f(x_label, (minimum(ys) + maximum(ys)) / 2))
@@ -693,19 +732,6 @@ function _shared_bracket_label_pixel_positions(
         end
     end
     return positions
-end
-
-"""
-Return `Point2f` positions of all leaves in the subtree rooted at `mrca`.
-Uses `Accessors.leaves` so cycle detection is inherited automatically.
-"""
-function _subtree_leaf_positions(
-        accessor::LineageGraphAccessor,
-        mrca,
-        node_positions::Dict,
-    )::Vector{Point2f}
-    subtree_leaves = leaves(accessor, mrca)
-    return Point2f[node_positions[node] for node in subtree_leaves if haskey(node_positions, node)]
 end
 
 """
@@ -966,6 +992,105 @@ function Makie.plot!(p::CladeHighlightLayer)::CladeHighlightLayer
             )
         end
         return rects
+    end
+
+    poly!(
+        p,
+        p[:highlight_rects];
+        color = p[:resolved_highlight_color],
+        visible = p[:visible],
+    )
+    return p
+end
+
+# ── NodeGroupHighlightLayer ───────────────────────────────────────────────────
+
+"""
+    nodegrouphighlightlayer!(ax, geom::LineageGraphGeometry,
+                             accessor::LineageGraphAccessor; kwargs...) -> NodeGroupHighlightLayer
+
+Render a filled rectangular highlight around one explicit displayed node group.
+
+Unlike `CladeHighlightLayer`, this graph-capable surface performs no MRCA
+expansion and no subtree traversal. The highlighted extent is derived only from
+the displayed node positions named in `group_nodes`, which keeps the contract
+DAG-safe and honest on shared-parent lineage graphs.
+
+# Arguments
+- `geom::LineageGraphGeometry`: pre-computed layout geometry.
+- `accessor::LineageGraphAccessor`: accepted for API symmetry with other
+  annotation layers; not used by the core highlight logic.
+
+# Keyword attributes
+- `group_nodes`: one explicit displayed node group to highlight. Compose
+  multiple `NodeGroupHighlightLayer` instances additively if more than one
+  distinct group is needed in the same figure. Default `Any[]`.
+- `color`: fill color, including alpha channel. Default
+  `Makie.RGBAf(0.95, 0.7, 0.2, 0.18)`.
+- `alpha`: opacity in `[0, 1]`; replaces the alpha of `color` in the rendered
+  output. Default `0.18`.
+- `padding`: pixel-space expansion of the bounding box on each side, as
+  `Vec2f(dx_px, dy_px)`. Default `Vec2f(4, 4)`.
+- `visible`: whether the layer is rendered. Default `true`.
+"""
+@recipe NodeGroupHighlightLayer (geom, accessor) begin
+    group_nodes = Any[]
+    color = Makie.RGBAf(0.95f0, 0.7f0, 0.2f0, 0.18f0)
+    alpha = 0.18
+    "Pixel-space expansion of the node-group bounding box. Default: 4 px on each side."
+    padding = Makie.Vec2f(4, 4)
+    visible = true
+end
+
+function Makie.plot!(p::NodeGroupHighlightLayer)::NodeGroupHighlightLayer
+    sc = parent_scene(p)
+    register_pixel_projection!(p.attributes, sc)
+
+    map!(p.attributes, [:color, :alpha], :resolved_highlight_color) do color, alpha
+        c = Makie.to_color(color)
+        return Makie.RGBAf(c.r, c.g, c.b, Float32(alpha))
+    end
+
+    map!(
+        p.attributes,
+        [:geom, :group_nodes, :padding, :pixel_projection],
+        :highlight_rects,
+    ) do geom, group_nodes, padding, _
+        group_pts = _group_node_positions(group_nodes, geom.node_positions)
+        isempty(group_pts) && return Rect2f[]
+
+        xmin = minimum(q[1] for q in group_pts)
+        xmax = maximum(q[1] for q in group_pts)
+        ymin = minimum(q[2] for q in group_pts)
+        ymax = maximum(q[2] for q in group_pts)
+
+        vp = Makie.viewport(sc)[]
+        vp_w, vp_h = Makie.widths(vp)
+        adx, ady = if iszero(vp_w) || iszero(vp_h)
+            (0.0f0, 0.0f0)
+        else
+            centre = Point2f((xmin + xmax) / 2, (ymin + ymax) / 2)
+            dx = pixel_offset_to_data_delta(sc, centre, Vec2f(padding[1], 0))[1]
+            dy = pixel_offset_to_data_delta(sc, centre, Vec2f(0, padding[2]))[2]
+            (abs(dx), abs(dy))
+        end
+
+        bb = geom.boundingbox
+        bb_x0 = Float32(Makie.minimum(bb)[1])
+        bb_x1 = Float32(Makie.maximum(bb)[1])
+        bb_y0 = Float32(Makie.minimum(bb)[2])
+        bb_y1 = Float32(Makie.maximum(bb)[2])
+        padded_xmin = max(xmin - adx, bb_x0)
+        padded_xmax = min(xmax + adx, bb_x1)
+        padded_ymin = max(ymin - ady, bb_y0)
+        padded_ymax = min(ymax + ady, bb_y1)
+        return Rect2f[
+            Rect2f(
+                padded_xmin, padded_ymin,
+                padded_xmax - padded_xmin,
+                padded_ymax - padded_ymin,
+            ),
+        ]
     end
 
     poly!(
@@ -1283,6 +1408,275 @@ function Makie.plot!(p::CladeLabelLayer)::CladeLabelLayer
     return p
 end
 
+# ── NodeGroupLabelLayer ───────────────────────────────────────────────────────
+
+"""
+    nodegrouplabellayer!(ax, geom::LineageGraphGeometry,
+                         accessor::LineageGraphAccessor; kwargs...) -> NodeGroupLabelLayer
+
+Render a bracket annotation with one label for one explicit displayed node
+group on axis `ax`.
+
+Unlike `CladeLabelLayer`, this graph-capable surface performs no MRCA expansion
+and no subtree traversal. The bracket span is computed from the exact displayed
+node positions named in `group_nodes`, which keeps the owner contract honest on
+shared-parent lineage graphs. When plotted on `LineageAxis`, this layer uses
+the same measured annotation-lane mechanism as `CladeLabelLayer`.
+
+# Arguments
+- `geom::LineageGraphGeometry`: pre-computed layout geometry.
+- `accessor::LineageGraphAccessor`: accepted for API symmetry with other
+  annotation layers; not used by the core grouping logic.
+
+# Keyword attributes
+- `group_nodes`: one explicit displayed node group to annotate. Compose
+  multiple `NodeGroupLabelLayer` instances additively if more than one distinct
+  group is needed in the same figure. Default `Any[]`.
+- `label_func`: callable `group_nodes -> String` producing the bracket label
+  from the exact explicit node group. Default `nodes -> ""`.
+- `color`: line and text color. Default `:black`.
+- `fontsize`: label font size in points. Default `11`.
+- `offset`: pixel-space offset from the outer extent of the named node group
+  toward the bracket bar. Horizontal brackets use the x component; vertical
+  brackets use the y component. Default `Vec2f(6, 0)`.
+- `side`: which side of the node-group extent to place the bracket. Supported
+  values are `:right` (default), `:left`, `:top`, and `:bottom`. Set
+  automatically by `lineageplot!(ax::LineageAxis, ...)` based on orientation.
+- `visible`: whether the layer is rendered. Default `true`.
+"""
+@recipe NodeGroupLabelLayer (geom, accessor) begin
+    group_nodes = Any[]
+    "Callable `group_nodes -> String` producing the bracket label."
+    label_func = (nodes -> "")
+    color = :black
+    fontsize = 11
+    "Pixel-space offset from the node-group extent toward the bracket bar."
+    offset = Makie.Vec2f(6, 0)
+    "Bracket side relative to the node-group extent: :right, :left, :top, or :bottom."
+    side = :right
+    annotation_layout = nothing
+    visible = true
+end
+
+function Makie.plot!(p::NodeGroupLabelLayer)::NodeGroupLabelLayer
+    sc = parent_scene(p)
+    register_pixel_projection!(p.attributes, sc)
+
+    map!(
+        p.attributes,
+        [:geom, :group_nodes, :offset, :pixel_projection, :side],
+        :bracket_shapes,
+    ) do geom, group_nodes, offset, _, side
+        group_pts = _group_node_positions(group_nodes, geom.node_positions)
+        isempty(group_pts) && return Point2f[]
+
+        xs = [q[1] for q in group_pts]
+        ys = [q[2] for q in group_pts]
+        x_min = minimum(xs)
+        x_max = maximum(xs)
+        y_min = minimum(ys)
+        y_max = maximum(ys)
+        mid_x = (x_min + x_max) / 2
+        mid_y = (y_min + y_max) / 2
+        nan = Point2f(NaN, NaN)
+        pts = Point2f[]
+
+        if side === :right
+            x_anchor = x_max
+            anchor = Point2f(x_anchor, mid_y)
+            dx_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+            dx_tick = pixel_offset_to_data_delta(sc, anchor, Vec2f(3.0f0, 0))[1]
+            x_bar = x_anchor + dx_off
+            push!(pts, Point2f(x_bar - dx_tick, y_min), Point2f(x_bar, y_min), nan)
+            push!(pts, Point2f(x_bar, y_min), Point2f(x_bar, y_max), nan)
+            push!(pts, Point2f(x_bar, y_max), Point2f(x_bar - dx_tick, y_max), nan)
+        elseif side === :left
+            x_anchor = x_min
+            anchor = Point2f(x_anchor, mid_y)
+            dx_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+            dx_tick = pixel_offset_to_data_delta(sc, anchor, Vec2f(3.0f0, 0))[1]
+            x_bar = x_anchor - dx_off
+            push!(pts, Point2f(x_bar + dx_tick, y_min), Point2f(x_bar, y_min), nan)
+            push!(pts, Point2f(x_bar, y_min), Point2f(x_bar, y_max), nan)
+            push!(pts, Point2f(x_bar, y_max), Point2f(x_bar + dx_tick, y_max), nan)
+        elseif side === :top
+            y_anchor = y_max
+            anchor = Point2f(mid_x, y_anchor)
+            dy_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+            dy_tick = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, 3.0f0))[2]
+            y_bar = y_anchor + dy_off
+            push!(pts, Point2f(x_min, y_bar - dy_tick), Point2f(x_min, y_bar), nan)
+            push!(pts, Point2f(x_min, y_bar), Point2f(x_max, y_bar), nan)
+            push!(pts, Point2f(x_max, y_bar), Point2f(x_max, y_bar - dy_tick), nan)
+        elseif side === :bottom
+            y_anchor = y_min
+            anchor = Point2f(mid_x, y_anchor)
+            dy_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+            dy_tick = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, 3.0f0))[2]
+            y_bar = y_anchor - dy_off
+            push!(pts, Point2f(x_min, y_bar + dy_tick), Point2f(x_min, y_bar), nan)
+            push!(pts, Point2f(x_min, y_bar), Point2f(x_max, y_bar), nan)
+            push!(pts, Point2f(x_max, y_bar), Point2f(x_max, y_bar + dy_tick), nan)
+        else
+            throw(
+                ArgumentError(
+                    "unsupported node-group label side $(repr(side)); " *
+                    "supported values are :right, :left, :top, and :bottom",
+                ),
+            )
+        end
+
+        return pts
+    end
+
+    map!(p.attributes, [:group_nodes, :label_func], :resolved_label_string) do group_nodes, label_func
+        isempty(group_nodes) && return ""
+        return string(label_func(group_nodes))
+    end
+
+    map!(
+        p.attributes,
+        [:geom, :group_nodes, :resolved_label_string, :offset, :pixel_projection, :side],
+        :bracket_label_data,
+    ) do geom, group_nodes, label_string, offset, _, side
+        group_pts = _group_node_positions(group_nodes, geom.node_positions)
+        isempty(group_pts) && return Tuple{Point2f, String, Tuple{Symbol, Symbol}}[]
+
+        xs = [q[1] for q in group_pts]
+        ys = [q[2] for q in group_pts]
+        x_min = minimum(xs)
+        x_max = maximum(xs)
+        y_min = minimum(ys)
+        y_max = maximum(ys)
+        mid_x = (x_min + x_max) / 2
+        mid_y = (y_min + y_max) / 2
+
+        if side === :right
+            x_anchor = x_max
+            anchor = Point2f(x_anchor, mid_y)
+            dx_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+            x_bar = x_anchor + dx_off
+            return [(Point2f(x_bar, mid_y), label_string, (:left, :center))]
+        elseif side === :left
+            x_anchor = x_min
+            anchor = Point2f(x_anchor, mid_y)
+            dx_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(offset[1], 0))[1]
+            x_bar = x_anchor - dx_off
+            return [(Point2f(x_bar, mid_y), label_string, (:right, :center))]
+        elseif side === :top
+            y_anchor = y_max
+            anchor = Point2f(mid_x, y_anchor)
+            dy_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+            y_bar = y_anchor + dy_off
+            return [(Point2f(mid_x, y_bar), label_string, (:center, :bottom))]
+        elseif side === :bottom
+            y_anchor = y_min
+            anchor = Point2f(mid_x, y_anchor)
+            dy_off = pixel_offset_to_data_delta(sc, anchor, Vec2f(0, offset[2]))[2]
+            y_bar = y_anchor - dy_off
+            return [(Point2f(mid_x, y_bar), label_string, (:center, :top))]
+        end
+
+        throw(
+            ArgumentError(
+                "unsupported node-group label side $(repr(side)); " *
+                "supported values are :right, :left, :top, and :bottom",
+            ),
+        )
+    end
+
+    map!(p.attributes, [:bracket_label_data], :bracket_label_positions) do entries
+        return Point2f[pos for (pos, _, _) in entries]
+    end
+
+    map!(p.attributes, [:bracket_label_data], :bracket_label_strings) do entries
+        return String[str for (_, str, _) in entries]
+    end
+
+    map!(p.attributes, [:bracket_label_data], :local_bracket_label_aligns) do entries
+        return Tuple{Symbol, Symbol}[align for (_, _, align) in entries]
+    end
+
+    map!(p.attributes, [:local_bracket_label_aligns, :annotation_layout], :bracket_label_aligns) do aligns, annotation_layout
+        if _shared_clade_annotation_active(annotation_layout)
+            return Tuple{Symbol, Symbol}[annotation_layout.clade_label_align for _ in aligns]
+        end
+        return aligns
+    end
+
+    map!(
+        p.attributes,
+        [:geom, :group_nodes, :bracket_shapes, :annotation_layout, :pixel_projection],
+        :bracket_pixel_shapes,
+    ) do geom, group_nodes, shapes, annotation_layout, _
+        if _shared_clade_annotation_active(annotation_layout)
+            return _shared_bracket_pixel_shapes_for_groups(
+                sc,
+                [_group_node_positions(group_nodes, geom.node_positions)],
+                annotation_layout,
+            )
+        end
+
+        sc_vp = Makie.viewport(sc)[]
+        result = Point2f[]
+        for pt in shapes
+            if isnan(pt[1]) || isnan(pt[2])
+                push!(result, Point2f(NaN, NaN))
+            else
+                px = data_to_pixel(sc, pt)
+                push!(result, Point2f(
+                    Float32(sc_vp.origin[1]) + px[1],
+                    Float32(sc_vp.origin[2]) + px[2],
+                ))
+            end
+        end
+        return result
+    end
+
+    map!(
+        p.attributes,
+        [:geom, :group_nodes, :bracket_label_positions, :annotation_layout, :pixel_projection],
+        :bracket_label_pixel_positions,
+    ) do geom, group_nodes, positions, annotation_layout, _
+        if _shared_clade_annotation_active(annotation_layout)
+            return _shared_bracket_label_pixel_positions_for_groups(
+                sc,
+                [_group_node_positions(group_nodes, geom.node_positions)],
+                annotation_layout,
+            )
+        end
+
+        sc_vp = Makie.viewport(sc)[]
+        return Point2f[
+            Point2f(
+                Float32(sc_vp.origin[1]) + data_to_pixel(sc, pos)[1],
+                Float32(sc_vp.origin[2]) + data_to_pixel(sc, pos)[2],
+            )
+            for pos in positions
+        ]
+    end
+
+    lines!(p, Point2f[]; visible = false)
+    decoration_sc = Makie.parent(sc)
+
+    lines!(
+        decoration_sc,
+        p[:bracket_pixel_shapes];
+        color = p[:color],
+        visible = p[:visible],
+    )
+    text!(
+        decoration_sc,
+        p[:bracket_label_pixel_positions];
+        text = p[:bracket_label_strings],
+        fontsize = p[:fontsize],
+        color = p[:color],
+        align = p[:bracket_label_aligns],
+        visible = p[:visible],
+    )
+    return p
+end
+
 # ── ScaleBarLayer ─────────────────────────────────────────────────────────────
 
 """
@@ -1497,7 +1891,8 @@ end
 Composite entry point. Computes a rectangular or circular layout from
 `basenode` and `accessor` and renders all visual layers: `EdgeLayer`,
 `NodeLayer`, `LeafLayer`, `LeafLabelLayer`, `NodeLabelLayer`,
-`CladeHighlightLayer`, `CladeLabelLayer`, and `ScaleBarLayer`.
+`CladeHighlightLayer`, `NodeGroupHighlightLayer`, `NodeGroupLabelLayer`,
+`CladeLabelLayer`, and `ScaleBarLayer`.
 
 `lineageunits` selects how process coordinates are computed (see
 `Geometry.rectangular_layout` for all values). `nothing` (default) detects
@@ -1539,6 +1934,18 @@ re-calling `lineageplot!`. The `basenode` argument may be a plain value or an
   `node_label_visible`: forwarded to `NodeLabelLayer`. `node_label_position =
   :toward_parent` currently requires a rooted-tree or explicit tree-view
   display.
+- `group_nodes`: one explicit displayed node group shared by
+  `NodeGroupHighlightLayer` and `NodeGroupLabelLayer`. This graph-capable
+  surface performs no MRCA expansion and is DAG-safe. Default `Any[]`.
+- `nodegroup_highlight_color`, `nodegroup_highlight_alpha`,
+  `nodegroup_highlight_padding`, `nodegroup_highlight_visible`: forwarded to
+  `NodeGroupHighlightLayer`.
+- `nodegroup_label_func`, `nodegroup_label_color`,
+  `nodegroup_label_fontsize`, `nodegroup_label_offset`,
+  `nodegroup_label_side`, `nodegroup_label_visible`: forwarded to
+  `NodeGroupLabelLayer`. `nodegroup_label_func` is called as
+  `label_func(group_nodes)`. `nodegroup_label_side` is set automatically by
+  `lineageplot!(ax::LineageAxis, ...)` based on orientation.
 - `clade_nodes`: vector of MRCA nodes shared by `CladeHighlightLayer`
   and `CladeLabelLayer`. This MRCA/subtree surface currently requires a
   rooted-tree or explicit tree-view display. Default `Any[]`.
@@ -1618,6 +2025,24 @@ For the non-mutating convenience entry point that creates a `Figure` and
     node_label_fontsize = 10
     node_label_color = :gray50
     node_label_visible = true
+
+    # ── NodeGroupHighlightLayer / NodeGroupLabelLayer ────────────────────────
+    "One explicit displayed node group shared by `NodeGroupHighlightLayer` and `NodeGroupLabelLayer`."
+    group_nodes = Any[]
+    nodegroup_highlight_color = Makie.RGBAf(0.95f0, 0.7f0, 0.2f0, 0.18f0)
+    nodegroup_highlight_alpha = 0.18
+    "Pixel-space expansion of the explicit node-group bounding box on each side."
+    nodegroup_highlight_padding = Makie.Vec2f(4, 4)
+    nodegroup_highlight_visible = true
+    "Callable `group_nodes -> String` producing the graph-capable node-group label."
+    nodegroup_label_func = (nodes -> "")
+    nodegroup_label_color = :black
+    nodegroup_label_fontsize = 11
+    "Pixel-space offset from the explicit node-group extent toward the bracket bar."
+    nodegroup_label_offset = Makie.Vec2f(6, 0)
+    "Side on which the node-group bracket is placed: :right, :left, :top, or :bottom."
+    nodegroup_label_side = :right
+    nodegroup_label_visible = true
 
     # ── CladeHighlightLayer (shares clade_nodes with CladeLabelLayer) ─────────
     "Vector of MRCA nodes whose subtrees are highlighted and labelled; currently rooted-tree or explicit tree-view only."
@@ -1717,7 +2142,7 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         return av === nothing ? _scalebar_visible(lu, label) : av::Bool
     end
 
-    # Step 4: Call all 8 sub-layer recipes, passing ComputeGraph node handles
+    # Step 4: Call all 10 sub-layer recipes, passing ComputeGraph node handles
     # as positional arguments where possible.
     #
     # Reactive chain:
@@ -1739,6 +2164,15 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         alpha = lp[:clade_highlight_alpha],
         padding = lp[:clade_highlight_padding],
         visible = lp[:clade_highlight_visible],
+    )
+
+    nodegrouphighlightlayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        group_nodes = lp[:group_nodes],
+        color = lp[:nodegroup_highlight_color],
+        alpha = lp[:nodegroup_highlight_alpha],
+        padding = lp[:nodegroup_highlight_padding],
+        visible = lp[:nodegroup_highlight_visible],
     )
 
     # Internal node markers are rendered in two passes so the marker fill can
@@ -1811,6 +2245,17 @@ function Makie.plot!(lp::LineagePlot)::LineagePlot
         visible = lp[:node_label_visible],
     )
 
+    nodegrouplabellayer!(
+        lp, lp[:computed_geom], lp[:accessor];
+        group_nodes = lp[:group_nodes],
+        label_func = lp[:nodegroup_label_func],
+        color = lp[:nodegroup_label_color],
+        fontsize = lp[:nodegroup_label_fontsize],
+        offset = lp[:nodegroup_label_offset],
+        side = lp[:nodegroup_label_side],
+        visible = lp[:nodegroup_label_visible],
+    )
+
     cladelabellayer!(
         lp, lp[:computed_geom], lp[:accessor];
         clade_nodes = lp[:clade_nodes],
@@ -1858,6 +2303,10 @@ export LineagePlot,
     nodelabellayer!,
     CladeHighlightLayer,
     cladehighlightlayer!,
+    NodeGroupHighlightLayer,
+    nodegrouphighlightlayer!,
+    NodeGroupLabelLayer,
+    nodegrouplabellayer!,
     CladeLabelLayer,
     cladelabellayer!,
     ScaleBarLayer,

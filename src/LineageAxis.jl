@@ -49,7 +49,13 @@ using Makie: make_block_docstring
 
 # _resolve_lineageunits_stub is private (unexported) but needed by lineageplot!.
 # LineagePlot is the return type of the updated lineageplot! method.
-using .Layers: _resolve_lineageunits_stub, CladeLabelLayer, LeafLabelLayer, LineagePlot, ScaleBarLayer
+using .Layers:
+    _resolve_lineageunits_stub,
+    CladeLabelLayer,
+    LeafLabelLayer,
+    LineagePlot,
+    NodeGroupLabelLayer,
+    ScaleBarLayer
 # import (not using) to extend lineageplot! with a LineageAxis-specific method.
 import .Layers: lineageplot!
 # data_to_pixel is needed by _wire_x_axis! to convert tick x values to blockscene
@@ -1397,6 +1403,8 @@ function _lineageaxis_orientation_defaults(annotation_side::Symbol)::NamedTuple
             leaf_label_align = (:right, :center),
             clade_label_side = :left,
             clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
+            nodegroup_label_side = :left,
+            nodegroup_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
         )
     elseif annotation_side === :right
         return (
@@ -1404,6 +1412,8 @@ function _lineageaxis_orientation_defaults(annotation_side::Symbol)::NamedTuple
             leaf_label_align = (:left, :center),
             clade_label_side = :right,
             clade_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
+            nodegroup_label_side = :right,
+            nodegroup_label_offset = Makie.Vec2f(_LINEAGEAXIS_CLADE_LABEL_OFFSET_PX, 0),
         )
     elseif annotation_side === :top
         return (
@@ -1411,6 +1421,8 @@ function _lineageaxis_orientation_defaults(annotation_side::Symbol)::NamedTuple
             leaf_label_align = (:center, :bottom),
             clade_label_side = :top,
             clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
+            nodegroup_label_side = :top,
+            nodegroup_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
         )
     elseif annotation_side === :bottom
         return (
@@ -1418,6 +1430,8 @@ function _lineageaxis_orientation_defaults(annotation_side::Symbol)::NamedTuple
             leaf_label_align = (:center, :top),
             clade_label_side = :bottom,
             clade_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
+            nodegroup_label_side = :bottom,
+            nodegroup_label_offset = Makie.Vec2f(0, _LINEAGEAXIS_CLADE_LABEL_OFFSET_PX),
         )
     end
     throw(
@@ -1492,6 +1506,38 @@ function _resolved_clade_label_strings(clade_nodes, label_func)::Vector{String}
     return String[string(label_func(node)) for node in clade_nodes]
 end
 
+function _resolved_nodegroup_label_strings(group_nodes, label_func)::Vector{String}
+    isempty(group_nodes) && return String[]
+    return String[string(label_func(group_nodes))]
+end
+
+function _shared_annotation_label_side(
+        clade_nodes,
+        clade_label_visible::Bool,
+        clade_label_side::Symbol,
+        group_nodes,
+        nodegroup_label_visible::Bool,
+        nodegroup_label_side::Symbol,
+    )::Symbol
+    clade_active = clade_label_visible && !isempty(clade_nodes)
+    nodegroup_active = nodegroup_label_visible && !isempty(group_nodes)
+    if clade_active && nodegroup_active
+        clade_side = _rectangular_annotation_side(clade_label_side)
+        nodegroup_side = _rectangular_annotation_side(nodegroup_label_side)
+        clade_side === nodegroup_side || throw(
+            ArgumentError(
+                "LineageAxis shares one rectangular annotation lane across clade and node-group labels; " *
+                "clade_label_side = $(repr(clade_label_side)) and " *
+                "nodegroup_label_side = $(repr(nodegroup_label_side)) must match when both surfaces are visible",
+            ),
+        )
+        return clade_side
+    elseif nodegroup_active
+        return _rectangular_annotation_side(nodegroup_label_side)
+    end
+    return _rectangular_annotation_side(clade_label_side)
+end
+
 function _resolved_scalebar_label(label)::String
     return string(label)
 end
@@ -1513,6 +1559,12 @@ function _annotation_measurements(
         clade_label_visible::Bool,
         clade_label_offset::Makie.Vec2f,
         clade_label_side::Symbol,
+        group_nodes,
+        nodegroup_label_func,
+        nodegroup_label_fontsize,
+        nodegroup_label_visible::Bool,
+        nodegroup_label_offset::Makie.Vec2f,
+        nodegroup_label_side::Symbol,
         scalebar_visible::Bool,
         scalebar_position::Tuple,
         scalebar_label,
@@ -1523,6 +1575,21 @@ function _annotation_measurements(
 
     clade_strings = _resolved_clade_label_strings(clade_nodes, clade_label_func)
     clade_width_px, clade_height_px = _max_text_size_px(clade_strings, :regular, clade_label_fontsize)
+    nodegroup_strings = _resolved_nodegroup_label_strings(group_nodes, nodegroup_label_func)
+    nodegroup_width_px, nodegroup_height_px = _max_text_size_px(
+        nodegroup_strings,
+        :regular,
+        nodegroup_label_fontsize,
+    )
+    shared_annotation_visible =
+        (clade_label_visible && !isempty(clade_nodes)) ||
+        (nodegroup_label_visible && !isempty(group_nodes))
+    shared_label_max_width_px = max(clade_width_px, nodegroup_width_px)
+    shared_label_max_height_px = max(clade_height_px, nodegroup_height_px)
+    shared_label_offset_px = max(
+        _offset_component_px(clade_label_offset, _rectangular_annotation_side(clade_label_side)),
+        _offset_component_px(nodegroup_label_offset, _rectangular_annotation_side(nodegroup_label_side)),
+    )
     scalebar_label_string = _resolved_scalebar_label(scalebar_label)
     scalebar_width_px, scalebar_height_px = _max_text_size_px(
         String[scalebar_label_string],
@@ -1542,11 +1609,11 @@ function _annotation_measurements(
             leaf_width_px,
             leaf_height_px,
             false,
-            abs(Float32(clade_label_offset[1])),
+            max(abs(Float32(clade_label_offset[1])), abs(Float32(nodegroup_label_offset[1]))),
             _LINEAGEAXIS_CLADE_TICK_LENGTH_PX,
             _LINEAGEAXIS_CLADE_TEXT_GAP_PX,
-            clade_width_px,
-            clade_height_px,
+            shared_label_max_width_px,
+            shared_label_max_height_px,
             radial_gap_px,
             leaf_width_px,
             leaf_height_px,
@@ -1559,7 +1626,14 @@ function _annotation_measurements(
         )
     end
 
-    active_side = _rectangular_annotation_side(clade_label_side)
+    active_side = _shared_annotation_label_side(
+        clade_nodes,
+        clade_label_visible,
+        clade_label_side,
+        group_nodes,
+        nodegroup_label_visible,
+        nodegroup_label_side,
+    )
     leaf_normal_align = _text_normal_alignment(leaf_label_align, active_side)
     leaf_normal_extent_px = _normal_text_extent_px(leaf_width_px, leaf_height_px, active_side)
     toward_plot_px, away_from_plot_px = _text_extents_for_side(
@@ -1577,12 +1651,12 @@ function _annotation_measurements(
         away_from_plot_px,
         leaf_width_px,
         leaf_height_px,
-        clade_label_visible && !isempty(clade_nodes),
-        _offset_component_px(clade_label_offset, active_side),
+        shared_annotation_visible,
+        shared_label_offset_px,
         _LINEAGEAXIS_CLADE_TICK_LENGTH_PX,
         _LINEAGEAXIS_CLADE_TEXT_GAP_PX,
-        clade_width_px,
-        clade_height_px,
+        shared_label_max_width_px,
+        shared_label_max_height_px,
         max(_offset_component_px(leaf_label_offset, active_side), 4.0f0),
         leaf_width_px,
         leaf_height_px,
@@ -1617,6 +1691,12 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
             lp[:clade_label_visible][],
             lp[:clade_label_offset][],
             lp[:clade_label_side][],
+            lp[:group_nodes][],
+            lp[:nodegroup_label_func][],
+            lp[:nodegroup_label_fontsize][],
+            lp[:nodegroup_label_visible][],
+            lp[:nodegroup_label_offset][],
+            lp[:nodegroup_label_side][],
             lp[:resolved_scalebar_visible][],
             lp[:scalebar_position][],
             lp[:scalebar_label][],
@@ -1642,6 +1722,12 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
         lp[:clade_label_visible],
         lp[:clade_label_offset],
         lp[:clade_label_side],
+        lp[:group_nodes],
+        lp[:nodegroup_label_func],
+        lp[:nodegroup_label_fontsize],
+        lp[:nodegroup_label_visible],
+        lp[:nodegroup_label_offset],
+        lp[:nodegroup_label_side],
         lp[:resolved_scalebar_visible],
         lp[:scalebar_position],
         lp[:scalebar_label],
@@ -1653,7 +1739,10 @@ function _sync_annotation_measurements!(ax::LineageAxis, lp::LineagePlot)::Nothi
 end
 
 function _wire_annotation_layout!(ax::LineageAxis, lp::LineagePlot)::Nothing
-    annotation_layers = filter(p -> p isa Union{LeafLabelLayer, CladeLabelLayer, ScaleBarLayer}, lp.plots)
+    annotation_layers = filter(
+        p -> p isa Union{LeafLabelLayer, CladeLabelLayer, NodeGroupLabelLayer, ScaleBarLayer},
+        lp.plots,
+    )
 
     function _push_annotation_layout!(layout)
         for plot in annotation_layers
@@ -1712,10 +1801,11 @@ When `ax` is a `LineageAxis`, this method additionally:
 1. Infers `ax.axis_polarity` from `lineageunits` unless the user has explicitly
    set it (detected by the `_polarity_locked` flag wired in `initialize_block!`).
 2. Computes orientation-aware defaults for `leaf_label_offset`, `leaf_label_align`,
-   and `clade_label_side` based on `lineage_orientation` and `display_polarity`.
-   Horizontal embeddings default to left/right annotation lanes; vertical
-   embeddings default to top/bottom annotation lanes. Caller-supplied keyword
-   arguments always override these defaults.
+   `clade_label_side`, and `nodegroup_label_side` based on
+   `lineage_orientation` and `display_polarity`. Horizontal embeddings default
+   to left/right annotation lanes; vertical embeddings default to top/bottom
+   annotation lanes. Caller-supplied keyword arguments always override these
+   defaults.
 3. Calls `reset_limits!(ax, geom)` after the recipe sets `lp[:computed_geom]`
    so that axis limits fit the lineage graph bounding box with `display_polarity`
    and `lineage_orientation` applied.

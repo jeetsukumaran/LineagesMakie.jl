@@ -495,6 +495,33 @@ end
         @test layout.clade_label_anchor_y < layout.clade_bracket_y
     end
 
+    @testset "node-group labels share measured annotation lanes on shared-parent DAG displays" begin
+        fig, lax = _fresh_lax()
+        group_nodes = _LA_SHARED_DESCENDANT_DAG.children
+        lp = lineageplot!(
+            lax,
+            _LA_SHARED_DESCENDANT_DAG,
+            _LA_DAG_ACC;
+            lineageunits = :nodelevels,
+            leaf_label_func = node -> "node_" * node.name,
+            group_nodes = group_nodes,
+            nodegroup_label_func = nodes -> join(String[node.name for node in nodes], " + "),
+        )
+        colorbuffer(fig)
+
+        layout = lax._decoration_layout[]
+        ngl = only(filter(p -> p isa NodeGroupLabelLayer, lp.plots))
+
+        @test layout.active_annotation_side === :right
+        @test all(
+            pos -> isapprox(pos[1], layout.clade_label_anchor_x; atol = 1.0f-3),
+            ngl[:bracket_label_pixel_positions][],
+        )
+
+        bracket_xs = unique(Float32[pt[1] for pt in ngl[:bracket_pixel_shapes][] if isfinite(pt[1])])
+        @test any(x -> isapprox(x, layout.clade_bracket_x; atol = 1.0f-3), bracket_xs)
+    end
+
     @testset "radial annotation layout uses measured outer padding" begin
         fig, lax = _fresh_lax(; lineage_orientation = :radial)
         lineageplot!(

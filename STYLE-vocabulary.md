@@ -432,9 +432,10 @@ names; `lineagegraph` (no underscore) in compound code identifiers.
 **Definition:** The primary conceptual object that LineagesMakie.jl visualizes.
 A lineage graph is a graph representing evolutionary relationships.
 
-In Tier 1 the lineage graph is always a tree (each node has exactly one parent);
-future tiers will extend to DAGs with shared ancestry (reticulation) and
-eventually to general networks.
+A lineage graph may be a rooted tree or a DAG with shared ancestry
+(reticulation). Rooted trees are the single-parent special case inside that
+broader owner model. Future tiers may extend further to richer network display
+policies and general network-specific rendering layers.
 
 **Usage:**
 - In prose: "lineage graph" (two words).
@@ -455,6 +456,97 @@ in prose and `LineageGraph` / `lineagegraph` in code.
 **Relationship to other terms:** A lineage graph is traversed via a
 `LineageGraphAccessor`. Its computed 2D layout is stored in a
 `LineageGraphGeometry`. The core plotting function is `lineageplot!`.
+
+---
+
+### `tree view`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** A displayed view whose rendered geometry is one rooted tree.
+The view may come from a rooted-tree input directly or from an explicit
+projection contract, but the rendered owner path has single-parent semantics.
+
+**Usage notes:** Tree-only annotation surfaces such as `clade_nodes` and
+`NodeLabelLayer(position = :toward_parent)` are honest only on rooted trees or
+explicit tree views.
+
+**Proscribed alternates:** using `tree` without qualification when the view is
+actually a full-network display; `default DAG view`.
+
+---
+
+### `full-network view`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** A displayed view that renders all normalized displayed nodes
+and edges in the lineage graph without silently projecting the structure to one
+tree.
+
+**Usage notes:** Graph-capable annotation surfaces must name when they operate
+on a full-network view, because subtree or unique-parent assumptions are not
+available there by default.
+
+**Proscribed alternates:** `network tree`; `generic tree view` when all edges
+remain displayed.
+
+---
+
+### `node group` / `group_nodes`
+
+**Part of speech:** noun (annotation concept); keyword argument name
+
+**Definition:** An explicit displayed node set used by the graph-capable
+annotation surfaces `NodeGroupHighlightLayer`, `NodeGroupLabelLayer`, and the
+composite `group_nodes` / `nodegroup_*` keyword family.
+
+`group_nodes` denotes one explicit node group per direct-layer or composite
+invocation. The owner contract performs no MRCA expansion, subtree inference,
+hidden projection, or nested batching.
+
+**Usage notes:** If more than one distinct explicit group is needed in one
+figure, compose multiple `NodeGroupHighlightLayer` or `NodeGroupLabelLayer`
+instances additively rather than overloading `group_nodes` into a nested
+structure.
+
+**Proscribed alternates:** reusing `clade_nodes` for non-subtree semantics;
+calling an arbitrary displayed set a `subtree`; nested `group_nodes` payloads.
+
+---
+
+### `group annotation`
+
+**Part of speech:** noun (annotation-contract concept)
+
+**Definition:** Annotation that operates on one explicit displayed node group
+rather than on one MRCA subtree.
+
+**Usage notes:** Group annotation is the graph-capable counterpart to tree-only
+clade or MRCA annotation. It must name the exact group contract instead of
+pretending the group is one subtree.
+
+**Proscribed alternates:** using `clade annotation` for non-subtree group
+semantics; `generic annotation` when the explicit owner is a node group.
+
+---
+
+### `tree-only annotation surface` / `graph-capable annotation surface`
+
+**Part of speech:** noun (public-contract concept)
+
+**Definition:** A `tree-only annotation surface` is a public annotation entry
+surface whose semantics depend on rooted-tree or explicit tree-view ownership.
+A `graph-capable annotation surface` is a public annotation entry surface whose
+contract is honest on shared-parent DAG or full-network displays.
+
+**Usage notes:** `clade_nodes` and `NodeLabelLayer(position = :toward_parent)`
+are tree-only annotation surfaces. `group_nodes`,
+`NodeGroupHighlightLayer`, and `NodeGroupLabelLayer` are graph-capable
+annotation surfaces.
+
+**Proscribed alternates:** calling a tree-only surface "generic DAG
+annotation"; calling a graph-capable node-group surface a `clade` surface.
 
 ---
 
@@ -1015,6 +1107,8 @@ required artifact set.
 | `LeafLabelLayer` | `leaflabellayer!` | `TipLabelLayer`, `tiplabellayer!` |
 | `NodeLabelLayer` | `nodelabellayer!` | `VertexLabelLayer`, `vertexlabellayer!` |
 | `CladeHighlightLayer` | `cladehighlightlayer!` | — |
+| `NodeGroupHighlightLayer` | `nodegrouphighlightlayer!` | — |
+| `NodeGroupLabelLayer` | `nodegrouplabellayer!` | — |
 | `CladeLabelLayer` | `cladelabellayer!` | — |
 | `ScaleBarLayer` | `scalebarlayer!` | — |
 | `LineagePlot` | `lineageplot!` | — |

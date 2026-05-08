@@ -43,7 +43,7 @@ These capacities extend the standard 2D rooted-tree plotting surface:
 
 These capacities target reticulate lineage graphs and richer layout control:
 
-- PhyloNetworks.jl adapter
+- PhyloNetworks.jl package extension
 - hybrid node markers
 - reticulation edge rendering with major and minor inheritance paths
 - gamma label layer for reticulation edges

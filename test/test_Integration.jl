@@ -322,6 +322,34 @@ end
         @test occursin("rooted-tree or explicit tree-view", sprint(showerror, _it_root_error(err)))
     end
 
+    @testset "lineageplot! supports exact node-group DAG annotations through the public contract" begin
+        fig = Figure(; size = (600, 400))
+        ax = Axis(fig[1, 1])
+        acc = _it_dag_accessor()
+        nodes = _it_dag_nodes()
+        lp = @test_nowarn lineageplot!(
+            ax,
+            _IT_SHARED_DESCENDANT_DAG,
+            acc;
+            lineageunits = :nodelevels,
+            group_nodes = [nodes.left, nodes.right],
+            nodegroup_label_func = nodes -> join(String[node.name for node in nodes], " + "),
+            nodegroup_highlight_alpha = 0.22,
+        )
+        @test lp isa LineagePlot
+        @test_nowarn CairoMakie.colorbuffer(fig)
+
+        ngh = only(filter(p -> p isa NodeGroupHighlightLayer, lp.plots))
+        ngl = only(filter(p -> p isa NodeGroupLabelLayer, lp.plots))
+        geom = lp[:computed_geom][]
+        rect = only(ngh[:highlight_rects][])
+        full_span = Float32(geom.boundingbox.widths[1])
+
+        @test rect.widths[1] < full_span
+        @test ngl[:bracket_label_strings][] == ["left + right"]
+        @test length(ngl[:bracket_label_pixel_positions][]) == 1
+    end
+
     @testset "lineageplot! on Axis keeps explicit-coordinate leaf labels aligned with rendered order" begin
         fig = Figure(; size = (600, 400))
         ax = Axis(fig[1, 1])

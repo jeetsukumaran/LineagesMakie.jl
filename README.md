@@ -5,20 +5,20 @@
 [![Build Status](https://github.com/jeetsukumaran/LineagesMakie.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/jeetsukumaran/LineagesMakie.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
-LineagesMakie.jl draws lineage graphs with Makie. In this package, a
-lineage graph means a rooted branching history or hierarchy, such as a
-phylogenetic tree, coalescent genealogy, cladogram, or any custom object graph
-where each node can report its child nodes.
+LineagesMakie.jl draws lineage graphs with Makie. In this package, a lineage
+graph may be a rooted branching history or hierarchy or a directed acyclic
+graph (DAG) with shared ancestry. Rooted trees remain the single-parent
+special case inside that broader owner model.
 
 LineagesMakie.jl accepts ordinary Julia objects through a small accessor
 interface, or any object that implements the AbstractTrees.jl `children`
 interface. It does not require a package-specific tree type, an R bridge, or a
 web service.
 
-Use LineagesMakie.jl when you want Makie composition for rooted branching
-structures: structure-only layouts, edge-length-proportional layouts, radial
-layouts, labels, clade annotations, scale bars, `LineageAxis` decorations, and
-Observable-backed updates.
+Use LineagesMakie.jl when you want Makie composition for lineage graphs:
+structure-only layouts, edge-length-proportional layouts, radial layouts,
+graph-capable node-group annotation, tree-view clade annotation, scale bars,
+`LineageAxis` decorations, and Observable-backed updates.
 
 Full reference documentation lives in the [stable docs](https://jeetsukumaran.github.io/LineagesMakie.jl/stable/)
 and [development docs](https://jeetsukumaran.github.io/LineagesMakie.jl/dev/).
@@ -101,13 +101,13 @@ plot_result = lineageplot(
 ```
 
 
-## Edge lengths and annotations
+## Edge lengths and tree-view annotation
 
 Add the `edgeweight(src, dst)` accessor when horizontal distance should reflect
-edge weight. The same example also shows leaf labels, clade highlighting, a
-clade bracket label, a quantitative x-axis, and a scale bar. On shared-parent
-DAG displays, `clade_nodes` subtree annotations currently require an explicit
-rooted-tree view.
+edge weight. The same example also shows leaf labels, tree-view clade
+highlighting, a clade bracket label, a quantitative x-axis, and a scale bar.
+On shared-parent DAG full-network views, `clade_nodes` subtree annotations
+still require an explicit rooted-tree view.
 
 ```julia
 using CairoMakie
@@ -159,6 +159,41 @@ plot_result = lineageplot(
     clade_highlight_color = (:lightskyblue, 0.25),
     scalebar_label = "1 unit",
     scalebar_auto_visible = true,
+)
+```
+
+## Shared-parent DAG node-group annotation
+
+Use `group_nodes` with the `nodegroup_*` keyword family when the annotation
+target is one explicit displayed node set rather than one MRCA subtree. This
+surface performs no subtree expansion, so it stays honest on shared-parent DAG
+full-network views.
+
+```julia
+using CairoMakie
+using LineagesMakie
+
+mutable struct DagNode
+    name::String
+    children::Vector{DagNode}
+end
+
+shared = DagNode("shared", DagNode[])
+left = DagNode("left", DagNode[shared])
+right = DagNode("right", DagNode[shared])
+basenode = DagNode("root", DagNode[left, right])
+
+accessor = lineagegraph_accessor(basenode; children = node -> node.children)
+
+plot_result = lineageplot(
+    basenode,
+    accessor;
+    lineageunits = :nodelevels,
+    axis = (; title = "Shared-parent DAG with exact node-group annotation"),
+    leaf_label_func = node -> node.name,
+    group_nodes = [left, right],
+    nodegroup_highlight_color = (:goldenrod, 0.28),
+    nodegroup_label_func = nodes -> join(String[node.name for node in nodes], " + "),
 )
 ```
 
@@ -330,6 +365,8 @@ its layers.
 | Leaves | `leaf_marker`, `leaf_color`, `leaf_markersize`, `leaf_strokecolor`, `leaf_visible`. |
 | Leaf labels | `leaf_label_func`, `leaf_label_fontsize`, `leaf_label_color`, `leaf_label_italic`, `leaf_label_visible`. |
 | Node labels | `node_label_func`, `node_label_threshold`, `node_label_position`, `node_label_fontsize`. `node_label_position = :toward_parent` currently requires a rooted-tree or explicit tree-view display. |
+| Node-group highlights | `group_nodes`, `nodegroup_highlight_color`, `nodegroup_highlight_alpha`, `nodegroup_highlight_padding`. This graph-capable surface performs no MRCA expansion and is DAG-safe. |
+| Node-group labels | `group_nodes`, `nodegroup_label_func`, `nodegroup_label_color`, `nodegroup_label_fontsize`, `nodegroup_label_side`. `nodegroup_label_func` is called as `label_func(group_nodes)`. |
 | Clade highlights | `clade_nodes`, `clade_highlight_color`, `clade_highlight_alpha`, `clade_highlight_padding`. `clade_nodes` subtree highlights currently require a rooted-tree or explicit tree-view display. |
 | Clade labels | `clade_nodes`, `clade_label_func`, `clade_label_color`, `clade_label_fontsize`, `clade_label_side`. `clade_nodes` subtree brackets currently require a rooted-tree or explicit tree-view display. |
 | Scale bars | `scalebar_label`, `scalebar_length`, `scalebar_position`, `scalebar_auto_visible`. |
@@ -349,7 +386,9 @@ lineageplot!(
 Node labels are opt-in. Enable them with `node_label_threshold`:
 
 `node_label_position = :toward_parent` currently requires a rooted-tree or
-explicit tree-view display; use `:node` on shared-parent DAG layouts.
+explicit tree-view display; use `:node` on shared-parent DAG layouts, or use
+`group_nodes` with `nodegroup_label_*` when the annotation target is one exact
+displayed node set.
 
 ```julia
 lineageplot!(

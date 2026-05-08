@@ -7,6 +7,7 @@
 #
 # Demonstrates:
 #   - DAG-safe rectangular layout with `:nodelevels`
+#   - graph-capable node-group annotation through explicit `group_nodes`
 #   - consistent weighted full-network radial layout with `:edgeweights`
 #   - all normalized DAG edges rendered without a hidden tree projection
 
@@ -29,6 +30,7 @@ edgeweights = Dict(
     ("left", "shared") => 2.0,
     ("right", "shared") => 2.0,
 )
+group_nodes = DagNode[left, right]
 
 accessor = lineagegraph_accessor(
     basenode;
@@ -57,6 +59,10 @@ lineageplot!(
     leaf_color = :black,
     leaf_markersize = 12,
     leaf_label_func = node -> node.name,
+    group_nodes = group_nodes,
+    nodegroup_highlight_color = (:goldenrod, 0.28),
+    nodegroup_highlight_alpha = 0.28,
+    nodegroup_label_func = nodes -> join(String[node.name for node in nodes], " + "),
 )
 
 lax2 = LineageAxis(

@@ -731,6 +731,87 @@ end
 
     end
 
+    @testset "NodeGroupHighlightLayer" begin
+
+        @testset "renders without error on shared-parent DAG displays" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            plot_obj = nodegrouphighlightlayer!(
+                ax,
+                geom,
+                acc;
+                group_nodes = _LT_SHARED_DESCENDANT_DAG.children,
+            )
+            @test plot_obj isa NodeGroupHighlightLayer
+        end
+
+        @testset "exact group highlight stays local rather than expanding to the full DAG" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            plot_obj = nodegrouphighlightlayer!(
+                ax,
+                geom,
+                acc;
+                group_nodes = _LT_SHARED_DESCENDANT_DAG.children,
+            )
+            colorbuffer(fig)
+
+            rect = only(plot_obj[:highlight_rects][])
+            full_span = Float32(geom.boundingbox.widths[1])
+
+            @test rect.widths[1] < full_span
+            for node in _LT_SHARED_DESCENDANT_DAG.children
+                @test _lt_rect_contains(rect, geom.node_positions[node])
+            end
+            @test !_lt_rect_contains(rect, geom.node_positions[_LT_SHARED_DESCENDANT_DAG])
+            @test !_lt_rect_contains(rect, geom.node_positions[_LT_SHARED_DESCENDANT_DAG.children[1].children[1]])
+        end
+
+    end
+
+    @testset "NodeGroupLabelLayer" begin
+
+        @testset "renders without error on shared-parent DAG displays" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            plot_obj = nodegrouplabellayer!(
+                ax,
+                geom,
+                acc;
+                group_nodes = _LT_SHARED_DESCENDANT_DAG.children,
+                label_func = nodes -> join(String[node.name for node in nodes], " + "),
+            )
+            @test plot_obj isa NodeGroupLabelLayer
+        end
+
+        @testset "label_func receives the explicit node group" begin
+            fig = Figure(; size = (400, 300))
+            ax = Axis(fig[1, 1])
+            acc = _lt_dag_accessor()
+            geom = rectangular_layout(_LT_SHARED_DESCENDANT_DAG, acc)
+            plot_obj = nodegrouplabellayer!(
+                ax,
+                geom,
+                acc;
+                group_nodes = _LT_SHARED_DESCENDANT_DAG.children,
+                label_func = nodes -> join(String[node.name for node in nodes], " + "),
+            )
+            colorbuffer(fig)
+
+            @test plot_obj[:bracket_label_strings][] == ["left + right"]
+            @test length(plot_obj[:bracket_label_positions][]) == 1
+            @test only(plot_obj[:bracket_label_positions][])[1] >
+                maximum(geom.node_positions[node][1] for node in _LT_SHARED_DESCENDANT_DAG.children)
+        end
+
+    end
+
     @testset "CladeLabelLayer" begin
 
         @testset "renders without error" begin
