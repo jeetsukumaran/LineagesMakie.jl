@@ -383,11 +383,15 @@ function _axis_tick_labels(values::Vector{Float32})::Vector{String}
     return [string(round(value; digits = 2)) for value in values]
 end
 
-function _boundingbox_tick_values(
+function _displayed_extent_rect(geom::LineageGraphGeometry)::Rect2f
+    return Geometry._plot_envelope(geom)
+end
+
+function _displayed_extent_tick_values(
         geom::LineageGraphGeometry,
         axis::Symbol,
     )::Vector{Float32}
-    bb = geom.boundingbox
+    bb = _displayed_extent_rect(geom)
     lower = axis === :x ? Float32(Makie.minimum(bb)[1]) : Float32(Makie.minimum(bb)[2])
     upper = axis === :x ? Float32(Makie.maximum(bb)[1]) : Float32(Makie.maximum(bb)[2])
     return _axis_tick_values(lower, upper)
@@ -400,7 +404,7 @@ function _screen_axis_measurements(
     )::_LineageAxisScreenAxisMeasurements
     (!show_y_axis || geom === nothing) && return _default_screen_axis_measurements()
 
-    ylabels = _axis_tick_labels(_boundingbox_tick_values(geom::LineageGraphGeometry, :y))
+    ylabels = _axis_tick_labels(_displayed_extent_tick_values(geom::LineageGraphGeometry, :y))
     tick_width_px, _ = _max_text_size_px(ylabels, Makie.defaultfont(), _LINEAGEAXIS_TICK_FONTSIZE)
     yaxis_band_width_px = max(
         _LINEAGEAXIS_YAXIS_MIN_BAND_PX,
@@ -1069,9 +1073,9 @@ function _wire_x_axis!(lax::LineageAxis, blockscene::Scene, layout_obs)
             return
         end
         layout = lax._decoration_layout[]
-        bb = (geom::LineageGraphGeometry).boundingbox
+        bb = _displayed_extent_rect(geom::LineageGraphGeometry)
         ymid = (Float32(Makie.minimum(bb)[2]) + Float32(Makie.maximum(bb)[2])) / 2.0f0
-        xs = _boundingbox_tick_values(geom, :x)
+        xs = _displayed_extent_tick_values(geom, :x)
 
         positions = Point2f[]
         segments = Point2f[]
@@ -1141,9 +1145,9 @@ function _wire_y_axis!(lax::LineageAxis, blockscene::Scene, layout_obs)
         end
 
         layout = lax._decoration_layout[]
-        bb = (geom::LineageGraphGeometry).boundingbox
+        bb = _displayed_extent_rect(geom::LineageGraphGeometry)
         xmid = (Float32(Makie.minimum(bb)[1]) + Float32(Makie.maximum(bb)[1])) / 2.0f0
-        ys = _boundingbox_tick_values(geom, :y)
+        ys = _displayed_extent_tick_values(geom, :y)
 
         yaxis_band_rect = layout.yaxis_band_rect
         axis_x = yaxis_band_rect.origin[1] + yaxis_band_rect.widths[1] - 4.0f0
@@ -1202,8 +1206,8 @@ function _wire_grid!(lax::LineageAxis, blockscene::Scene, layout_obs)
             return
         end
 
-        xvals = lax.show_x_axis[] ? _boundingbox_tick_values(geom::LineageGraphGeometry, :x) : Float32[]
-        yvals = lax.show_y_axis[] ? _boundingbox_tick_values(geom::LineageGraphGeometry, :y) : Float32[]
+        xvals = lax.show_x_axis[] ? _displayed_extent_tick_values(geom::LineageGraphGeometry, :x) : Float32[]
+        yvals = lax.show_y_axis[] ? _displayed_extent_tick_values(geom::LineageGraphGeometry, :y) : Float32[]
         if isempty(xvals) && isempty(yvals)
             grid_visible[] = false
             lax._grid_segments[] = Point2f[]
@@ -1211,7 +1215,7 @@ function _wire_grid!(lax::LineageAxis, blockscene::Scene, layout_obs)
         end
 
         layout = lax._decoration_layout[]
-        bb = geom.boundingbox
+        bb = _displayed_extent_rect(geom)
         xmid = (Float32(Makie.minimum(bb)[1]) + Float32(Makie.maximum(bb)[1])) / 2.0f0
         ymid = (Float32(Makie.minimum(bb)[2]) + Float32(Makie.maximum(bb)[2])) / 2.0f0
         plot_left = layout.plot_rect.origin[1]
@@ -1300,7 +1304,7 @@ viewport suitable for circular layouts.
 function reset_limits!(lax::LineageAxis, geom::LineageGraphGeometry)::Nothing
     lax.last_geom[] = geom
 
-    bb = Geometry._plot_envelope(geom)
+    bb = _displayed_extent_rect(geom)
     data_left   = Float32(Makie.minimum(bb)[1])
     data_right  = Float32(Makie.maximum(bb)[1])
     data_bottom = Float32(Makie.minimum(bb)[2])

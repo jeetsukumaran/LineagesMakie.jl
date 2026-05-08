@@ -36,6 +36,20 @@ const _LA_BALANCED_BASENODE = LATestNode("root", [
 
 const _LA_ACC = lineagegraph_accessor(_LA_BALANCED_BASENODE; children = node -> node.children)
 const _LA_NONBASENODE_CLADE = _LA_BALANCED_BASENODE.children[1]
+const _LA_LARGE_COALESCENCEAGES = Dict(
+    "root" => 20.0,
+    "ab" => 10.0,
+    "cd" => 10.0,
+    "a" => 0.0,
+    "b" => 0.0,
+    "c" => 0.0,
+    "d" => 0.0,
+)
+const _LA_COALESCENCE_ACC_LARGE = lineagegraph_accessor(
+    _LA_BALANCED_BASENODE;
+    children = node -> node.children,
+    coalescenceage = node -> _LA_LARGE_COALESCENCEAGES[node.name],
+)
 const _LA_REORDERED_NODEPOS = Dict{String, Makie.Point2f}(
     "root" => Makie.Point2f(0, 250),
     "ab" => Makie.Point2f(10, 150),
@@ -91,6 +105,55 @@ function _visible_blockscene_strings(lax::LineageAxis)::Vector{String}
         end
     end
     return strings
+end
+
+function _tick_labels_for_rect(rect::Makie.Rect2f, axis::Symbol)::Vector{String}
+    lower = axis === :x ? Float32(Makie.minimum(rect)[1]) : Float32(Makie.minimum(rect)[2])
+    upper = axis === :x ? Float32(Makie.maximum(rect)[1]) : Float32(Makie.maximum(rect)[2])
+    values = LineagesMakie._axis_tick_values(lower, upper)
+    return LineagesMakie._axis_tick_labels(values)
+end
+
+function _displayed_extent_tick_labels(geom, axis::Symbol)::Vector{String}
+    return _tick_labels_for_rect(LineagesMakie.Geometry._plot_envelope(geom), axis)
+end
+
+function _node_envelope_tick_labels(geom, axis::Symbol)::Vector{String}
+    return _tick_labels_for_rect(geom.boundingbox, axis)
+end
+
+function _grid_line_axis_coords(segments::Vector{Makie.Point2f})
+    vertical = Float32[]
+    horizontal = Float32[]
+    i = 1
+    while i <= length(segments) - 2
+        p1 = segments[i]
+        p2 = segments[i + 1]
+        p3 = segments[i + 2]
+        @test isnan(p3[1]) && isnan(p3[2])
+        if isapprox(p1[1], p2[1]; atol = 1.0f-3)
+            push!(vertical, Float32(p1[1]))
+        else
+            push!(horizontal, Float32(p1[2]))
+        end
+        i += 3
+    end
+    return vertical, horizontal
+end
+
+function _expected_yaxis_band_width_px(labels::Vector{String})::Float32
+    tick_width_px, _ = LineagesMakie._max_text_size_px(
+        labels,
+        Makie.defaultfont(),
+        LineagesMakie._LINEAGEAXIS_TICK_FONTSIZE,
+    )
+    return max(
+        LineagesMakie._LINEAGEAXIS_YAXIS_MIN_BAND_PX,
+        tick_width_px +
+        LineagesMakie._LINEAGEAXIS_TICK_LENGTH_PX +
+        LineagesMakie._LINEAGEAXIS_YAXIS_LABEL_GAP_PX +
+        6.0f0,
+    )
 end
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -530,6 +593,69 @@ end
             @test -1.0f-3 <= px[1] <= vp_w + 1.0f-3
             @test -1.0f-3 <= px[2] <= vp_h + 1.0f-3
         end
+    end
+
+    @testset "radial quantitative axes and grid share the displayed extent owner" begin
+        fig, lax = _fresh_lax(;
+            lineage_orientation = :radial,
+            show_x_axis = true,
+            show_y_axis = true,
+            show_grid = true,
+        )
+        lineageplot!(
+            lax,
+            _LA_BALANCED_BASENODE,
+            _LA_ACC;
+            lineageunits = :nodeheights,
+            lineage_orientation = :radial,
+        )
+        colorbuffer(fig)
+
+        geom = lax.last_geom[]
+        plot_bb = LineagesMakie.Geometry._plot_envelope(geom)
+        expected_xlabels = _displayed_extent_tick_labels(geom, :x)
+        expected_ylabels = _displayed_extent_tick_labels(geom, :y)
+        @test plot_bb.widths[1] > geom.boundingbox.widths[1] ||
+            plot_bb.widths[2] > geom.boundingbox.widths[2]
+        @test expected_xlabels != _node_envelope_tick_labels(geom, :x)
+        @test expected_ylabels != _node_envelope_tick_labels(geom, :y)
+        @test lax._xaxis_tick_labels[] == expected_xlabels
+        @test lax._yaxis_tick_labels[] == expected_ylabels
+
+        vertical_xs, horizontal_ys = _grid_line_axis_coords(lax._grid_segments[])
+        x_tick_xs = sort(Float32[pt[1] for pt in lax._xaxis_tick_positions[]])
+        y_tick_ys = sort(Float32[pt[2] for pt in lax._yaxis_tick_positions[]])
+        @test length(vertical_xs) == length(x_tick_xs)
+        @test length(horizontal_ys) == length(y_tick_ys)
+        for (actual, expected) in zip(sort(vertical_xs), x_tick_xs)
+            @test actual ≈ expected atol = 1.0f-3
+        end
+        for (actual, expected) in zip(sort(horizontal_ys), y_tick_ys)
+            @test actual ≈ expected atol = 1.0f-3
+        end
+    end
+
+    @testset "radial y-axis band measurement follows the displayed extent owner" begin
+        fig, lax = _fresh_lax(; lineage_orientation = :radial, show_y_axis = true)
+        lineageplot!(
+            lax,
+            _LA_BALANCED_BASENODE,
+            _LA_COALESCENCE_ACC_LARGE;
+            lineageunits = :coalescenceage,
+            lineage_orientation = :radial,
+        )
+        colorbuffer(fig)
+
+        geom = lax.last_geom[]
+        expected_labels = _displayed_extent_tick_labels(geom, :y)
+        stale_labels = _node_envelope_tick_labels(geom, :y)
+        expected_width = _expected_yaxis_band_width_px(expected_labels)
+        stale_width = _expected_yaxis_band_width_px(stale_labels)
+        actual_width = lax._decoration_layout[].yaxis_band_rect.widths[1]
+        @test expected_labels != stale_labels
+        @test !isapprox(expected_width, stale_width; atol = 0.5f0)
+        @test actual_width ≈ expected_width atol = 1.0f-3
+        @test !isapprox(actual_width, stale_width; atol = 0.5f0)
     end
 
     @testset "radial scale bar is auto-hidden when unlabeled" begin

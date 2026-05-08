@@ -186,6 +186,13 @@ function _it_root_error(err)
     return hasproperty(err, :error) ? getproperty(err, :error) : err
 end
 
+function _it_tick_labels_for_rect(rect, axis::Symbol)::Vector{String}
+    lower = axis === :x ? Float32(CairoMakie.Makie.minimum(rect)[1]) : Float32(CairoMakie.Makie.minimum(rect)[2])
+    upper = axis === :x ? Float32(CairoMakie.Makie.maximum(rect)[1]) : Float32(CairoMakie.Makie.maximum(rect)[2])
+    values = LineagesMakie._axis_tick_values(lower, upper)
+    return LineagesMakie._axis_tick_labels(values)
+end
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 @testset "Integration" begin
@@ -228,6 +235,31 @@ end
         finally
             isfile(tmpfile) && rm(tmpfile)
         end
+    end
+
+    @testset "lineageplot convenience path keeps radial quantitative axes on the plot envelope" begin
+        acc = lineagegraph_accessor(_IT_BASENODE; children = node -> node.children)
+        plot_result = lineageplot(
+            _IT_BASENODE,
+            acc;
+            lineageunits = :nodeheights,
+            lineage_orientation = :radial,
+            figure = (; size = (600, 600)),
+            axis = (; lineage_orientation = :radial, show_x_axis = true, show_y_axis = true, show_grid = true),
+        )
+        @test plot_result isa CairoMakie.Makie.FigureAxisPlot
+        fig, lax, lp = plot_result
+        CairoMakie.colorbuffer(fig)
+
+        geom = lp[:computed_geom][]
+        plot_bb = LineagesMakie.Geometry._plot_envelope(geom)
+        expected_xlabels = _it_tick_labels_for_rect(plot_bb, :x)
+        expected_ylabels = _it_tick_labels_for_rect(plot_bb, :y)
+        @test expected_xlabels != _it_tick_labels_for_rect(geom.boundingbox, :x)
+        @test expected_ylabels != _it_tick_labels_for_rect(geom.boundingbox, :y)
+        @test lax._xaxis_tick_labels[] == expected_xlabels
+        @test lax._yaxis_tick_labels[] == expected_ylabels
+        @test length(lax._grid_segments[]) == 3 * (length(expected_xlabels) + length(expected_ylabels))
     end
 
     @testset "lineageplot! renders DAG-safe shared-descendant geometry on Axis" begin
