@@ -64,6 +64,31 @@ _LT_ACC_UNIT = lineagegraph_accessor(
 )
 _LT_GEOM = rectangular_layout(_LT_BALANCED_BASENODE, _LT_ACC)
 _LT_GEOM_RADIAL = circular_layout(_LT_BALANCED_BASENODE, _LT_ACC_UNIT; lineageunits = :edgeweights)
+const _LT_DUPLICATE_EDGE_GEOM = LineageGraphGeometry(
+    Dict{Any, Makie.Point2f}(
+        :dup_parent => Makie.Point2f(0.0f0, 0.0f0),
+        :dup_child => Makie.Point2f(2.0f0, 0.5f0),
+        :other_parent => Makie.Point2f(0.0f0, 1.0f0),
+        :other_child => Makie.Point2f(2.0f0, 1.5f0),
+    ),
+    Makie.Point2f[
+        Makie.Point2f(0.0f0, 0.0f0),
+        Makie.Point2f(1.0f0, 0.0f0),
+        Makie.Point2f(2.0f0, 0.0f0),
+        Makie.Point2f(NaN32, NaN32),
+        Makie.Point2f(0.0f0, 0.5f0),
+        Makie.Point2f(1.0f0, 0.5f0),
+        Makie.Point2f(2.0f0, 0.5f0),
+        Makie.Point2f(NaN32, NaN32),
+        Makie.Point2f(0.0f0, 1.0f0),
+        Makie.Point2f(1.0f0, 1.0f0),
+        Makie.Point2f(2.0f0, 1.5f0),
+        Makie.Point2f(NaN32, NaN32),
+    ],
+    Tuple{Any, Any}[(:dup_parent, :dup_child), (:dup_parent, :dup_child), (:other_parent, :other_child)],
+    Any[],
+    Rect2f(0.0f0, 0.0f0, 2.0f0, 1.5f0),
+)
 _LT_NONBASENODE_CLADE = _LT_BALANCED_BASENODE.children[1]
 
 function _lt_dag_accessor()
@@ -100,11 +125,33 @@ function _lt_expected_edge_shape_subset(
         geom::LineageGraphGeometry,
         selected_edges,
     )::Vector{Makie.Point2f}
-    selected = selected_edges isa AbstractSet ? selected_edges : Set(selected_edges)
+    used_slots = falses(length(geom.edges))
+    selected_indices = Int[]
+    for edge_selector in selected_edges
+        if edge_selector isa Integer
+            edge_index = Int(edge_selector)
+            used_slots[edge_index] && error("duplicate geometry edge selector in test fixture")
+            used_slots[edge_index] = true
+            push!(selected_indices, edge_index)
+            continue
+        end
+
+        resolved_index = nothing
+        for (i, edge_key) in enumerate(geom.edges)
+            used_slots[i] && continue
+            edge_key == edge_selector || continue
+            resolved_index = i
+            break
+        end
+        resolved_index === nothing && error("could not resolve expected test edge selector")
+        used_slots[resolved_index] = true
+        push!(selected_indices, resolved_index)
+    end
+    sort!(selected_indices)
+
     shapes = Makie.Point2f[]
-    for (i, edge_key) in enumerate(geom.edges)
-        edge_key in selected || continue
-        base = 4 * (i - 1)
+    for edge_index in selected_indices
+        base = 4 * (edge_index - 1)
         append!(shapes, @view geom.edge_shapes[(base + 1):(base + 4)])
     end
     return shapes
@@ -210,6 +257,22 @@ end
             @test isequal(actual_shapes, expected_shapes)
             @test actual_anchors == expected_anchors
             @test all(pt -> isfinite(pt[1]) && isfinite(pt[2]), actual_anchors)
+        end
+
+        @testset "edge helpers keep duplicate endpoint pairs distinct in geometry order" begin
+            selected_edges = (_LT_DUPLICATE_EDGE_GEOM.edges[1], _LT_DUPLICATE_EDGE_GEOM.edges[2])
+            expected_shapes = _lt_expected_edge_shape_subset(_LT_DUPLICATE_EDGE_GEOM, selected_edges)
+            actual_shapes = LineagesMakie.Layers._edge_shape_subset(_LT_DUPLICATE_EDGE_GEOM, selected_edges)
+            actual_anchors = LineagesMakie.Layers._edge_label_anchor_positions(_LT_DUPLICATE_EDGE_GEOM, (2, 1))
+            expected_anchors = [
+                _lt_expected_edge_anchor(_LT_DUPLICATE_EDGE_GEOM.edge_shapes[1:3]),
+                _lt_expected_edge_anchor(_LT_DUPLICATE_EDGE_GEOM.edge_shapes[5:7]),
+            ]
+
+            @test isequal(actual_shapes, expected_shapes)
+            @test isequal(actual_shapes[1:4], _LT_DUPLICATE_EDGE_GEOM.edge_shapes[1:4])
+            @test isequal(actual_shapes[5:8], _LT_DUPLICATE_EDGE_GEOM.edge_shapes[5:8])
+            @test actual_anchors == expected_anchors
         end
 
     end

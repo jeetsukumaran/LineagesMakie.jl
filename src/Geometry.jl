@@ -43,9 +43,12 @@ Fields:
   `lines!` call.
 - `edges::Vector{Tuple{NodeT,NodeT}}`: `(src, dst)` pairs in the same
   normalized-topology edge order as `edge_shapes`. `edges[i]` corresponds to
-  the i-th NaN-terminated group of 4 points in `edge_shapes`. Used by
-  rendering layers to expand per-edge attribute functions without re-traversing
-  the source tree.
+  the i-th NaN-terminated group of 4 points in `edge_shapes`. Duplicate
+  endpoint pairs may occur when distinct normalized edges share the same
+  source and destination nodes, so internal overlay selection must treat
+  geometry-order position as authoritative rather than assuming endpoint-pair
+  uniqueness. Rendering layers still use `edges` to expand public per-edge
+  attribute functions without re-traversing the source tree.
 - `leaf_order::Vector{NodeT}`: leaves in the order they appear along the
   rendered leaf axis. Topology-backed layouts derive this from owner-computed
   layout coordinates; explicit-coordinate layouts derive it from the supplied

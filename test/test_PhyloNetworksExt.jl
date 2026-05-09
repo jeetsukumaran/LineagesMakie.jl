@@ -15,6 +15,44 @@ function _pn_net1()
     )
 end
 
+function _pn_2cycle_net()
+    return PhyloNetworks.readnewick(
+        "((((((a:1)#H1:1::.9)#H2:1::.8)#H3:1::.7,#H3:0.5):1,#H2:1):1,(#H1:1,b:1):1,c:1);",
+    )
+end
+
+function _pn_edge_groups(net)
+    edge_groups = Dict{Tuple{PhyloNetworks.Node, PhyloNetworks.Node}, Vector{PhyloNetworks.Edge}}()
+    for parent_node in net.node
+        for edge in parent_node.edge
+            PhyloNetworks.getparent(edge) === parent_node || continue
+            child_node = PhyloNetworks.getchild(edge)
+            push!(get!(() -> PhyloNetworks.Edge[], edge_groups, (parent_node, child_node)), edge)
+        end
+    end
+    return edge_groups
+end
+
+function _pn_duplicate_endpoint_pair(net)
+    return only([(edge_key, edge_group) for (edge_key, edge_group) in _pn_edge_groups(net) if length(edge_group) > 1])
+end
+
+function _pn_root_error(err)
+    return hasproperty(err, :error) ? getproperty(err, :error) : err
+end
+
+function _pn_edge_shape_chunks(points)::Vector{Vector{Makie.Point2f}}
+    return [collect(@view points[i:(i + 3)]) for i in 1:4:length(points)]
+end
+
+function _pn_contains_edge_shape(points, edge_shape)::Bool
+    return any(chunk -> isequal(chunk, collect(edge_shape)), _pn_edge_shape_chunks(points))
+end
+
+function _pn_hybrid_edge_labels(net)::Vector{String}
+    return sort([string(round(edge.gamma; digits = 3)) for edge in net.edge if edge.hybrid])
+end
+
 function _pn_inconsistent_lengths!(net)::Nothing
     for edge in net.edge
         edge.length = 1.0
@@ -77,22 +115,20 @@ end
 
 @testset "PhyloNetworks extension" begin
 
-    @testset "extension metadata is keyed by exact upstream parent and child nodes" begin
-        net = _pn_net1()
+    @testset "extension metadata preserves distinct upstream duplicate-endpoint groups" begin
+        net = _pn_2cycle_net()
         metadata = _PN_EXT._hybridnetwork_edge_metadata(net)
+        duplicate_pair, duplicate_edges = _pn_duplicate_endpoint_pair(net)
 
-        @test length(metadata.edge_metadata) == length(net.edge)
+        @test sum(length, values(metadata.edge_metadata)) == length(net.edge)
         @test Set(metadata.hybrid_nodes) == Set(net.hybrid)
-
-        minor_edge = only(filter(edge -> edge.hybrid && !edge.ismajor, net.edge))
-        major_edge = only(filter(edge -> edge.hybrid && edge.ismajor, net.edge))
-        minor_key = (PhyloNetworks.getparent(minor_edge), PhyloNetworks.getchild(minor_edge))
-        major_key = (PhyloNetworks.getparent(major_edge), PhyloNetworks.getchild(major_edge))
-
-        @test metadata.edge_metadata[minor_key].gamma == minor_edge.gamma
-        @test metadata.edge_metadata[minor_key].ismajor == false
-        @test metadata.edge_metadata[major_key].gamma == major_edge.gamma
-        @test metadata.edge_metadata[major_key].ismajor == true
+        @test length(metadata.edge_metadata[duplicate_pair]) == 2
+        @test [item.edge.number for item in metadata.edge_metadata[duplicate_pair]] ==
+            [edge.number for edge in duplicate_edges]
+        @test [item.ismajor for item in metadata.edge_metadata[duplicate_pair]] ==
+            [edge.ismajor for edge in duplicate_edges]
+        @test [item.gamma for item in metadata.edge_metadata[duplicate_pair]] ==
+            [edge.gamma for edge in duplicate_edges]
     end
 
     @testset "non-mutating lineageplot activates rooted full-network plotting" begin
@@ -115,7 +151,7 @@ end
         @test any(plot -> plot isa CairoMakie.Makie.Text, lp.plots)
     end
 
-    @testset "mutating plotting works on Axis and LineageAxis" begin
+    @testset "mutating plotting works on Axis and LineageAxis for unique and duplicate endpoint rooted networks" begin
         net_axis = _pn_net1()
         fig_axis = Figure(; size = (760, 420))
         ax = Axis(fig_axis[1, 1])
@@ -129,6 +165,20 @@ end
         lp_lax = @test_nowarn lineageplot!(lax, net_lax; leaf_label_visible = false)
         colorbuffer(fig_lax)
         @test lp_lax isa LineagePlot
+
+        net_dup_axis = _pn_2cycle_net()
+        fig_dup_axis = Figure(; size = (760, 420))
+        ax_dup = Axis(fig_dup_axis[1, 1])
+        lp_dup_axis = @test_nowarn lineageplot!(ax_dup, net_dup_axis; leaf_label_visible = false)
+        colorbuffer(fig_dup_axis)
+        @test lp_dup_axis isa LineagePlot
+
+        net_dup_lax = _pn_2cycle_net()
+        fig_dup_lax = Figure(; size = (760, 420))
+        lax_dup = LineageAxis(fig_dup_lax[1, 1]; show_x_axis = true, xlabel = "node levels")
+        lp_dup_lax = @test_nowarn lineageplot!(lax_dup, net_dup_lax; leaf_label_visible = false)
+        colorbuffer(fig_dup_lax)
+        @test lp_dup_lax isa LineagePlot
     end
 
     @testset "direct rooted-scope diagnostic rejects non-rooted HybridNetwork inputs" begin
@@ -162,8 +212,28 @@ end
             caught_error
         end
 
-        @test err !== nothing
-        @test occursin("full-network consistency", sprint(showerror, err))
+        root_err = _pn_root_error(err)
+        @test root_err isa ArgumentError
+        @test occursin("full-network consistency", sprint(showerror, root_err))
+    end
+
+    @testset "duplicate-endpoint weighted direct entrypoints fail with an honest ambiguity diagnostic" begin
+        net = _pn_2cycle_net()
+        fig = Figure(; size = (600, 360))
+        ax = Axis(fig[1, 1])
+
+        err = try
+            lineageplot!(ax, net; lineageunits = :edgeweights, leaf_label_visible = false)
+            colorbuffer(fig)
+            nothing
+        catch caught_error
+            caught_error
+        end
+
+        root_err = _pn_root_error(err)
+        @test root_err isa ArgumentError
+        @test occursin("duplicate-endpoint", sprint(showerror, root_err))
+        @test occursin("edgeweight(src, dst)", sprint(showerror, root_err))
     end
 
     @testset "branchingtime and coalescenceage requests remain available on direct HybridNetwork entrypoints" begin
@@ -196,6 +266,20 @@ end
         @test lp_ca isa LineagePlot
     end
 
+    @testset "upstream-tested rooted 2-cycle fixture stays a genuine 2-cycle" begin
+        net = _pn_2cycle_net()
+        duplicate_pair, duplicate_edges = _pn_duplicate_endpoint_pair(net)
+
+        @test PhyloNetworks.shrink2cycles!(deepcopy(net)) == true
+        @test length(duplicate_edges) == 2
+        @test all(edge -> edge.hybrid, duplicate_edges)
+        @test [edge.ismajor for edge in duplicate_edges] == [true, false]
+        @test isapprox(duplicate_edges[1].gamma, 0.7; atol = 1.0e-8)
+        @test isapprox(duplicate_edges[2].gamma, 0.3; atol = 1.0e-8)
+        @test duplicate_pair[1] === PhyloNetworks.getparent(duplicate_edges[1])
+        @test duplicate_pair[2] === PhyloNetworks.getchild(duplicate_edges[1])
+    end
+
     @testset "render-level rooted full-network proof keeps minor edges, hybrid markers, and upstream gamma labels" begin
         net = _pn_net1()
         metadata = _PN_EXT._hybridnetwork_edge_metadata(net)
@@ -221,25 +305,67 @@ end
         text_plot = _pn_overlay_text_plot(lp)
         hybrid_plot = only(filter(plot -> plot isa CairoMakie.Makie.Scatter, lp.plots))
 
-        major_key = only(filter(edge_key -> metadata.edge_metadata[edge_key].edge.hybrid && metadata.edge_metadata[edge_key].ismajor, keys(metadata.edge_metadata)))
-        minor_key = only(filter(edge_key -> metadata.edge_metadata[edge_key].edge.hybrid && !metadata.edge_metadata[edge_key].ismajor, keys(metadata.edge_metadata)))
+        major_index = only(_PN_EXT._reticulation_edge_indices(geom, metadata, true))
+        minor_index = only(_PN_EXT._reticulation_edge_indices(geom, metadata, false))
         major_plot = only(filter(plot -> plot.color[] == _PN_EXT._RETICULATION_MAJOR_COLOR, line_plots))
         minor_plot = only(filter(plot -> plot.color[] == _PN_EXT._RETICULATION_MINOR_COLOR, line_plots))
         gamma_payload = _PN_EXT._reticulation_gamma_payload(geom, metadata)
 
         @test length(line_plots) == 2
-        @test isequal(major_plot[1][], LineagesMakie.Layers._edge_shape_subset(geom, (major_key,)))
-        @test isequal(minor_plot[1][], LineagesMakie.Layers._edge_shape_subset(geom, (minor_key,)))
+        @test isequal(major_plot[1][], LineagesMakie.Layers._edge_shape_subset(geom, (major_index,)))
+        @test isequal(minor_plot[1][], LineagesMakie.Layers._edge_shape_subset(geom, (minor_index,)))
         @test hybrid_plot[1][] == [geom.node_positions[only(net.hybrid)]]
-        @test text_plot[1][] == LineagesMakie.Layers._edge_label_anchor_positions(geom, gamma_payload.edge_keys)
+        @test text_plot[1][] == LineagesMakie.Layers._edge_label_anchor_positions(geom, gamma_payload.edge_indices)
 
-        rendered_labels = sort(_rt_text_payload_strings(text_plot.text[]))
-        expected_labels = sort([
-            string(round(edge.gamma; digits = 3)) for edge in net.edge if edge.hybrid
-        ])
-
-        @test rendered_labels == expected_labels
+        @test sort(_rt_text_payload_strings(text_plot.text[])) == _pn_hybrid_edge_labels(net)
         @test text_plot.color[] == gamma_payload.colors
+    end
+
+    @testset "rooted 2-cycle render proof keeps both duplicate-endpoint partner edges separately styled and labeled" begin
+        net = _pn_2cycle_net()
+        duplicate_pair, duplicate_edges = _pn_duplicate_endpoint_pair(net)
+
+        fig = Figure(; size = (900, 520))
+        ax = Axis(fig[1, 1])
+        lp = lineageplot!(
+            ax,
+            net;
+            leaf_label_visible = false,
+            node_label_visible = false,
+            edge_color = :gray45,
+            edge_linewidth = 1.0,
+            node_color = (:white, 0.0),
+            node_strokecolor = (:white, 0.0),
+            leaf_color = (:white, 0.0),
+            leaf_strokecolor = (:white, 0.0),
+        )
+
+        colorbuffer(fig)
+        geom = lp[:computed_geom][]
+        line_plots = filter(plot -> plot isa CairoMakie.Makie.Lines, lp.plots)
+        text_plot = _pn_overlay_text_plot(lp)
+        hybrid_plot = only(filter(plot -> plot isa CairoMakie.Makie.Scatter, lp.plots))
+        major_plot = only(filter(plot -> plot.color[] == _PN_EXT._RETICULATION_MAJOR_COLOR, line_plots))
+        minor_plot = only(filter(plot -> plot.color[] == _PN_EXT._RETICULATION_MINOR_COLOR, line_plots))
+        duplicate_pair_indices = findall(edge_key -> edge_key == duplicate_pair, geom.edges)
+
+        @test length(duplicate_pair_indices) == 2
+        @test length(line_plots) == 2
+        @test length(major_plot[1][]) ÷ 4 == count(edge -> edge.hybrid && edge.ismajor, net.edge)
+        @test length(minor_plot[1][]) ÷ 4 == count(edge -> edge.hybrid && !edge.ismajor, net.edge)
+        @test length(hybrid_plot[1][]) == length(net.hybrid)
+        @test length(text_plot.text[]) == count(edge -> edge.hybrid, net.edge)
+        @test sort(_rt_text_payload_strings(text_plot.text[])) == _pn_hybrid_edge_labels(net)
+        @test _pn_contains_edge_shape(
+            major_plot[1][],
+            LineagesMakie.Layers._edge_shape_subset(geom, (duplicate_pair_indices[1],)),
+        )
+        @test _pn_contains_edge_shape(
+            minor_plot[1][],
+            LineagesMakie.Layers._edge_shape_subset(geom, (duplicate_pair_indices[2],)),
+        )
+        @test sort([string(round(edge.gamma; digits = 3)) for edge in duplicate_edges]) ⊆
+            Set(_rt_text_payload_strings(text_plot.text[]))
     end
 
 end

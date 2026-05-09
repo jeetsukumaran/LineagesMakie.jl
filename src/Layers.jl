@@ -510,15 +510,62 @@ function _tree_parent_lookup(
     return Dict{Any, Any}(dst => src for (src, dst) in geom.edges)
 end
 
+function _edge_selector_index(
+        geom::LineageGraphGeometry,
+        edge_selector,
+        used_slots::BitVector,
+    )::Int
+    if edge_selector isa Integer
+        edge_index = Int(edge_selector)
+        1 <= edge_index <= length(geom.edges) || throw(
+            ArgumentError(
+                "geometry edge selector $(repr(edge_selector)) is outside the valid range " *
+                    "1:$(length(geom.edges))",
+            ),
+        )
+        used_slots[edge_index] && throw(
+            ArgumentError(
+                "geometry edge selector $(repr(edge_selector)) was provided more than once",
+            ),
+        )
+        return edge_index
+    end
+
+    for (i, edge_key) in enumerate(geom.edges)
+        used_slots[i] && continue
+        edge_key == edge_selector || continue
+        return i
+    end
+
+    throw(
+        ArgumentError(
+            "could not resolve geometry-order edge selector $(repr(edge_selector)) against geom.edges",
+        ),
+    )
+end
+
+function _selected_edge_indices(
+        geom::LineageGraphGeometry,
+        selected_edges,
+    )::Vector{Int}
+    used_slots = falses(length(geom.edges))
+    edge_indices = Int[]
+    for edge_selector in selected_edges
+        edge_index = _edge_selector_index(geom, edge_selector, used_slots)
+        used_slots[edge_index] = true
+        push!(edge_indices, edge_index)
+    end
+    sort!(edge_indices)
+    return edge_indices
+end
+
 function _edge_shape_subset(
         geom::LineageGraphGeometry,
         selected_edges,
     )::Vector{Point2f}
-    edge_membership = selected_edges isa AbstractSet ? selected_edges : Set(selected_edges)
     shapes = Point2f[]
-    for (i, edge_key) in enumerate(geom.edges)
-        edge_key in edge_membership || continue
-        base = 4 * (i - 1)
+    for edge_index in _selected_edge_indices(geom, selected_edges)
+        base = 4 * (edge_index - 1)
         append!(shapes, @view geom.edge_shapes[(base + 1):(base + 4)])
     end
     return shapes
@@ -554,11 +601,9 @@ function _edge_label_anchor_positions(
         geom::LineageGraphGeometry,
         selected_edges,
     )::Vector{Point2f}
-    edge_membership = selected_edges isa AbstractSet ? selected_edges : Set(selected_edges)
     anchors = Point2f[]
-    for (i, edge_key) in enumerate(geom.edges)
-        edge_key in edge_membership || continue
-        base = 4 * (i - 1)
+    for edge_index in _selected_edge_indices(geom, selected_edges)
+        base = 4 * (edge_index - 1)
         push!(
             anchors,
             _edge_label_anchor_position(
