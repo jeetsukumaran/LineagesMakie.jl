@@ -796,7 +796,7 @@ view-mode policy decisions that belong to Tranche 5 into hidden defaults.
 - Canonical green gates remain `julia --project=test test/runtests.jl` and
   `julia --project=docs docs/make.jl`; extension-specific tests and examples
   must prove both extension absence and extension presence behavior.
-- Extension-absence verification must run in the checked-in `test/Project.toml`
+- Extension-absence verification must run in the `test/Project.toml`
   environment without `PhyloNetworks.jl` present there.
 - Extension-presence verification must also use `test/Project.toml`: activate
   `--project=test` and install the reviewed local checkout at

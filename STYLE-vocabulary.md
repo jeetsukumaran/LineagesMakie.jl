@@ -676,7 +676,7 @@ node, and what `axis_polarity` `LineageAxis` infers:
   `edgeweight` accessor is supplied; `:backward` polarity.
 - `:nodelevels` — integer level from basenode; equal inter-level spacing;
   no accessor required; `:forward` polarity.
-- `:node_coordinates` — user-supplied data coordinates; requires `node_coordinates`
+- `:nodecoordinates` — user-supplied data coordinates; requires `nodecoordinates`
   accessor; polarity is user-defined.
 - `:nodepos` — user-supplied pixel coordinates; requires `nodepos` accessor;
   polarity is user-defined.
@@ -744,7 +744,7 @@ In any given plot, the process coordinate is determined by the active
 `lineageunits` value: `branchingtime` values for `lineageunits = :branchingtime`
 or `:edgeweights`, `coalescenceage` values for `lineageunits = :coalescenceage`,
 path distances (edge counts) for `:nodelevels` / `:nodedepths` / `:nodeheights`,
-or user-supplied coordinates for `:node_coordinates` / `:nodepos`.
+or user-supplied coordinates for `:nodecoordinates` / `:nodepos`.
 
 This is a documentation and design term that unifies all `lineageunits` values
 under a single concept. It does not appear as a code identifier (there is no
@@ -1224,7 +1224,7 @@ required artifact set.
 | `:nodedepths` | none | Cumulative path distance (edge count) from `basenode` (all edge weights = 1) | Basenode = 0, increases toward leaves | `:forward` |
 | `:nodeheights` | none | Per-node height (path distance to farthest leaf); all leaves at x = 0; clade graph (unweighted) analogue of `:coalescenceage` | Leaf = 0, increases toward basenode | `:backward` |
 | `:nodelevels` | none | Integer level = edge count from `basenode`; equal spacing between levels; clade graph (unweighted) analogue of `:branchingtime` | Basenode = 0, increases toward leaves | `:forward` |
-| `:node_coordinates` | `node_coordinates` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
+| `:nodecoordinates` | `nodecoordinates` | User-supplied `(x, y)` in data coordinates | User-defined | User-defined |
 | `:nodepos` | `nodepos` | User-supplied `(x, y)` in pixel coordinates | User-defined | User-defined |
 
 **Default `lineageunits`:** `:edgeweights` if an `edgeweight` accessor is
@@ -1276,4 +1276,4 @@ names, or symbols, including code examples.
 | Children collection (local var) | `child_collection` | — | `ch`, `children` (collision with `AbstractTrees.children`) |
 | Node identity type parameter | — | `NodeT` | `V`, `N`, `T` |
 | Collection of all nodes | `all_nodes` | — | `all_vertices`, `vs` |
-| Node data accessor | `node_coordinates` / `nodepos` | `NC` / `NP` | `vertexcoords`, `vertexpos`, `vc`, `vp` |
+| Node data accessor | `nodecoordinates` / `nodepos` | `NC` / `NP` | `vertexcoords`, `vertexpos`, `vc`, `vp` |
