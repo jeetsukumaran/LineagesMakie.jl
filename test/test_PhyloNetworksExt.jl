@@ -21,6 +21,10 @@ function _pn_2cycle_net()
     )
 end
 
+function _pn_minimal_2cycle_net()
+    return PhyloNetworks.readnewick("((t1:1)#H22:1::0.8,#H22:1::0.2);")
+end
+
 function _pn_edge_groups(net)
     edge_groups = Dict{Tuple{PhyloNetworks.Node, PhyloNetworks.Node}, Vector{PhyloNetworks.Edge}}()
     for parent_node in net.node
@@ -51,6 +55,45 @@ end
 
 function _pn_hybrid_edge_labels(net)::Vector{String}
     return sort([string(round(edge.gamma; digits = 3)) for edge in net.edge if edge.hybrid])
+end
+
+function _pn_weighted_edge_map(net)::Dict{Tuple{PhyloNetworks.Node, PhyloNetworks.Node}, Float64}
+    edge_lengths = Dict{Tuple{PhyloNetworks.Node, PhyloNetworks.Node}, Float64}()
+    for (edge_key, edge_group) in _pn_edge_groups(net)
+        lengths = unique([edge.length for edge in edge_group])
+        length(lengths) == 1 || throw(
+            ArgumentError(
+                "test helper requires representable duplicate-endpoint groups; got conflicting lengths $(repr(lengths))",
+            ),
+        )
+        edge_lengths[edge_key] = only(lengths)
+    end
+    return edge_lengths
+end
+
+function _pn_generic_weighted_plot!(ax, net)::LineagePlot
+    root = PhyloNetworks.getroot(net)
+    edge_lengths = _pn_weighted_edge_map(net)
+    accessor = lineagegraph_accessor(
+        root;
+        children = PhyloNetworks.getchildren,
+        edgeweight = (src, dst) -> edge_lengths[(src, dst)],
+    )
+    return lineageplot!(ax, root, accessor; lineageunits = :edgeweights, leaf_label_visible = false)
+end
+
+function _pn_same_geom(lhs, rhs)::Bool
+    return isequal(lhs.node_positions, rhs.node_positions) &&
+        isequal(lhs.edge_shapes, rhs.edge_shapes) &&
+        isequal(lhs.edges, rhs.edges) &&
+        isequal(lhs.leaf_order, rhs.leaf_order) &&
+        isequal(lhs.boundingbox, rhs.boundingbox)
+end
+
+function _pn_make_duplicate_lengths_conflict!(net, new_length::Float64)::Nothing
+    _, duplicate_edges = _pn_duplicate_endpoint_pair(net)
+    duplicate_edges[2].length = new_length
+    return nothing
 end
 
 function _pn_inconsistent_lengths!(net)::Nothing
@@ -217,8 +260,57 @@ end
         @test occursin("full-network consistency", sprint(showerror, root_err))
     end
 
-    @testset "duplicate-endpoint weighted direct entrypoints fail with an honest ambiguity diagnostic" begin
-        net = _pn_2cycle_net()
+    @testset "equal-length duplicate-endpoint weighted requests stay aligned with the generic core path" begin
+        net = _pn_minimal_2cycle_net()
+        duplicate_pair, duplicate_edges = _pn_duplicate_endpoint_pair(net)
+
+        @test net.isrooted
+        @test length(duplicate_edges) == 2
+        @test all(edge.length == 1.0 for edge in duplicate_edges)
+
+        fig_generic = Figure(; size = (600, 360))
+        ax_generic = Axis(fig_generic[1, 1])
+        lp_generic = @test_nowarn _pn_generic_weighted_plot!(ax_generic, net)
+        colorbuffer(fig_generic)
+        generic_geom = lp_generic[:computed_geom][]
+
+        fig_axis = Figure(; size = (600, 360))
+        ax = Axis(fig_axis[1, 1])
+        lp_axis = @test_nowarn lineageplot!(ax, net; lineageunits = :edgeweights, leaf_label_visible = false)
+        colorbuffer(fig_axis)
+        axis_geom = lp_axis[:computed_geom][]
+
+        fig_lax = Figure(; size = (600, 360))
+        lax = LineageAxis(fig_lax[1, 1]; show_x_axis = true, xlabel = "edge weights")
+        lp_lax = @test_nowarn lineageplot!(lax, net; lineageunits = :edgeweights, leaf_label_visible = false)
+        colorbuffer(fig_lax)
+        lax_geom = lp_lax[:computed_geom][]
+
+        plot_result = lineageplot(
+            net;
+            figure = (; size = (600, 360)),
+            axis = (; title = "Equal-length duplicate-endpoint weighted 2-cycle"),
+            lineageunits = :edgeweights,
+            leaf_label_visible = false,
+        )
+        @test plot_result isa CairoMakie.Makie.FigureAxisPlot
+        fig_nonmut, lax_nonmut, lp_nonmut = plot_result
+        @test lax_nonmut isa LineageAxis
+        colorbuffer(fig_nonmut)
+        nonmut_geom = lp_nonmut[:computed_geom][]
+
+        @test duplicate_pair in generic_geom.edges
+        @test lp_axis[:resolved_lineageunits][] == :edgeweights
+        @test lp_lax[:resolved_lineageunits][] == :edgeweights
+        @test lp_nonmut[:resolved_lineageunits][] == :edgeweights
+        @test _pn_same_geom(axis_geom, generic_geom)
+        @test _pn_same_geom(lax_geom, generic_geom)
+        @test _pn_same_geom(nonmut_geom, generic_geom)
+    end
+
+    @testset "conflicting duplicate-endpoint weighted direct entrypoints fail with an honest ambiguity diagnostic" begin
+        net = _pn_minimal_2cycle_net()
+        _pn_make_duplicate_lengths_conflict!(net, 2.0)
         fig = Figure(; size = (600, 360))
         ax = Axis(fig[1, 1])
 
@@ -234,6 +326,7 @@ end
         @test root_err isa ArgumentError
         @test occursin("duplicate-endpoint", sprint(showerror, root_err))
         @test occursin("edgeweight(src, dst)", sprint(showerror, root_err))
+        @test occursin("conflicting lengths", sprint(showerror, root_err))
     end
 
     @testset "branchingtime and coalescenceage requests remain available on direct HybridNetwork entrypoints" begin

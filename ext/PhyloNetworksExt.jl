@@ -76,22 +76,34 @@ function _duplicate_endpoint_edgeweight_error(
         edge_group::Vector{_HybridEdgeMetadata},
     )::ArgumentError
     src, dst = edge_key
+    edge_lengths = unique([edge_meta.edge.length for edge_meta in edge_group])
     return ArgumentError(
         "lineageunits = :edgeweights cannot be supported honestly for rooted full-network duplicate-endpoint edges " *
             "under the current public edgeweight(src, dst) accessor contract; parent $(repr(src)) and child " *
-            "$(repr(dst)) are connected by $(length(edge_group)) distinct upstream edges. Select node-based units, " *
-            "explicit coordinates, or a future projected-tree contract instead.",
+            "$(repr(dst)) are connected by $(length(edge_group)) distinct upstream edges with conflicting lengths " *
+            "$(repr(edge_lengths)). Select node-based units, explicit coordinates, or a future projected-tree " *
+            "contract instead.",
     )
 end
 
-function _require_unambiguous_edgeweights(
+function _shared_edgeweight_length(
+        edge_key::Tuple{PhyloNetworks.Node, PhyloNetworks.Node},
+        edge_group::Vector{_HybridEdgeMetadata},
+    )::Float64
+    shared_length = edge_group[1].edge.length
+    all(edge_meta -> edge_meta.edge.length == shared_length, edge_group) ||
+        throw(_duplicate_endpoint_edgeweight_error(edge_key, edge_group))
+    return shared_length
+end
+
+function _require_representable_edgeweights(
         metadata::_HybridNetworkOverlayMetadata,
         lineageunits::Symbol,
     )::Nothing
     lineageunits === :edgeweights || return nothing
     for (edge_key, edge_group) in metadata.edge_metadata
         length(edge_group) == 1 && continue
-        throw(_duplicate_endpoint_edgeweight_error(edge_key, edge_group))
+        _shared_edgeweight_length(edge_key, edge_group)
     end
     return nothing
 end
@@ -112,8 +124,7 @@ function _hybridnetwork_accessor(
                 "could not resolve upstream edge metadata for parent $(repr(src)) and child $(repr(dst))",
             ),
         )
-        length(edge_group) == 1 || throw(_duplicate_endpoint_edgeweight_error(edge_key, edge_group))
-        return edge_group[1].edge.length
+        return _shared_edgeweight_length(edge_key, edge_group)
     end
 
     nodevalue = _namedtuple_get(kwargs, :nodevalue, _hybridnetwork_nodevalue)
@@ -293,7 +304,7 @@ function lineageplot!(
     keyword_args = (; kwargs...)
     resolved_lineageunits = _resolved_lineageunits(lineageunits)
     root, accessor, metadata = _hybridnetwork_accessor(net, keyword_args)
-    _require_unambiguous_edgeweights(metadata, resolved_lineageunits)
+    _require_representable_edgeweights(metadata, resolved_lineageunits)
     plot_kwargs = _namedtuple_without_keys(keyword_args, _ACCESSOR_KWARGS)
     lp = LineagesMakie.lineageplot!(
         ax,
