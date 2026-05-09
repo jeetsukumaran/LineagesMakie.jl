@@ -203,11 +203,14 @@ If `PhyloNetworks.jl` is available in the active environment, the package
 extension activates automatically and adds direct rooted
 `PhyloNetworks.HybridNetwork` plotting.
 
-Current scope is rooted full-network view only. The direct `HybridNetwork`
-entrypoint renders all displayed edges, adds a hybrid-node marker, highlights
-major and minor reticulation edges distinctly, and draws gamma labels from the
-upstream edge fields. Major-tree projection, projected-tree view, semidirected
-display, and unrooted display remain deferred.
+Current direct `HybridNetwork` surface supports two rooted contracts. The
+default is rooted `full-network view`, which renders all displayed edges, adds
+a hybrid-node marker, highlights major and minor reticulation edges
+distinctly, and draws gamma labels from the upstream edge fields. The same
+entrypoint also supports rooted `major-tree projection` through
+`networkview = :majortree, displaypolicy = :rooted`. Semidirected and
+unrooted display policies are not supported on this direct surface yet and
+fail with an explicit diagnostic.
 
 ```julia
 using CairoMakie
@@ -222,6 +225,13 @@ plot_result = lineageplot(
     axis = (; title = "Rooted full-network HybridNetwork", show_x_axis = true, xlabel = "node levels"),
     edge_color = :gray45,
     edge_linewidth = 1.0,
+)
+
+major_tree_result = lineageplot(
+    net;
+    networkview = :majortree,
+    displaypolicy = :rooted,
+    axis = (; title = "Rooted major-tree projection"),
 )
 ```
 

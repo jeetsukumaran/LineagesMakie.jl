@@ -1,4 +1,4 @@
-# Rooted full-network PhyloNetworks example for tranche 4.
+# Rooted full-network PhyloNetworks example.
 #
 # Run:
 #   julia --project=test examples/src/phylonetworks_full_network_ex1.jl
@@ -7,7 +7,7 @@
 #
 # Demonstrates:
 #   - optional extension activation when PhyloNetworks.jl is present
-#   - direct rooted full-network HybridNetwork plotting
+#   - default direct rooted full-network HybridNetwork plotting
 #   - hybrid-node markers
 #   - major/minor reticulation edge distinction
 #   - gamma labels sourced from upstream edge fields

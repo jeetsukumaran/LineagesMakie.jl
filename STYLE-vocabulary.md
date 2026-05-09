@@ -586,11 +586,101 @@ chosen at each hybrid node, thereby removing the minor reticulation edge from
 the displayed contract.
 
 **Usage notes:** `major-tree projection` is distinct from `full-network view`.
-It is a projected-tree contract, not a synonym for rooted network support, and
-its public display policy remains deferred beyond tranche 4.
+It is a projected-tree contract, not a synonym for rooted network support. In
+tranche 5 direct `PhyloNetworks.HybridNetwork` plotting, it is selected with
+`networkview = :majortree, displaypolicy = :rooted`.
 
 **Proscribed alternates:** calling a major-tree projection `network support`;
 calling a full-network view `major tree`.
+
+---
+
+### `projected-tree view`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** A displayed view whose rendered geometry is one explicitly
+named tree projection derived from a lineage graph or network rather than the
+full-network contract.
+
+**Usage notes:** In tranche 5 direct `PhyloNetworks.HybridNetwork` plotting,
+the only live projected-tree view is `major-tree projection`, selected with
+`networkview = :majortree`. Do not use `projected-tree view` as a synonym for
+the full-network path.
+
+**Proscribed alternates:** `tree mode`; `projected network`; calling the
+full-network path a projected-tree view.
+
+---
+
+### `display policy`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** The public contract that says how a network should be
+interpreted for direct display, separately from which named view is rendered.
+
+**Usage notes:** In tranche 5 direct `PhyloNetworks.HybridNetwork` plotting,
+the exact API keyword is `displaypolicy`. The only live supported value on
+that surface is `:rooted`. `:semidirected` and `:unrooted` remain reserved
+policy terms, not supported direct plotting values, until a later tranche
+ratifies and proves them.
+
+**Proscribed alternates:** `orientation`; `root mode`; `network mode`; using
+`view` when the contract being discussed is the rooted versus semidirected or
+unrooted interpretation rather than the rendered view.
+
+---
+
+### `rooted display policy`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** A display policy that interprets the input network as rooted
+for direct display.
+
+**Usage notes:** In tranche 5 direct `PhyloNetworks.HybridNetwork` plotting,
+`displaypolicy = :rooted` is the only supported direct display-policy value.
+It may be paired with `networkview = :fullnetwork` or
+`networkview = :majortree`.
+
+**Proscribed alternates:** `rooted mode`; `default network policy` without
+naming the exact policy.
+
+---
+
+### `semidirected display policy`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** A display-policy concept for networks whose valid
+interpretation does not identify one rooted display contract.
+
+**Usage notes:** This term is reserved vocabulary only in tranche 5. Direct
+`PhyloNetworks.HybridNetwork` plotting does not support
+`displaypolicy = :semidirected` yet, and unsupported requests must fail
+directly with an exact diagnostic.
+
+**Proscribed alternates:** `semi-directed display policy` within this project;
+using the term as if the direct tranche-5 plotting surface already supported
+it.
+
+---
+
+### `unrooted display policy`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** A display-policy concept for networks or trees interpreted
+without one rooted display contract.
+
+**Usage notes:** This term is reserved vocabulary only in tranche 5. Direct
+`PhyloNetworks.HybridNetwork` plotting does not support
+`displaypolicy = :unrooted` yet, and unsupported requests must fail directly
+with an exact diagnostic.
+
+**Proscribed alternates:** using the term as if the direct tranche-5 plotting
+surface already supported it.
 
 ---
 

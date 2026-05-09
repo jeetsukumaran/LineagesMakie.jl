@@ -23,16 +23,89 @@ const _RETICULATION_MINOR_COLOR = Makie.RGBAf(0.20f0, 0.56f0, 0.85f0, 1.0f0)
 const _HYBRID_NODE_FILL_COLOR = Makie.RGBAf(0.98f0, 0.92f0, 0.62f0, 1.0f0)
 const _HYBRID_NODE_STROKE_COLOR = Makie.RGBAf(0.30f0, 0.22f0, 0.08f0, 1.0f0)
 const _ACCESSOR_KWARGS = (:nodevalue, :branchingtime, :coalescenceage, :nodecoordinates, :nodepos)
+const _SUPPORTED_NETWORKVIEWS = (:fullnetwork, :majortree)
+const _SUPPORTED_DISPLAYPOLICIES = (:rooted,)
 
-function _require_rooted_full_network(net::PhyloNetworks.HybridNetwork)::Nothing
-    net.isrooted || throw(
+struct _ResolvedHybridNetworkContract
+    networkview::Symbol
+    displaypolicy::Symbol
+end
+
+function _supported_hybridnetwork_combinations()::String
+    return "(networkview = :fullnetwork, displaypolicy = :rooted) and " *
+        "(networkview = :majortree, displaypolicy = :rooted)"
+end
+
+function _resolved_networkview(networkview)::Symbol
+    return networkview === nothing ? :fullnetwork : networkview
+end
+
+function _resolved_displaypolicy(displaypolicy)::Symbol
+    return displaypolicy === nothing ? :rooted : displaypolicy
+end
+
+function _resolve_hybridnetwork_contract(
+        net::PhyloNetworks.HybridNetwork,
+        networkview,
+        displaypolicy,
+    )::_ResolvedHybridNetworkContract
+    resolved_networkview = _resolved_networkview(networkview)
+    resolved_displaypolicy = _resolved_displaypolicy(displaypolicy)
+
+    resolved_networkview in _SUPPORTED_NETWORKVIEWS || throw(
         ArgumentError(
-            "lineageplot(::PhyloNetworks.HybridNetwork) currently supports rooted full-network views only; " *
-                "got net.isrooted = false. Major-tree, projected-tree, semidirected, and unrooted " *
-                "display policies remain deferred.",
+            "unsupported networkview = $(repr(resolved_networkview)) for direct " *
+                "PhyloNetworks.HybridNetwork plotting; supported values are :fullnetwork and :majortree.",
         ),
     )
-    return nothing
+
+    resolved_displaypolicy in _SUPPORTED_DISPLAYPOLICIES || throw(
+        ArgumentError(
+            "unsupported displaypolicy = $(repr(resolved_displaypolicy)) for direct " *
+                "PhyloNetworks.HybridNetwork plotting; supported value is :rooted. Supported combinations " *
+                "are $(_supported_hybridnetwork_combinations()).",
+        ),
+    )
+
+    net.isrooted || throw(
+        ArgumentError(
+            "displaypolicy = :rooted requires net.isrooted = true for direct " *
+                "PhyloNetworks.HybridNetwork plotting; semidirected and unrooted display policies are not " *
+                "yet supported on this surface. Supported combinations are " *
+                "$(_supported_hybridnetwork_combinations()).",
+        ),
+    )
+
+    return _ResolvedHybridNetworkContract(resolved_networkview, resolved_displaypolicy)
+end
+
+function _major_tree_projection(net::PhyloNetworks.HybridNetwork)::PhyloNetworks.HybridNetwork
+    return PhyloNetworks.majortree(net; unroot = false)
+end
+
+function _hybridnetwork_plot!(
+        ax,
+        net::PhyloNetworks.HybridNetwork,
+        contract::_ResolvedHybridNetworkContract,
+        lineageunits,
+        keyword_args::NamedTuple,
+    )::LineagesMakie.LineagePlot
+    source_net = contract.networkview === :majortree ? _major_tree_projection(net) : net
+    resolved_lineageunits = _resolved_lineageunits(lineageunits)
+    root, accessor, metadata = _hybridnetwork_accessor(source_net, keyword_args)
+    _require_representable_edgeweights(metadata, resolved_lineageunits)
+    plot_kwargs = _namedtuple_without_keys(keyword_args, _ACCESSOR_KWARGS)
+
+    lp = LineagesMakie.lineageplot!(
+        ax,
+        root,
+        accessor;
+        lineageunits = resolved_lineageunits,
+        plot_kwargs...,
+    )
+
+    contract.networkview === :fullnetwork && _add_reticulation_overlays!(lp, metadata)
+    return lp
 end
 
 function _hybridnetwork_edge_metadata(
@@ -297,37 +370,35 @@ end
 function lineageplot!(
         ax,
         net::PhyloNetworks.HybridNetwork;
+        networkview = nothing,
+        displaypolicy = nothing,
         lineageunits = nothing,
         kwargs...,
     )::LineagesMakie.LineagePlot
-    _require_rooted_full_network(net)
     keyword_args = (; kwargs...)
-    resolved_lineageunits = _resolved_lineageunits(lineageunits)
-    root, accessor, metadata = _hybridnetwork_accessor(net, keyword_args)
-    _require_representable_edgeweights(metadata, resolved_lineageunits)
-    plot_kwargs = _namedtuple_without_keys(keyword_args, _ACCESSOR_KWARGS)
-    lp = LineagesMakie.lineageplot!(
-        ax,
-        root,
-        accessor;
-        lineageunits = resolved_lineageunits,
-        plot_kwargs...,
-    )
-    _add_reticulation_overlays!(lp, metadata)
-    return lp
+    contract = _resolve_hybridnetwork_contract(net, networkview, displaypolicy)
+    return _hybridnetwork_plot!(ax, net, contract, lineageunits, keyword_args)
 end
 
 function lineageplot(
         net::PhyloNetworks.HybridNetwork;
         figure = NamedTuple(),
         axis = NamedTuple(),
+        networkview = nothing,
+        displaypolicy = nothing,
         kwargs...,
     )::Makie.FigureAxisPlot
     figure_kwargs = LineagesMakie._layout_kwargs_namedtuple(figure, "figure")
     axis_kwargs = LineagesMakie._layout_kwargs_namedtuple(axis, "axis")
     fig = Makie.Figure(; figure_kwargs...)
     lax = LineagesMakie.LineageAxis(fig[1, 1]; axis_kwargs...)
-    lp = lineageplot!(lax, net; kwargs...)
+    lp = lineageplot!(
+        lax,
+        net;
+        networkview = networkview,
+        displaypolicy = displaypolicy,
+        kwargs...,
+    )
     return Makie.FigureAxisPlot(fig, lax, lp)
 end
 

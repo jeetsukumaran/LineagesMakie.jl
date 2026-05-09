@@ -82,12 +82,35 @@ function _pn_generic_weighted_plot!(ax, net)::LineagePlot
     return lineageplot!(ax, root, accessor; lineageunits = :edgeweights, leaf_label_visible = false)
 end
 
+function _pn_major_tree(net)::PhyloNetworks.HybridNetwork
+    return PhyloNetworks.majortree(net; unroot = false)
+end
+
+function _pn_generic_tree_plot!(ax, net)::LineagePlot
+    root = PhyloNetworks.getroot(net)
+    accessor = lineagegraph_accessor(root; children = PhyloNetworks.getchildren)
+    return lineageplot!(
+        ax,
+        root,
+        accessor;
+        lineageunits = :nodelevels,
+        leaf_label_visible = false,
+        node_label_visible = false,
+    )
+end
+
+function _pn_geom_signature(geom)
+    node_positions = sort(
+        [(node.number, geom.node_positions[node]) for node in keys(geom.node_positions)];
+        by = first,
+    )
+    edges = [(src.number, dst.number) for (src, dst) in geom.edges]
+    leaf_order = [node.number for node in geom.leaf_order]
+    return (; node_positions, edge_shapes = geom.edge_shapes, edges, leaf_order, boundingbox = geom.boundingbox)
+end
+
 function _pn_same_geom(lhs, rhs)::Bool
-    return isequal(lhs.node_positions, rhs.node_positions) &&
-        isequal(lhs.edge_shapes, rhs.edge_shapes) &&
-        isequal(lhs.edges, rhs.edges) &&
-        isequal(lhs.leaf_order, rhs.leaf_order) &&
-        isequal(lhs.boundingbox, rhs.boundingbox)
+    return isequal(_pn_geom_signature(lhs), _pn_geom_signature(rhs))
 end
 
 function _pn_make_duplicate_lengths_conflict!(net, new_length::Float64)::Nothing
@@ -194,6 +217,75 @@ end
         @test any(plot -> plot isa CairoMakie.Makie.Text, lp.plots)
     end
 
+    @testset "explicit networkview surface preserves rooted full-network default and adds a distinct major-tree projection" begin
+        net_default = _pn_net1()
+        default_result = lineageplot(
+            net_default;
+            figure = (; size = (760, 420)),
+            axis = (; title = "Default rooted full-network view"),
+            leaf_label_visible = false,
+            node_label_visible = false,
+        )
+        @test default_result isa CairoMakie.Makie.FigureAxisPlot
+        fig_default, _, lp_default = default_result
+        colorbuffer(fig_default)
+        default_geom = lp_default[:computed_geom][]
+
+        net_named = _pn_net1()
+        named_result = lineageplot(
+            net_named;
+            figure = (; size = (760, 420)),
+            axis = (; title = "Explicit rooted full-network view"),
+            networkview = :fullnetwork,
+            displaypolicy = :rooted,
+            leaf_label_visible = false,
+            node_label_visible = false,
+        )
+        @test named_result isa CairoMakie.Makie.FigureAxisPlot
+        fig_named, _, lp_named = named_result
+        colorbuffer(fig_named)
+        named_geom = lp_named[:computed_geom][]
+
+        net_major = _pn_net1()
+        major_result = lineageplot(
+            net_major;
+            figure = (; size = (760, 420)),
+            axis = (; title = "Rooted major-tree projection"),
+            networkview = :majortree,
+            displaypolicy = :rooted,
+            leaf_label_visible = false,
+            node_label_visible = false,
+        )
+        @test major_result isa CairoMakie.Makie.FigureAxisPlot
+        fig_major, _, lp_major = major_result
+        colorbuffer(fig_major)
+        major_geom = lp_major[:computed_geom][]
+
+        expected_major_tree = _pn_major_tree(_pn_net1())
+        fig_expected = Figure(; size = (760, 420))
+        ax_expected = Axis(fig_expected[1, 1])
+        lp_expected = _pn_generic_tree_plot!(ax_expected, expected_major_tree)
+        colorbuffer(fig_expected)
+        expected_major_geom = lp_expected[:computed_geom][]
+
+        @test lp_default[:resolved_lineageunits][] == :nodelevels
+        @test lp_named[:resolved_lineageunits][] == :nodelevels
+        @test lp_major[:resolved_lineageunits][] == :nodelevels
+        @test _pn_same_geom(default_geom, named_geom)
+        @test !_pn_same_geom(default_geom, major_geom)
+        @test _pn_same_geom(major_geom, expected_major_geom)
+        @test length(major_geom.edges) < length(default_geom.edges)
+        @test isempty(filter(plot -> plot isa CairoMakie.Makie.Text, lp_major.plots))
+        @test isempty(
+            filter(
+                plot ->
+                    plot isa CairoMakie.Makie.Lines &&
+                        plot.color[] in (_PN_EXT._RETICULATION_MAJOR_COLOR, _PN_EXT._RETICULATION_MINOR_COLOR),
+                lp_major.plots,
+            ),
+        )
+    end
+
     @testset "mutating plotting works on Axis and LineageAxis for unique and duplicate endpoint rooted networks" begin
         net_axis = _pn_net1()
         fig_axis = Figure(; size = (760, 420))
@@ -224,7 +316,91 @@ end
         @test lp_dup_lax isa LineagePlot
     end
 
-    @testset "direct rooted-scope diagnostic rejects non-rooted HybridNetwork inputs" begin
+    @testset "major-tree projection works on Axis and LineageAxis" begin
+        net_axis = _pn_net1()
+        fig_axis = Figure(; size = (760, 420))
+        ax = Axis(fig_axis[1, 1])
+        lp_axis = @test_nowarn lineageplot!(
+            ax,
+            net_axis;
+            networkview = :majortree,
+            displaypolicy = :rooted,
+            leaf_label_visible = false,
+            node_label_visible = false,
+        )
+        colorbuffer(fig_axis)
+        @test lp_axis isa LineagePlot
+
+        net_lax = _pn_net1()
+        fig_lax = Figure(; size = (760, 420))
+        lax = LineageAxis(fig_lax[1, 1]; show_x_axis = true, xlabel = "node levels")
+        lp_lax = @test_nowarn lineageplot!(
+            lax,
+            net_lax;
+            networkview = :majortree,
+            displaypolicy = :rooted,
+            leaf_label_visible = false,
+            node_label_visible = false,
+        )
+        colorbuffer(fig_lax)
+        @test lp_lax isa LineagePlot
+    end
+
+    @testset "networkview and displaypolicy diagnostics are explicit" begin
+        fig_bad_view = Figure(; size = (600, 360))
+        ax_bad_view = Axis(fig_bad_view[1, 1])
+        err_bad_view = try
+            lineageplot!(ax_bad_view, _pn_net1(); networkview = :displayedtrees, leaf_label_visible = false)
+            nothing
+        catch caught_error
+            caught_error
+        end
+        @test err_bad_view isa ArgumentError
+        @test occursin("unsupported networkview", sprint(showerror, err_bad_view))
+        @test occursin(":fullnetwork", sprint(showerror, err_bad_view))
+        @test occursin(":majortree", sprint(showerror, err_bad_view))
+
+        fig_bad_policy = Figure(; size = (600, 360))
+        ax_bad_policy = Axis(fig_bad_policy[1, 1])
+        err_bad_policy = try
+            lineageplot!(
+                ax_bad_policy,
+                _pn_net1();
+                networkview = :fullnetwork,
+                displaypolicy = :semidirected,
+                leaf_label_visible = false,
+            )
+            nothing
+        catch caught_error
+            caught_error
+        end
+        @test err_bad_policy isa ArgumentError
+        @test occursin("unsupported displaypolicy", sprint(showerror, err_bad_policy))
+        @test occursin(":rooted", sprint(showerror, err_bad_policy))
+
+        net_unrooted = _pn_net1()
+        net_unrooted.isrooted = false
+        fig_unrooted = Figure(; size = (600, 360))
+        ax_unrooted = Axis(fig_unrooted[1, 1])
+        err_unrooted = try
+            lineageplot!(
+                ax_unrooted,
+                net_unrooted;
+                networkview = :majortree,
+                displaypolicy = :rooted,
+                leaf_label_visible = false,
+            )
+            nothing
+        catch caught_error
+            caught_error
+        end
+
+        @test err_unrooted isa ArgumentError
+        @test occursin("displaypolicy = :rooted requires net.isrooted = true", sprint(showerror, err_unrooted))
+        @test occursin("semidirected and unrooted display policies are not yet supported", sprint(showerror, err_unrooted))
+    end
+
+    @testset "rooted displaypolicy still rejects non-rooted HybridNetwork defaults" begin
         net = _pn_net1()
         net.isrooted = false
         fig = Figure(; size = (600, 360))
@@ -238,10 +414,10 @@ end
         end
 
         @test err isa ArgumentError
-        @test occursin("rooted full-network views only", sprint(showerror, err))
+        @test occursin("displaypolicy = :rooted requires net.isrooted = true", sprint(showerror, err))
     end
 
-    @testset "weighted direct entrypoints keep the settled full-network validation owner" begin
+    @testset "weighted direct entrypoints keep the settled full-network validation owner and add the named major-tree escape hatch" begin
         net = _pn_net1()
         _pn_inconsistent_lengths!(net)
         fig = Figure(; size = (600, 360))
@@ -258,6 +434,33 @@ end
         root_err = _pn_root_error(err)
         @test root_err isa ArgumentError
         @test occursin("full-network consistency", sprint(showerror, root_err))
+
+        projected_net = _pn_net1()
+        _pn_inconsistent_lengths!(projected_net)
+        projected_major_tree = _pn_major_tree(projected_net)
+
+        fig_projected = Figure(; size = (600, 360))
+        ax_projected = Axis(fig_projected[1, 1])
+        lp_projected = @test_nowarn lineageplot!(
+            ax_projected,
+            projected_net;
+            networkview = :majortree,
+            displaypolicy = :rooted,
+            lineageunits = :edgeweights,
+            leaf_label_visible = false,
+            node_label_visible = false,
+        )
+        colorbuffer(fig_projected)
+        projected_geom = lp_projected[:computed_geom][]
+
+        fig_expected = Figure(; size = (600, 360))
+        ax_expected = Axis(fig_expected[1, 1])
+        lp_expected = _pn_generic_weighted_plot!(ax_expected, projected_major_tree)
+        colorbuffer(fig_expected)
+        expected_geom = lp_expected[:computed_geom][]
+
+        @test lp_projected[:resolved_lineageunits][] == :edgeweights
+        @test _pn_same_geom(projected_geom, expected_geom)
     end
 
     @testset "equal-length duplicate-endpoint weighted requests stay aligned with the generic core path" begin

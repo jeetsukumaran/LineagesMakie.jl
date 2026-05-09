@@ -796,9 +796,10 @@ view-mode policy decisions that belong to Tranche 5 into hidden defaults.
 - Canonical green gates remain `julia --project=test test/runtests.jl` and
   `julia --project=docs docs/make.jl`; extension-specific tests and examples
   must prove both extension absence and extension presence behavior.
-- Extension-absence verification must run in the `test/Project.toml`
-  environment without `PhyloNetworks.jl` present there.
-- Extension-presence verification must also use `test/Project.toml`: activate
+- Extension-absence verification must run through an isolated temporary-project
+  or subprocess probe, because the checked-in `test/Project.toml` environment
+  already points at the reviewed local `PhyloNetworks.jl` checkout.
+- Extension-presence verification must use `test/Project.toml`: activate
   `--project=test` and install the reviewed local checkout at
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
   in that environment with a documented local-path package-manager workflow
@@ -864,12 +865,12 @@ view-mode policy decisions that belong to Tranche 5 into hidden defaults.
   `PhyloNetworks.jl`;
   add extension integration tests using real upstream fixtures for hybrid nodes,
   major edges, minor edges, and gamma values;
-  run the extension suite once in the checked-in `test/Project.toml`
-  environment without `PhyloNetworks.jl` and once after adding
+  run the isolated absence-case probe once without `PhyloNetworks.jl` in the
+  probe environment and run the extension suite once after adding
   the reviewed local `PhyloNetworks.jl` checkout from
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
-  to that same test environment with a documented local-path package-manager
-  workflow;
+  to the checked-in `test/Project.toml` environment with a documented
+  local-path package-manager workflow;
   run `julia --project=test test/runtests.jl`;
   run `julia --project=docs docs/make.jl`;
   rerun affected examples.
@@ -965,7 +966,11 @@ This tranche must add the explicit view-mode policy surface above the completed
 extension foundation:
 full-network view, major-tree projection or another explicitly named
 projected-tree view, and rooted, semidirected, or unrooted display policies as
-required by the verified upstream model. It must also harden docs, examples,
+required by the verified upstream model. In the ratified tranche-5 outcome, the
+direct `HybridNetwork` surface keeps rooted full-network as the default direct
+contract, adds rooted major-tree projection as the named projected-tree
+contract, and leaves semidirected and unrooted direct display policies
+unsupported with exact diagnostics. It must also harden docs, examples,
 fixtures, and verification so the final Tier 3 contract is honest and
 reproducible.
 
@@ -1000,9 +1005,10 @@ reproducible.
 - Canonical green gates remain `julia --project=test test/runtests.jl` and
   `julia --project=docs docs/make.jl`; network examples and rendered artifacts
   are also mandatory for tranche completion.
-- Extension-absence verification must run in the checked-in `test/Project.toml`
-  environment without `PhyloNetworks.jl` present there.
-- Extension-presence verification must also use `test/Project.toml`: activate
+- Extension-absence verification must run through an isolated temporary-project
+  or subprocess probe, because the checked-in `test/Project.toml` environment
+  already points at the reviewed local `PhyloNetworks.jl` checkout.
+- Extension-presence verification must use `test/Project.toml`: activate
   `--project=test` and install the reviewed local checkout at
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
   in that environment with a documented local-path package-manager workflow
@@ -1031,9 +1037,9 @@ reproducible.
 - **Primary-goal lock**:
   lock items 2, 4, 5, and 6 from the parent PRD.
 - **Direct red-state repros**:
-  current documentation and roadmap still permit an adapter reading;
   absent or hidden network projection policy would still let full-network and
-  projected-tree behavior drift.
+  projected-tree behavior drift; semidirected and unrooted direct plotting
+  would still be ambiguous without an explicit review-governed boundary.
 - **Owner and invariant under repair**:
   network view-mode and display-policy ownership; invariant that Tier 3 builds
   on completed core owners and that each rendered network mode is named
@@ -1072,12 +1078,12 @@ reproducible.
   such as `displayedtrees` or major-tree utilities where applicable;
   add tests that fail if minor edges disappear in full-network mode or if a
   projected-tree mode is not explicitly named;
-  run the extension suite once in the checked-in `test/Project.toml`
-  environment without `PhyloNetworks.jl` and once after adding
+  run the isolated absence-case probe once without `PhyloNetworks.jl` in the
+  probe environment and run the extension suite once after adding
   the reviewed local `PhyloNetworks.jl` checkout from
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`
-  to that same test environment with a documented local-path package-manager
-  workflow;
+  to the checked-in `test/Project.toml` environment with a documented
+  local-path package-manager workflow;
   run `julia --project=test test/runtests.jl`;
   run `julia --project=docs docs/make.jl`;
   rerun affected examples and any extension-specific demonstrations.

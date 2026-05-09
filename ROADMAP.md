@@ -18,9 +18,9 @@ LineagesMakie.jl currently provides the core Makie-native plotting foundation:
 - `LineageAxis` with `axis_polarity`, `display_polarity`, and
   `lineage_orientation`
 - quantitative x-axis and y-axis decorations, labels, and grid lines
-- optional rooted full-network `PhyloNetworks.HybridNetwork` plotting with
-  hybrid-node markers, major/minor reticulation-edge distinction, and gamma
-  labels
+- optional rooted `PhyloNetworks.HybridNetwork` plotting with rooted
+  full-network default behavior, rooted major-tree projection, hybrid-node
+  markers, major/minor reticulation-edge distinction, and gamma labels
 - edge, node, leaf, leaf-label, node-label, clade-highlight, clade-label,
   graph-capable node-group highlight, graph-capable node-group label, and
   scale-bar layers
@@ -49,8 +49,8 @@ These capacities extend the standard 2D rooted-tree plotting surface:
 
 These capacities target reticulate lineage graphs and richer layout control:
 
-- major-tree projection and other projected-tree network views
 - semidirected and unrooted network display policies
+- other projected-tree network views beyond rooted major-tree projection
 - inward circular layout
 - geographic leaf coordinate constraints
 
