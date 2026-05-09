@@ -1,6 +1,6 @@
 ---
 date-created: 2026-05-08T12:58:06-07:00
-date-revised: 2026-05-08T12:58:06-07:00
+date-revised: 2026-05-08T17:37:48-07:00
 status: approved
 ---
 
@@ -27,6 +27,13 @@ The remaining tranche-4 work is the real `HybridNetwork` adaptation path, the
 rooted full-network rendering primitives layered on top of the settled core
 owners, the optional-extension proof hardening for the live environment, and
 the touched public contract updates that follow from that support.
+
+Revalidation also confirmed that the tranche-2 and tranche-3 weighted
+full-network consistency validators and their direct rejection proofs are
+already live in `src/Geometry.jl`, `test/test_Geometry.jl`, and
+`test/test_Integration.jl`. Tranche 4 extends honest direct
+`HybridNetwork` entrypoints on top of that settled baseline; it does not
+recreate or reopen the core validator owner.
 
 Parent tranche: Tranche 4  
 Parent PRD:
@@ -212,6 +219,11 @@ These sources constrain the tranche as follows:
 - `Project.toml` already declares `[weakdeps]` and `[extensions]`, and
   `ext/PhyloNetworksExt.jl` already exists. The surviving red state is that the
   file is still a stub and contributes no real `HybridNetwork` integration.
+- Current `src/Geometry.jl`, `test/test_Geometry.jl`, and
+  `test/test_Integration.jl` already enforce and prove explicit rejection for
+  inconsistent weighted full-network requests on shared-descendant DAGs.
+  Tranche 4 must preserve those core proofs and extend honest behavior to
+  direct `HybridNetwork` entrypoints rather than reopening the validator owner.
 - `test/Project.toml` already declares the reviewed local `PhyloNetworks.jl`
   checkout in `[sources]`, and current `test/test_ExtensionBoundary.jl`
   already proves the isolated absence case plus the activation case.
@@ -410,9 +422,10 @@ Not authorized for this tranche:
   generic helper additions in `src/Layers.jl`; no topology or geometry owner
   redesign; no tranche-5 policy work
 - Current-state diagnosis:
-  the optional extension boundary exists and current `HEAD` is green, but the
-  extension file is still a stub and no real `HybridNetwork` plotting or
-  network primitives exist yet
+  the optional extension boundary exists, current `HEAD` is green, and the
+  tranche-2 and tranche-3 core weighted full-network rejection proofs already
+  exist, but the extension file is still a stub and no real `HybridNetwork`
+  plotting or network primitives exist yet
 - Primary-goal lock:
   lock items 1 through 6 above
 - Direct red-state repros:
@@ -457,8 +470,14 @@ Not authorized for this tranche:
 - Re-read the completed tranche-1 through tranche-3 workflow artifacts listed
   above in full.
 - Re-read `Project.toml`, `test/Project.toml`, `ext/PhyloNetworksExt.jl`,
-  `src/Layers.jl`, touched tests, touched docs, and touched examples in full.
+  `src/Geometry.jl`, `src/Layers.jl`, `test/test_Geometry.jl`,
+  `test/test_Integration.jl`, `test/test_ExtensionBoundary.jl`, touched docs,
+  and touched examples in full.
 - Re-read the upstream primary sources listed above in full.
+- Reconfirm before extension edits that the settled tranche-2 and tranche-3
+  core proofs for inconsistent weighted full-network requests remain green and
+  still fail any fake fix that silently substitutes a projected-tree fallback
+  for honest full-network consistency.
 - Re-run or otherwise re-confirm the green baseline before substantial edits:
   - `julia --project=test test/runtests.jl`
   - `julia --project=docs docs/make.jl`
@@ -528,6 +547,10 @@ When the tranche is complete:
 
 - Keep the isolated extension-absence probe and ensure it still fails any fake
   fix that hard-depends on `PhyloNetworks.jl`.
+- Preserve the existing inconsistent weighted full-network rejection proofs in
+  `test/test_Geometry.jl` and `test/test_Integration.jl`; tranche 4 extends
+  that proof surface to direct `HybridNetwork` entrypoints rather than
+  recreating or narrowing the core validator.
 - Add activation and integration tests in the checked-in `test/Project.toml`
   environment using the reviewed local upstream checkout at
   `/home/jeetsukumaran/site/storage/local/00_resources/codebases-and-documentation/PhyloNetworks.jl`.
@@ -642,15 +665,16 @@ When the tranche is complete:
    **Type**: `TEST`
    **Output**: strong integration and render-level proof exists for rooted
    full-network `HybridNetwork` rendering, minor-edge presence, gamma-label
-   content or placement, rooted-scope diagnostics, and tree or tranche-3
-   non-regression.
+   content or placement, rooted-scope diagnostics, preserved weighted
+   full-network rejection behavior, and tree or tranche-3 non-regression.
    **Depends on**: `3`
    **Positive contract**:
    real upstream fixture tests prove that all normalized edges remain
    displayed, hybrid marker count matches the real hybrid-node set, major and
    minor reticulation edges remain distinguishable, gamma labels come from
-   upstream edge `gamma` fields, and existing tree or node-group paths stay
-   green.
+   upstream edge `gamma` fields, the settled weighted full-network rejection
+   proofs remain green without moving validation into `ext/`, and existing tree
+   or node-group paths stay green.
    **Negative contract**:
    no test may accept a fake fix that drops minor edges, renders only the
    major tree, infers hybrid semantics from labels or node numbers alone, or
@@ -664,7 +688,9 @@ When the tranche is complete:
    run `julia --project=test test/runtests.jl`; include at least one negative
    regression that fails if a supposed full-network render omits any minor
    reticulation edge from `net1.out`, and one direct diagnostic regression for
-   non-rooted `HybridNetwork` input.
+   non-rooted `HybridNetwork` input; preserve the existing
+   `test/test_Geometry.jl` and `test/test_Integration.jl` weighted-request
+   rejections unchanged.
 
 5. **Title**: Migrate public docs, roadmap, and a rooted full-network example to the landed tranche-4 contract
    **Type**: `MIGRATE`
