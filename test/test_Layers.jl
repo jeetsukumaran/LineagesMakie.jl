@@ -63,6 +63,7 @@ _LT_ACC_UNIT = lineagegraph_accessor(
     edgeweight = (src, dst) -> 1.0,
 )
 _LT_GEOM = rectangular_layout(_LT_BALANCED_BASENODE, _LT_ACC)
+_LT_GEOM_RADIAL = circular_layout(_LT_BALANCED_BASENODE, _LT_ACC_UNIT; lineageunits = :edgeweights)
 _LT_NONBASENODE_CLADE = _LT_BALANCED_BASENODE.children[1]
 
 function _lt_dag_accessor()
@@ -93,6 +94,43 @@ end
 function _lt_rect_contains(rect::Rect2f, pt)::Bool
     return rect.origin[1] <= pt[1] <= _lt_rect_xmax(rect) &&
         rect.origin[2] <= pt[2] <= _lt_rect_ymax(rect)
+end
+
+function _lt_expected_edge_shape_subset(
+        geom::LineageGraphGeometry,
+        selected_edges,
+    )::Vector{Makie.Point2f}
+    selected = selected_edges isa AbstractSet ? selected_edges : Set(selected_edges)
+    shapes = Makie.Point2f[]
+    for (i, edge_key) in enumerate(geom.edges)
+        edge_key in selected || continue
+        base = 4 * (i - 1)
+        append!(shapes, @view geom.edge_shapes[(base + 1):(base + 4)])
+    end
+    return shapes
+end
+
+function _lt_expected_edge_anchor(points)::Makie.Point2f
+    start_pt, mid_pt, end_pt = points
+    seg1 = hypot(mid_pt[1] - start_pt[1], mid_pt[2] - start_pt[2])
+    seg2 = hypot(end_pt[1] - mid_pt[1], end_pt[2] - mid_pt[2])
+    total = seg1 + seg2
+    total > 0.0f0 || return mid_pt
+
+    half_length = total / 2.0f0
+    if half_length <= seg1 && seg1 > 0.0f0
+        t = half_length / seg1
+        return Makie.Point2f(
+            start_pt[1] + (mid_pt[1] - start_pt[1]) * t,
+            start_pt[2] + (mid_pt[2] - start_pt[2]) * t,
+        )
+    end
+
+    t = seg2 > 0.0f0 ? (half_length - seg1) / seg2 : 0.0f0
+    return Makie.Point2f(
+        mid_pt[1] + (end_pt[1] - mid_pt[1]) * t,
+        mid_pt[2] + (end_pt[2] - mid_pt[2]) * t,
+    )
 end
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
@@ -135,6 +173,43 @@ end
             acc = lineagegraph_accessor(_LT_BALANCED_BASENODE; children = node -> node.children)
             geom = rectangular_layout(_LT_BALANCED_BASENODE, acc)
             @test_nowarn edgelayer!(ax, geom; linewidth = 2.0, alpha = 0.5)
+        end
+
+        @testset "edge subset helper preserves geometry-owned edge order on rectangular layouts" begin
+            selected_edges = Set((_LT_GEOM.edges[4], _LT_GEOM.edges[1]))
+            expected_shapes = _lt_expected_edge_shape_subset(_LT_GEOM, selected_edges)
+            actual_shapes = LineagesMakie.Layers._edge_shape_subset(_LT_GEOM, selected_edges)
+
+            @test isequal(actual_shapes, expected_shapes)
+            @test isequal(actual_shapes[1:4], _LT_GEOM.edge_shapes[1:4])
+            @test isequal(actual_shapes[5:8], _LT_GEOM.edge_shapes[13:16])
+        end
+
+        @testset "edge label anchor helper follows selected rectangular edge shapes" begin
+            selected_edges = (_LT_GEOM.edges[2], _LT_GEOM.edges[5])
+            actual_anchors = LineagesMakie.Layers._edge_label_anchor_positions(_LT_GEOM, selected_edges)
+            expected_anchors = [
+                _lt_expected_edge_anchor(_LT_GEOM.edge_shapes[(4 * (i - 1) + 1):(4 * (i - 1) + 3)])
+                for i in (2, 5)
+            ]
+
+            @test actual_anchors == expected_anchors
+            @test length(actual_anchors) == 2
+        end
+
+        @testset "edge subset and anchor helpers stay geometry-owned on radial layouts" begin
+            selected_edges = (_LT_GEOM_RADIAL.edges[2], _LT_GEOM_RADIAL.edges[6])
+            expected_shapes = _lt_expected_edge_shape_subset(_LT_GEOM_RADIAL, selected_edges)
+            actual_shapes = LineagesMakie.Layers._edge_shape_subset(_LT_GEOM_RADIAL, selected_edges)
+            actual_anchors = LineagesMakie.Layers._edge_label_anchor_positions(_LT_GEOM_RADIAL, selected_edges)
+            expected_anchors = [
+                _lt_expected_edge_anchor(_LT_GEOM_RADIAL.edge_shapes[(4 * (i - 1) + 1):(4 * (i - 1) + 3)])
+                for i in (2, 6)
+            ]
+
+            @test isequal(actual_shapes, expected_shapes)
+            @test actual_anchors == expected_anchors
+            @test all(pt -> isfinite(pt[1]) && isfinite(pt[2]), actual_anchors)
         end
 
     end

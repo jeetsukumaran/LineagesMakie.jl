@@ -493,6 +493,107 @@ remain displayed.
 
 ---
 
+### `hybrid node`
+
+**Part of speech:** noun (network-structure concept)
+
+**Definition:** A displayed or source-network node that has more than one
+parent edge and therefore represents reticulate ancestry rather than one
+single-parent branching event.
+
+**Usage notes:** In tranche 4 rooted full-network support, hybrid nodes are
+read from live upstream network semantics and rendered as explicit hybrid-node
+markers. Do not infer hybrid status from labels, names, or edge numbers when
+the source owner already exposes it directly.
+
+**Proscribed alternates:** `admixed node`; `reticulation vertex`;
+`network tip` when the node is not a leaf.
+
+---
+
+### `reticulation edge`
+
+**Part of speech:** noun (network-edge concept)
+
+**Definition:** A displayed parent edge of a hybrid node in a full-network
+view. Reticulation edges carry inheritance semantics and therefore remain
+distinct from ordinary tree-only parent edges even when all edges are drawn in
+the same scene.
+
+**Usage notes:** In tranche 4 rooted full-network support, reticulation edges
+remain visible in the rendered full-network view and are distinguished from one
+another as `major edge` versus `minor edge`.
+
+**Proscribed alternates:** `hybrid branch`; `network branch`; `admixture edge`
+when the project term is the general reticulation case.
+
+---
+
+### `major edge`
+
+**Part of speech:** noun (reticulation-edge subtype)
+
+**Definition:** The reticulation edge whose source-network owner marks it as
+the major parent path to a hybrid node.
+
+**Usage notes:** A major edge is still one reticulation edge inside a
+full-network view. Showing only major edges is not the same contract as showing
+the full network.
+
+**Proscribed alternates:** `main branch`; `primary branch`; `default network
+edge`.
+
+---
+
+### `minor edge`
+
+**Part of speech:** noun (reticulation-edge subtype)
+
+**Definition:** The reticulation edge whose source-network owner marks it as
+the minor parent path to a hybrid node.
+
+**Usage notes:** Dropping a minor edge changes a full-network view into some
+other projected or tree-like contract. A supposed rooted full-network display
+is not honest if any minor edge disappears silently.
+
+**Proscribed alternates:** `secondary branch`; `optional edge`; `hidden edge`.
+
+---
+
+### `gamma label`
+
+**Part of speech:** noun (network-annotation concept)
+
+**Definition:** A displayed text label whose value comes from the upstream
+inheritance proportion field on a reticulation edge.
+
+**Usage notes:** In tranche 4 rooted full-network support, gamma labels are
+drawn from live upstream edge `gamma` values on reticulation edges. Tree edges
+with the default inheritance value are not the owner of this annotation
+surface.
+
+**Proscribed alternates:** `inheritance text`; `edge probability label`;
+`support label` when the annotation is actually gamma.
+
+---
+
+### `major-tree projection`
+
+**Part of speech:** noun (display-contract concept)
+
+**Definition:** A tree view produced by projecting a network to the major edge
+chosen at each hybrid node, thereby removing the minor reticulation edge from
+the displayed contract.
+
+**Usage notes:** `major-tree projection` is distinct from `full-network view`.
+It is a projected-tree contract, not a synonym for rooted network support, and
+its public display policy remains deferred beyond tranche 4.
+
+**Proscribed alternates:** calling a major-tree projection `network support`;
+calling a full-network view `major tree`.
+
+---
+
 ### `node group` / `group_nodes`
 
 **Part of speech:** noun (annotation concept); keyword argument name

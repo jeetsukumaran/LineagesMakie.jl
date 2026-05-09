@@ -19,4 +19,5 @@ using JET
     include("test_LineageAxis.jl")
     include("test_Integration.jl")
     include("test_ExtensionBoundary.jl")
+    include("test_PhyloNetworksExt.jl")
 end

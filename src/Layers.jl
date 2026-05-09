@@ -510,6 +510,67 @@ function _tree_parent_lookup(
     return Dict{Any, Any}(dst => src for (src, dst) in geom.edges)
 end
 
+function _edge_shape_subset(
+        geom::LineageGraphGeometry,
+        selected_edges,
+    )::Vector{Point2f}
+    edge_membership = selected_edges isa AbstractSet ? selected_edges : Set(selected_edges)
+    shapes = Point2f[]
+    for (i, edge_key) in enumerate(geom.edges)
+        edge_key in edge_membership || continue
+        base = 4 * (i - 1)
+        append!(shapes, @view geom.edge_shapes[(base + 1):(base + 4)])
+    end
+    return shapes
+end
+
+function _edge_segment_midpoint(start_pt::Point2f, end_pt::Point2f, t::Float32)::Point2f
+    return Point2f(
+        start_pt[1] + (end_pt[1] - start_pt[1]) * t,
+        start_pt[2] + (end_pt[2] - start_pt[2]) * t,
+    )
+end
+
+function _edge_label_anchor_position(
+        start_pt::Point2f,
+        mid_pt::Point2f,
+        end_pt::Point2f,
+    )::Point2f
+    seg1 = hypot(mid_pt[1] - start_pt[1], mid_pt[2] - start_pt[2])
+    seg2 = hypot(end_pt[1] - mid_pt[1], end_pt[2] - mid_pt[2])
+    total = seg1 + seg2
+    total > 0.0f0 || return mid_pt
+
+    half_length = total / 2.0f0
+    if half_length <= seg1 && seg1 > 0.0f0
+        return _edge_segment_midpoint(start_pt, mid_pt, half_length / seg1)
+    elseif seg2 > 0.0f0
+        return _edge_segment_midpoint(mid_pt, end_pt, (half_length - seg1) / seg2)
+    end
+    return mid_pt
+end
+
+function _edge_label_anchor_positions(
+        geom::LineageGraphGeometry,
+        selected_edges,
+    )::Vector{Point2f}
+    edge_membership = selected_edges isa AbstractSet ? selected_edges : Set(selected_edges)
+    anchors = Point2f[]
+    for (i, edge_key) in enumerate(geom.edges)
+        edge_key in edge_membership || continue
+        base = 4 * (i - 1)
+        push!(
+            anchors,
+            _edge_label_anchor_position(
+                geom.edge_shapes[base + 1],
+                geom.edge_shapes[base + 2],
+                geom.edge_shapes[base + 3],
+            ),
+        )
+    end
+    return anchors
+end
+
 function _to_blockscene_pixel(sc, data_pt::Point2f)::Point2f
     sc_vp = Makie.viewport(sc)[]
     px = data_to_pixel(sc, data_pt)

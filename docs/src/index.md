@@ -31,6 +31,13 @@ views. Tree-only
 `node_label_position = :toward_parent` and `clade_nodes` subtree annotations
 still require a rooted-tree or explicit tree view.
 
+When `PhyloNetworks.jl` is present in the active environment, the optional
+package extension activates automatically and adds direct rooted
+full-network `HybridNetwork` plotting. Current scope is rooted full-network
+view only: hybrid-node markers, major/minor reticulation-edge distinction, and
+gamma labels are live, while major-tree projection, projected-tree view,
+semidirected display, and unrooted display remain deferred.
+
 Screen-axis controls are live: `show_x_axis` and `xlabel` govern the screen
 x-axis, `show_y_axis` and `ylabel` govern the screen y-axis, and `show_grid`
 draws grid lines for whichever screen axes are visible. In vertical

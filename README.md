@@ -197,6 +197,34 @@ plot_result = lineageplot(
 )
 ```
 
+## Optional PhyloNetworks rooted full-network plotting
+
+If `PhyloNetworks.jl` is available in the active environment, the package
+extension activates automatically and adds direct rooted
+`PhyloNetworks.HybridNetwork` plotting.
+
+Current scope is rooted full-network view only. The direct `HybridNetwork`
+entrypoint renders all displayed edges, adds a hybrid-node marker, highlights
+major and minor reticulation edges distinctly, and draws gamma labels from the
+upstream edge fields. Major-tree projection, projected-tree view, semidirected
+display, and unrooted display remain deferred.
+
+```julia
+using CairoMakie
+using LineagesMakie
+using PhyloNetworks
+
+net = readnewick(joinpath(dirname(pathof(PhyloNetworks)), "..", "examples", "net1.out"))
+
+plot_result = lineageplot(
+    net;
+    figure = (; size = (820, 460)),
+    axis = (; title = "Rooted full-network HybridNetwork", show_x_axis = true, xlabel = "node levels"),
+    edge_color = :gray45,
+    edge_linewidth = 1.0,
+)
+```
+
 ## Input contract
 
 LineagesMakie.jl uses `LineageGraphAccessor` as its input boundary. The
