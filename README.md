@@ -212,6 +212,16 @@ entrypoint also supports rooted `major-tree projection` through
 unrooted display policies are not supported on this direct surface yet and
 fail with an explicit diagnostic.
 
+The direct `networkview = :majortree` surface is intentionally narrower than
+the generic tree API. User-supplied identity-sensitive families are rejected
+early on this direct surface: `nodevalue`, `branchingtime`,
+`coalescenceage`, `nodecoordinates`, `nodepos`, callable `edge_color`,
+`leaf_label_func`, `node_label_func`, `node_label_threshold`, `group_nodes`,
+`nodegroup_label_func`, `clade_nodes`, and `clade_label_func`. If you need
+projected-tree custom accessors, callbacks, or node collections, call
+`PhyloNetworks.majortree(net; unroot = false)` yourself and use the generic
+LineagesMakie tree entrypoint.
+
 ```julia
 using CairoMakie
 using LineagesMakie

@@ -25,6 +25,36 @@ const _HYBRID_NODE_STROKE_COLOR = Makie.RGBAf(0.30f0, 0.22f0, 0.08f0, 1.0f0)
 const _ACCESSOR_KWARGS = (:nodevalue, :branchingtime, :coalescenceage, :nodecoordinates, :nodepos)
 const _SUPPORTED_NETWORKVIEWS = (:fullnetwork, :majortree)
 const _SUPPORTED_DISPLAYPOLICIES = (:rooted,)
+const _MAJORTREE_IDENTITY_SURFACE_ORDER = (
+    :nodevalue,
+    :branchingtime,
+    :coalescenceage,
+    :nodecoordinates,
+    :nodepos,
+    :edge_color,
+    :leaf_label_func,
+    :node_label_func,
+    :node_label_threshold,
+    :group_nodes,
+    :nodegroup_label_func,
+    :clade_nodes,
+    :clade_label_func,
+)
+const _MAJORTREE_IDENTITY_SURFACE_LABELS = Dict{Symbol, String}(
+    :nodevalue => "`nodevalue(node)`",
+    :branchingtime => "`branchingtime(node)`",
+    :coalescenceage => "`coalescenceage(node)`",
+    :nodecoordinates => "`nodecoordinates(node)`",
+    :nodepos => "`nodepos(node)`",
+    :edge_color => "`edge_color = (src, dst) -> ...`",
+    :leaf_label_func => "`leaf_label_func`",
+    :node_label_func => "`node_label_func`",
+    :node_label_threshold => "`node_label_threshold`",
+    :group_nodes => "`group_nodes`",
+    :nodegroup_label_func => "`nodegroup_label_func`",
+    :clade_nodes => "`clade_nodes`",
+    :clade_label_func => "`clade_label_func`",
+)
 
 struct _ResolvedHybridNetworkContract
     networkview::Symbol
@@ -34,6 +64,69 @@ end
 function _supported_hybridnetwork_combinations()::String
     return "(networkview = :fullnetwork, displaypolicy = :rooted) and " *
         "(networkview = :majortree, displaypolicy = :rooted)"
+end
+
+function _requested_node_collection(value)::Bool
+    value === nothing && return false
+    try
+        return !isempty(value)
+    catch
+        return true
+    end
+end
+
+function _major_tree_identity_surface_error(surface_keys::Vector{Symbol})::ArgumentError
+    surface_labels = [_MAJORTREE_IDENTITY_SURFACE_LABELS[key] for key in surface_keys]
+    surface_noun = length(surface_labels) == 1 ? "surface " : "surfaces "
+    return ArgumentError(
+        "networkview = :majortree on direct PhyloNetworks.HybridNetwork plotting does not support the " *
+            "identity-sensitive $surface_noun$(join(surface_labels, ", ")). The upstream route " *
+            "PhyloNetworks.majortree(net; unroot = false) returns fresh projected-tree nodes and edges, " *
+            "so original-network keyed callables and node collections are not accepted on this direct " *
+            "surface. For projected-tree custom accessors, callbacks, or node collections, call " *
+            "PhyloNetworks.majortree(net; unroot = false) yourself and plot the projected tree through " *
+            "the generic LineagesMakie tree entrypoint.",
+    )
+end
+
+function _requested_major_tree_identity_surfaces(keyword_args::NamedTuple)::Vector{Symbol}
+    requested_surfaces = Symbol[]
+    requested_group_nodes = haskey(keyword_args, :group_nodes) &&
+        _requested_node_collection(keyword_args[:group_nodes])
+    requested_clade_nodes = haskey(keyword_args, :clade_nodes) &&
+        _requested_node_collection(keyword_args[:clade_nodes])
+
+    for key in _MAJORTREE_IDENTITY_SURFACE_ORDER
+        if key in _ACCESSOR_KWARGS
+            haskey(keyword_args, key) && keyword_args[key] !== nothing && push!(requested_surfaces, key)
+        elseif key === :edge_color
+            haskey(keyword_args, key) && isa(keyword_args[key], Base.Callable) && push!(requested_surfaces, key)
+        elseif key in (:leaf_label_func, :node_label_func, :node_label_threshold)
+            haskey(keyword_args, key) && keyword_args[key] !== nothing && push!(requested_surfaces, key)
+        elseif key === :group_nodes
+            requested_group_nodes && push!(requested_surfaces, key)
+        elseif key === :nodegroup_label_func
+            requested_group_nodes &&
+                haskey(keyword_args, key) &&
+                keyword_args[key] !== nothing &&
+                push!(requested_surfaces, key)
+        elseif key === :clade_nodes
+            requested_clade_nodes && push!(requested_surfaces, key)
+        elseif key === :clade_label_func
+            requested_clade_nodes &&
+                haskey(keyword_args, key) &&
+                keyword_args[key] !== nothing &&
+                push!(requested_surfaces, key)
+        end
+    end
+
+    return requested_surfaces
+end
+
+function _validate_major_tree_identity_contract(keyword_args::NamedTuple)::Nothing
+    requested_surfaces = _requested_major_tree_identity_surfaces(keyword_args)
+    isempty(requested_surfaces) || throw(_major_tree_identity_surface_error(requested_surfaces))
+    return nothing
 end
 
 function _resolved_networkview(networkview)::Symbol
@@ -90,6 +183,7 @@ function _hybridnetwork_plot!(
         lineageunits,
         keyword_args::NamedTuple,
     )::LineagesMakie.LineagePlot
+    contract.networkview === :majortree && _validate_major_tree_identity_contract(keyword_args)
     source_net = contract.networkview === :majortree ? _major_tree_projection(net) : net
     resolved_lineageunits = _resolved_lineageunits(lineageunits)
     root, accessor, metadata = _hybridnetwork_accessor(source_net, keyword_args)

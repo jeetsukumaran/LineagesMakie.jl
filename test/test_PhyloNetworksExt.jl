@@ -45,6 +45,46 @@ function _pn_root_error(err)
     return hasproperty(err, :error) ? getproperty(err, :error) : err
 end
 
+function _pn_direct_hybridnetwork_callstyles(net)
+    return [
+        (
+            "lineageplot!(::Axis, ...)",
+            kwargs -> begin
+                fig = Figure(; size = (600, 360))
+                ax = Axis(fig[1, 1])
+                return lineageplot!(ax, net; kwargs...)
+            end,
+        ),
+        (
+            "lineageplot!(::LineageAxis, ...)",
+            kwargs -> begin
+                fig = Figure(; size = (600, 360))
+                lax = LineageAxis(fig[1, 1])
+                return lineageplot!(lax, net; kwargs...)
+            end,
+        ),
+        (
+            "lineageplot(::HybridNetwork; ...)",
+            kwargs -> lineageplot(
+                net;
+                figure = (; size = (600, 360)),
+                axis = (; title = "direct HybridNetwork callstyle"),
+                kwargs...,
+            ),
+        ),
+    ]
+end
+
+function _pn_caught_direct_error(callstyle, kwargs)
+    err = try
+        callstyle(kwargs)
+        nothing
+    catch caught_error
+        caught_error
+    end
+    return _pn_root_error(err)
+end
+
 function _pn_edge_shape_chunks(points)::Vector{Vector{Makie.Point2f}}
     return [collect(@view points[i:(i + 3)]) for i in 1:4:length(points)]
 end
@@ -532,34 +572,66 @@ end
         @test occursin("conflicting lengths", sprint(showerror, root_err))
     end
 
-    @testset "branchingtime and coalescenceage requests remain available on direct HybridNetwork entrypoints" begin
-        net_bt = _pn_net1()
-        branchingtime = _pn_branchingtime_map(net_bt)
-        fig_bt = Figure(; size = (600, 360))
-        ax_bt = Axis(fig_bt[1, 1])
-        lp_bt = @test_nowarn lineageplot!(
-            ax_bt,
-            net_bt;
-            lineageunits = :branchingtime,
-            branchingtime = node -> branchingtime[node],
-            leaf_label_visible = false,
-        )
-        colorbuffer(fig_bt)
-        @test lp_bt isa LineagePlot
+    @testset "identity-sensitive projected-tree surfaces fail early on all direct HybridNetwork entrypoints" begin
+        net = _pn_net1()
+        branchingtime = _pn_branchingtime_map(net)
+        coalescenceage = _pn_coalescenceage_map(net)
+        basenode = PhyloNetworks.getroot(net)
 
-        net_ca = _pn_net1()
-        coalescenceage = _pn_coalescenceage_map(net_ca)
-        fig_ca = Figure(; size = (600, 360))
-        ax_ca = Axis(fig_ca[1, 1])
-        lp_ca = @test_nowarn lineageplot!(
-            ax_ca,
-            net_ca;
-            lineageunits = :coalescenceage,
-            coalescenceage = node -> coalescenceage[node],
-            leaf_label_visible = false,
-        )
-        colorbuffer(fig_ca)
-        @test lp_ca isa LineagePlot
+        cases = [
+            ("nodevalue", (:nodevalue,), (nodevalue = node -> string(node.number),)),
+            (
+                "branchingtime",
+                (:branchingtime,),
+                (lineageunits = :branchingtime, branchingtime = node -> branchingtime[node],),
+            ),
+            (
+                "coalescenceage",
+                (:coalescenceage,),
+                (lineageunits = :coalescenceage, coalescenceage = node -> coalescenceage[node],),
+            ),
+            (
+                "nodecoordinates",
+                (:nodecoordinates,),
+                (lineageunits = :nodecoordinates, nodecoordinates = node -> Makie.Point2f(node.number, 0),),
+            ),
+            (
+                "nodepos",
+                (:nodepos,),
+                (lineageunits = :nodepos, nodepos = node -> Makie.Point2f(node.number, 0),),
+            ),
+            ("edge_color callback", (:edge_color,), (edge_color = (src, dst) -> :gray45,)),
+            ("leaf_label_func", (:leaf_label_func,), (leaf_label_func = node -> node.name,)),
+            ("node_label_func", (:node_label_func,), (node_label_func = node -> node.name,)),
+            ("node_label_threshold", (:node_label_threshold,), (node_label_threshold = node -> true,)),
+            ("group_nodes", (:group_nodes,), (group_nodes = [basenode],)),
+            (
+                "nodegroup_label_func",
+                (:group_nodes, :nodegroup_label_func),
+                (group_nodes = [basenode], nodegroup_label_func = nodes -> "basenode",),
+            ),
+            ("clade_nodes", (:clade_nodes,), (clade_nodes = [basenode],)),
+            (
+                "clade_label_func",
+                (:clade_nodes, :clade_label_func),
+                (clade_nodes = [basenode], clade_label_func = node -> "basenode",),
+            ),
+        ]
+
+        for (callstyle_label, callstyle) in _pn_direct_hybridnetwork_callstyles(net)
+            @testset "$callstyle_label" begin
+                for (case_label, surface_keys, kwargs) in cases
+                    err = _pn_caught_direct_error(
+                        callstyle,
+                        (; networkview = :majortree, displaypolicy = :rooted, kwargs...),
+                    )
+
+                    @test err isa ArgumentError
+                    @test sprint(showerror, err) ==
+                        sprint(showerror, _PN_EXT._major_tree_identity_surface_error(Symbol[surface_keys...]))
+                end
+            end
+        end
     end
 
     @testset "upstream-tested rooted 2-cycle fixture stays a genuine 2-cycle" begin

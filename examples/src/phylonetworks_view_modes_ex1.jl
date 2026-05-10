@@ -9,6 +9,8 @@
 #   - rooted full-network view as the default direct HybridNetwork contract
 #   - rooted major-tree projection via `networkview = :majortree`
 #   - the visual distinction between the full-network and projected-tree paths
+#   - the direct `:majortree` surface using only non-identity-sensitive styling
+#     kwargs; projected-tree custom callbacks belong on the generic tree path
 
 using CairoMakie
 using LineagesMakie

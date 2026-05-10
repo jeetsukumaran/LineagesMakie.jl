@@ -37,7 +37,11 @@ package extension activates automatically and adds direct rooted
 `full-network view`. The same direct surface also supports rooted
 `major-tree projection` via `networkview = :majortree` and
 `displaypolicy = :rooted`. Semidirected and unrooted display policies are not
-supported on this direct surface yet.
+supported on this direct surface yet. The direct `:majortree` surface rejects
+user-supplied identity-sensitive accessors, callbacks, and node collections;
+for projected-tree custom identity work, call
+`PhyloNetworks.majortree(net; unroot = false)` yourself and use the generic
+LineagesMakie tree entrypoint.
 
 Screen-axis controls are live: `show_x_axis` and `xlabel` govern the screen
 x-axis, `show_y_axis` and `ylabel` govern the screen y-axis, and `show_grid`
